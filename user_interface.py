@@ -13,20 +13,23 @@ class UserInterface(object):
     def update(self):
 
         x, y = self.manager.game_input.virtual_mouse
+        self.manager.debugger.printer((x, y), "mouseloc")
 
         camera = self.manager.main_camera
         screen_vect = camera.getScreenVect(x, y)
-        target_position = camera.worldPosition.copy() - screen_vect
-        mouse_hit = camera.rayCast(target_position, camera, 5.0, "cursor_plane", 0, 1, 2)
+        target_position = camera.worldPosition - screen_vect
+        mouse_hit = camera.rayCast(target_position, camera, 7.0, "cursor_plane", 0, 1, 0)
 
         if mouse_hit[0]:
+
             location = mouse_hit[1]
             normal = mouse_hit[2]
 
             self.cursor.worldPosition = location
             self.cursor.worldOrientation = normal.to_track_quat("Z", "Y")
 
-        self.manager.debug_print((x, y))
+        self.manager.debugger.printer(mouse_hit[0], "mouse_hit")
+
 
 
 

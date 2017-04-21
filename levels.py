@@ -1,6 +1,7 @@
 import bge
 import user_interface
 
+
 class Level(object):
 
     def __init__(self, manager):
