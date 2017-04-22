@@ -43,6 +43,11 @@ class CameraControl(object):
     def update(self):
         self.zoom()
 
+        if self.zoom_in:
+            speed = 0.005
+        else:
+            speed = 0.007
+
         mouse_position = self.manager.game_input.virtual_mouse
         x, y = mouse_position
 
@@ -50,14 +55,14 @@ class CameraControl(object):
 
         if cam_scroll:
             mouse_vector = (mathutils.Vector((x, 1.0 - y)) - mathutils.Vector((0.5, 0.5))).to_3d()
-            mouse_vector.length = 0.01
+            mouse_vector.length = speed
 
             mouse_vector.rotate(self.offset)
 
             self.camera_vector += mouse_vector
-            self.camera_vector.length = min(0.3, self.camera_vector.length)
+            self.camera_vector.length = min(speed * 45.0, self.camera_vector.length)
         else:
-            self.camera_vector.length = bgeutils.interpolate_float(self.camera_vector.length, 0.0, 0.1)
+            self.camera_vector.length = bgeutils.interpolate_float(self.camera_vector.length, 0.0, 0.07)
 
         self.camera_hook.worldPosition += self.camera_vector
 
