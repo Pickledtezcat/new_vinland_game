@@ -44,8 +44,8 @@ class GameLoop(object):
 
     def update(self):
         self.game_input.update()
-        self.camera.update()
         self.level.update()
+        self.camera.update()
         self.debugger.update()
 
 

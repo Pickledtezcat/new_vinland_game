@@ -6,6 +6,7 @@ class UserInterface(object):
 
         self.manager = manager
         self.cursor = self.manager.own.scene.addObject("cursor", self.manager.own, 0)
+        self.cursor.setParent(self.manager.main_camera)
 
     def terminate(self):
         self.cursor.endObject()
@@ -13,7 +14,6 @@ class UserInterface(object):
     def update(self):
 
         x, y = self.manager.game_input.virtual_mouse
-        self.manager.debugger.printer((x, y), "mouseloc")
 
         camera = self.manager.main_camera
         screen_vect = camera.getScreenVect(x, y)
@@ -28,7 +28,6 @@ class UserInterface(object):
             self.cursor.worldPosition = location
             self.cursor.worldOrientation = normal.to_track_quat("Z", "Y")
 
-        self.manager.debugger.printer(mouse_hit[0], "mouse_hit")
 
 
 
