@@ -8,6 +8,9 @@ def get_keyboard_inputs():
         default_keys = saved_keys
     else:
         default_keys = {"escape": (130, "escape_key", 1),
+                        "alt": (125, "LEFTALTTKEY", 0)}
+
+        default_keysx = {"escape": (130, "escape_key", 1),
                         "space": (32, "SPACEKEY", 1),
                         "control": (124, "LEFTCNTRTKEY", 0),
                         "shift": (129, "LEFTSHIFTKEY", 0),
@@ -41,6 +44,8 @@ def get_keyboard_inputs():
                         "3": (51, "3", 1),
                         "m": (109, "m", 1),
                         "save": (162, "f1", 1)}
+
+        bge.logic.globalDict["keys"] = default_keys
 
     return default_keys
 
