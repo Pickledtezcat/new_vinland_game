@@ -14,6 +14,7 @@ class SelectionBox(object):
 
         select = "left_drag" in self.level.manager.game_input.buttons
         additive = "shift" in self.level.manager.game_input.keys
+        #
 
         if select:
             if not self.start:
