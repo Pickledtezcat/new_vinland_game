@@ -8,6 +8,7 @@ def get_keyboard_inputs():
         default_keys = saved_keys
     else:
         default_keys = {"escape": (130, "escape_key", 1),
+                        "shift": (129, "LEFTSHIFTKEY", 0),
                         "alt": (125, "LEFTALTTKEY", 0)}
 
         default_keysx = {"escape": (130, "escape_key", 1),
