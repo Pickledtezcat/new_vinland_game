@@ -2,7 +2,7 @@ import bge
 
 
 def get_key(position):
-    return int(round(position[0])), int(round(position[1]))
+    return "{}${}".format(int(round(position[0])), int(round(position[1])))
 
 
 def smoothstep(x):
