@@ -177,6 +177,8 @@ class Agent(object):
 
                     x_limit = command["X_LIMIT"]
                     y_limit = command["Y_LIMIT"]
+                    additive = command["ADDITIVE"]
+                    mouse_over = command["MOUSE_OVER"]
 
                     cam = self.level.manager.main_camera
 
@@ -190,10 +192,13 @@ class Agent(object):
                             if y_limit[0] - padding < screen_location[1] < y_limit[1] + padding:
                                 select = True
 
-                    if select:
+                    if mouse_over == self and additive:
+                        self.selected = False
+
+                    elif select:
                         self.selected = True
 
-                    elif not command["ADDITIVE"]:
+                    elif not additive:
                         if not select:
                             self.selected = False
 

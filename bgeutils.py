@@ -1,4 +1,5 @@
 import bge
+import mathutils
 
 
 def get_key(position):
@@ -7,6 +8,11 @@ def get_key(position):
 
 def smoothstep(x):
     return x * x * (3 - 2 * x)
+
+
+def get_distance(a, b):
+    vector = mathutils.Vector(b).to_3d() - mathutils.Vector(a).to_3d()
+    return vector.length
 
 
 def get_ob(string, ob_list):

@@ -1,5 +1,6 @@
 import bge
 import mathutils
+import bgeutils
 
 
 class Particle(object):
@@ -15,7 +16,8 @@ class Particle(object):
         pass
 
     def terminate(self):
-        pass
+        if self.box:
+            self.box.endObject()
 
     def update(self):
         pass
@@ -40,6 +42,42 @@ class DebugLabel(Particle):
             self.text_object.color = [0.0, 1.0, 0.0, 1.0]
         else:
             self.text_object.color = [1.0, 0.0, 0.0, 1.0]
+
+
+class MovementPointIcon(Particle):
+
+    def __init__(self, level, position):
+        super().__init__(level)
+        self.released = False
+        self.invalid_location = False
+        self.set_position(position)
+
+    def add_box(self):
+        return self.level.own.scene.addObject("movement_marker", self.level.own, 0)
+
+    def set_position(self, position):
+        if position:
+            tile = self.level.map.get(bgeutils.get_key(position))
+            if tile:
+                position = mathutils.Vector(tile["position"]).to_3d()
+                position.z = tile["height"] + 0.5
+                normal = tile["normal"]
+                self.invalid_location = False
+
+            else:
+                position = position.to_3d()
+                normal = mathutils.Vector([0.0, 0.0, 1.0])
+                self.invalid_location = True
+
+            self.box.worldPosition = position
+            self.box.worldPosition.z += 0.5
+            self.box.alignAxisToVect(normal)
+
+    def update(self):
+
+        if self.released:
+            self.ended = True
+
 
 
 
