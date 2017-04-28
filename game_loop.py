@@ -79,10 +79,17 @@ class GameLoop(object):
         self.debugger.update()
 
     def set_level(self):
+        if self.level:
+            self.level.terminate()
+
         self.level = levels.Level(self)
         self.next_level = None
 
     def level_update(self):
+
+        if "save" in self.game_input.keys:
+            self.next_level = True
+
         if self.next_level:
             self.profile("set_level", one_time=True)
         else:

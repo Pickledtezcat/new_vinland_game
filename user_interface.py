@@ -13,6 +13,7 @@ class UserInterface(object):
 
     def terminate(self):
         self.cursor.endObject()
+        self.bounding_box.endObject()
 
     def set_bounding_box(self, hide, start, end):
 

@@ -21,6 +21,10 @@ class MovementMarker(object):
             self.position = position
         self.icon.set_position(self.position)
 
+    def terminate(self):
+        if not self.icon.released:
+            self.icon.ended = True
+
     def release(self):
         if not self.icon.invalid_location:
             if "alt" in self.level.manager.game_input.keys:
@@ -52,35 +56,41 @@ class MouseControl(object):
         self.start = None
         self.end = None
         self.additive = False
-        self.tile_over = None
+        self.tile_over = [35, 35]
+        self.tile_key = bgeutils.get_key(self.tile_over)
         self.bypass = False
 
         self.movement_point = None
         self.movement_markers = []
         self.center_point = None
-        self.rotation_countdown = 15
+        self.rotation_countdown = 8
 
         self.pulse = 0
         self.pulsing = False
-        self.get_tile_over()
 
     def get_tile_over(self):
 
-        self.tile_over = None
         x, y = self.level.manager.game_input.virtual_mouse.copy()
         camera = self.level.manager.main_camera
         screen_vect = camera.getScreenVect(x, y)
         target_position = camera.worldPosition - screen_vect
-        mouse_hit = camera.rayCast(target_position, camera, 150.0, "ground", 0, 1, 0)
+        mouse_hit = camera.rayCast(target_position, camera, 200.0, "ground", 0, 1, 0)
 
         if mouse_hit[0]:
-            self.tile_over = [mouse_hit[1][0], mouse_hit[1][0]]
+            tile_over = [round(mouse_hit[1][0]), round(mouse_hit[1][1])]
+            tile_key = bgeutils.get_key(tile_over)
+            if self.level.map.get(tile_key):
+                self.tile_over = tile_over
+                self.tile_key = tile_key
 
     def reset_movement(self):
         self.movement_point = None
+        for movement_marker in self.movement_markers:
+            movement_marker.terminate()
+
         self.movement_markers = []
         self.center_point = None
-        self.rotation_countdown = 15
+        self.rotation_countdown = 8
 
     def set_movement_points(self):
         self.movement_point = mathutils.Vector(self.tile_over)
@@ -88,10 +98,10 @@ class MouseControl(object):
 
         center_point = mathutils.Vector().to_2d()
 
-        for selected_agent in selected_agents:
-            center_point += selected_agent.box.worldPosition.copy().to_2d()
+        if len(selected_agents) > 0:
+            for selected_agent in selected_agents:
+                center_point += selected_agent.box.worldPosition.copy().to_2d()
 
-        if center_point.length:
             center_point /= len(selected_agents)
 
         self.center_point = center_point
@@ -104,27 +114,26 @@ class MouseControl(object):
 
     def update_movement_points(self):
         vector_start = self.movement_point
-        ground_hit = self.level.map.get(bgeutils.get_key(self.tile_over))
-        if ground_hit:
+        ground_hit = self.level.map[bgeutils.get_key(self.tile_over)]
 
-            vector_end = mathutils.Vector(ground_hit["position"])
+        vector_end = mathutils.Vector(ground_hit["position"])
 
-            movement_vector = vector_end - vector_start
-            local_vector = vector_end - self.center_point
-            angle = movement_vector.angle_signed(local_vector, 0.0)
+        movement_vector = vector_end - vector_start
+        local_vector = vector_end - self.center_point
+        angle = movement_vector.angle_signed(local_vector, 0.0)
 
-            for marker in self.movement_markers:
-                rotation = mathutils.Euler((0.0, 0.0, angle))
-                new_position = marker.offset.copy().to_3d()
-                new_position.rotate(rotation)
-                target_point = self.movement_point.copy() - new_position.to_2d()
+        for marker in self.movement_markers:
+            rotation = mathutils.Euler((0.0, 0.0, angle))
+            new_position = marker.offset.copy().to_3d()
+            new_position.rotate(rotation)
+            target_point = self.movement_point.copy() - new_position.to_2d()
 
-                marker.update(target_point)
+            marker.update(target_point)
 
     def set_selection_box(self):
 
         additive = "shift" in self.level.manager.game_input.keys
-        mouse_over = self.level.map.get(bgeutils.get_key(self.tile_over))
+        mouse_over = self.level.map[bgeutils.get_key(self.tile_over)]
         if mouse_over:
             target_agent = mouse_over["occupied"]
         else:
@@ -146,7 +155,7 @@ class MouseControl(object):
 
         if self.pulse < 0:
             self.pulsing = True
-            self.pulse = 5
+            self.pulse = 3
         else:
             self.pulsing = False
             self.pulse -= 1
@@ -155,20 +164,18 @@ class MouseControl(object):
             self.get_tile_over()
 
         if not self.bypass:
-            self.level.manager.debugger.printer(self.tile_over, "tile_over")
-            focus = self.level.manager.game_input.virtual_mouse.copy()
-
             select = "left_drag" in self.level.manager.game_input.buttons
             movement = "right_drag" in self.level.manager.game_input.buttons
 
-            if movement:
+            if movement and self.tile_over:
                 if not self.movement_markers:
                     self.set_movement_points()
 
                 if self.rotation_countdown > 0:
                     self.rotation_countdown -= 1
                 else:
-                    self.update_movement_points()
+                    if self.pulsing:
+                        self.update_movement_points()
             else:
                 if self.movement_markers:
                     for marker in self.movement_markers:
@@ -177,6 +184,7 @@ class MouseControl(object):
 
                 else:
                     if select:
+                        focus = self.level.manager.game_input.virtual_mouse.copy()
                         if not self.start:
                             self.start = focus
 
@@ -214,7 +222,7 @@ class Level(object):
 
                 ray = self.own.rayCast(target_position, origin, 0.0, "ground", 1, 1, 0)
                 if ray[0]:
-                    tile = {"position": [x, y], "occupied": None, "height": ray[1][2], "normal": list(ray[2])}
+                    tile = {"position": [x + 0.5, y + 0.5], "occupied": None, "height": ray[1][2], "normal": list(ray[2])}
 
                     map[bgeutils.get_key((x, y))] = tile
 
@@ -222,6 +230,12 @@ class Level(object):
 
     def terminate(self):
         self.user_interface.terminate()
+
+        for particle in self.particles:
+            particle.terminate()
+
+        for agent in self.agents:
+            agent.terminate()
 
     def add_agents(self):
         agents.Agent(self, None, [45, 45], 0)
