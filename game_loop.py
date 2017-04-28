@@ -38,7 +38,6 @@ class DebugPrinter(object):
                 debug_text = "{}\n{}".format(item, debug_text)
 
             self.debug_text["Text"] = debug_text
-
             self.debug_list = []
 
     def printer(self, data, label=""):

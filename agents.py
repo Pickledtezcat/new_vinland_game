@@ -1,6 +1,7 @@
 import bge
 import mathutils
 import bgeutils
+import particles
 
 class AgentMovement(object):
 
@@ -42,8 +43,6 @@ class AgentMovement(object):
             self.target_vector = mathutils.Vector(self.agent.location).to_3d()
             self.target_vector.z = target_tile["height"]
             self.target_normal = mathutils.Vector(target_tile["normal"])
-
-        print(self.target_normal)
 
     def update(self):
         if self.direction:
@@ -116,13 +115,19 @@ class Agent(object):
 
         self.level = level
         self.load_name = load_name
+        self.team = team
+        self.ended = False
+
         self.box = self.add_box()
         self.movement_hook = bgeutils.get_ob("hook", self.box.childrenRecursive)
         self.tilt_hook = bgeutils.get_ob("tilt", self.box.childrenRecursive)
         self.recoil_hook = bgeutils.get_ob("recoil", self.box.childrenRecursive)
         self.mesh = bgeutils.get_ob("mesh", self.box.childrenRecursive)
+        self.debug_label = particles.DebugLabel(self.level, self)
+        self.debug_text = "AGENT"
 
-        self.team = team
+        self.commands = []
+
         self.location = location
         self.direction = direction
         if not direction:
@@ -149,6 +154,7 @@ class Agent(object):
 
     def terminate(self):
         self.box.endObject()
+        self.debug_label.ended = True
 
     def load_stats(self):
 
@@ -163,6 +169,39 @@ class Agent(object):
 
         self.movement.initial_position()
 
+    def process_commands(self):
+
+        for command in self.commands:
+            if command['LABEL'] == "SELECT":
+                if self.team == 0:
+
+                    x_limit = command["X_LIMIT"]
+                    y_limit = command["Y_LIMIT"]
+
+                    cam = self.level.manager.main_camera
+
+                    select = False
+
+                    if cam.pointInsideFrustum(self.box.worldPosition):
+                        screen_location = cam.getScreenPosition(self.box)
+                        padding = 0.03
+
+                        if x_limit[0] - padding < screen_location[0] < x_limit[1] + padding:
+                            if y_limit[0] - padding < screen_location[1] < y_limit[1] + padding:
+                                select = True
+
+                    if select:
+                        self.selected = True
+
+                    elif not command["ADDITIVE"]:
+                        if not select:
+                            self.selected = False
+
+        self.commands = []
+
     def update(self):
+
+        self.debug_text = self.selected
+        self.process_commands()
         pass
 

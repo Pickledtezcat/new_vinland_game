@@ -15,8 +15,6 @@ class SelectionBox(object):
     def update(self):
 
         select = "left_drag" in self.level.manager.game_input.buttons
-        additive = "shift" in self.level.manager.game_input.keys
-        #
 
         if select:
             if not self.start:
@@ -27,7 +25,16 @@ class SelectionBox(object):
 
         else:
             if self.start:
+                additive = "shift" in self.level.manager.game_input.keys
+                x_limit = sorted([self.start[0], self.end[0]])
+                y_limit = sorted([self.start[1], self.end[1]])
+
+                message = {"LABEL": "SELECT", "X_LIMIT": x_limit, "Y_LIMIT": y_limit, "ADDITIVE": additive}
+                for agent in self.level.agents:
+                    agent.commands.append(message)
+
                 self.start = None
+                self.end = None
 
             self.level.user_interface.set_bounding_box(True, None, None)
 
@@ -42,6 +49,7 @@ class Level(object):
 
         self.map = self.get_map()
         self.agents = []
+        self.particles = []
 
         self.add_agents()
 
@@ -70,6 +78,33 @@ class Level(object):
     def mouse_update(self):
         self.selection_box.update()
 
+    def particle_update(self):
+        next_generation = []
+
+        for particle in self.particles:
+            if not particle.ended:
+                particle.update()
+                next_generation.append(particle)
+            else:
+                particle.terminate()
+
+        self.particles = next_generation
+
+    def agent_update(self):
+
+        next_generation = []
+
+        for agent in self.agents:
+            if not agent.ended:
+                agent.update()
+                next_generation.append(agent)
+            else:
+                agent.terminate()
+
+        self.agents = next_generation
+
     def update(self):
         self.mouse_update()
         self.user_interface.update()
+        self.agent_update()
+        self.particle_update()
