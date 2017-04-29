@@ -77,7 +77,7 @@ class MouseControl(object):
         mouse_hit = camera.rayCast(target_position, camera, 200.0, "ground", 0, 1, 0)
 
         if mouse_hit[0]:
-            tile_over = [round(mouse_hit[1][0]), round(mouse_hit[1][1])]
+            tile_over = [round(mouse_hit[1][0]), round(mouse_hit[1][1]) - 1]
             tile_key = bgeutils.get_key(tile_over)
             if self.level.map.get(tile_key):
                 self.tile_over = tile_over
@@ -167,35 +167,36 @@ class MouseControl(object):
             select = "left_drag" in self.level.manager.game_input.buttons
             movement = "right_drag" in self.level.manager.game_input.buttons
 
-            if movement and self.tile_over:
-                if not self.movement_markers:
-                    self.set_movement_points()
+            if not self.start:
+                if movement and self.tile_over:
+                    if not self.movement_markers:
+                        self.set_movement_points()
 
-                if self.rotation_countdown > 0:
-                    self.rotation_countdown -= 1
-                else:
-                    if self.pulsing:
-                        self.update_movement_points()
-            else:
-                if self.movement_markers:
-                    for marker in self.movement_markers:
-                        marker.release()
-                    self.reset_movement()
-
-                else:
-                    if select:
-                        focus = self.level.manager.game_input.virtual_mouse.copy()
-                        if not self.start:
-                            self.start = focus
-
-                        self.end = focus
-                        self.level.user_interface.set_bounding_box(False, self.start, self.end)
-
+                    if self.rotation_countdown > 0:
+                        self.rotation_countdown -= 1
                     else:
-                        if self.start and self.end:
-                            self.set_selection_box()
+                        if self.pulsing:
+                            self.update_movement_points()
+                else:
+                    if self.movement_markers:
+                        for marker in self.movement_markers:
+                            marker.release()
+                        self.reset_movement()
 
-                        self.level.user_interface.set_bounding_box(True, None, None)
+            if not self.movement_markers:
+                if select:
+                    focus = self.level.manager.game_input.virtual_mouse.copy()
+                    if not self.start:
+                        self.start = focus
+
+                    self.end = focus
+                    self.level.user_interface.set_bounding_box(False, self.start, self.end)
+
+                else:
+                    if self.start and self.end:
+                        self.set_selection_box()
+
+                    self.level.user_interface.set_bounding_box(True, None, None)
 
 
 class Level(object):
@@ -204,7 +205,9 @@ class Level(object):
         self.manager = manager
         self.own = manager.own
         self.user_interface = user_interface.UserInterface(manager)
+        self.commands = []
         self.mouse_control = MouseControl(self)
+        self.paused = False
 
         self.map = self.get_map()
         self.agents = []
@@ -270,8 +273,16 @@ class Level(object):
 
         self.agents = next_generation
 
+    def user_interface_update(self):
+        # temporary
+        if "pause" in self.manager.game_input.keys:
+            self.paused = not self.paused
+
+        self.manager.debugger.printer(self.paused, "paused")
+        self.user_interface.update()
+
     def update(self):
         self.mouse_update()
-        self.user_interface.update()
+        self.user_interface_update()
         self.agent_update()
         self.particle_update()
