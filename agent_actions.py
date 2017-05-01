@@ -25,7 +25,7 @@ class AgentMovement(object):
     def set_vectors(self):
 
         start_tile = self.agent.level.map[bgeutils.get_key(self.agent.location)]
-        self.start_vector = mathutils.Vector(self.agent.location).to_3d()
+        self.start_vector = mathutils.Vector(start_tile["position"]).to_3d()
         self.start_vector.z = start_tile["height"]
         self.start_normal = mathutils.Vector(start_tile["normal"])
 
@@ -36,30 +36,30 @@ class AgentMovement(object):
         self.target_orientation = mathutils.Vector(self.agent.direction).to_3d().to_track_quat("Y", "Z").to_matrix().to_3x3()
 
         if self.target_direction:
-            self.target_orientation = mathutils.Vector(self.target_direction).to_3d().to_track_quat("Y", "Z").to_matrix().to_4x4()
+            self.target_orientation = mathutils.Vector(self.target_direction).to_3d().to_track_quat("Y", "Z").to_matrix().to_3x3()
 
         elif self.target:
             target_tile = self.agent.level.map[bgeutils.get_key(self.target)]
-            self.target_vector = mathutils.Vector(self.agent.location).to_3d()
+            self.target_vector = mathutils.Vector(target_tile["position"]).to_3d()
             self.target_vector.z = target_tile["height"]
             self.target_normal = mathutils.Vector(target_tile["normal"])
 
+        self.done = False
+
     def update(self):
         if self.target_direction:
-            self.done = False
             self.timer = min(1.0, self.timer + self.agent.turning_speed)
-            if self.timer == 1.0:
+            if self.timer >= 1.0:
+                self.agent.direction = self.target_direction
                 self.target_direction = None
-                self.timer = 0.0
 
         elif self.target:
-            self.done = False
             self.timer = min(1.0, self.timer + self.agent.speed)
-            if self.timer == 1.0:
+            if self.timer >= 1.0:
+                self.agent.location = self.target
                 self.target = None
-                self.timer = 0.0
-
         else:
+            self.timer = 0.0
             self.done = True
 
         if not self.done:
@@ -98,11 +98,97 @@ class Navigation(object):
         self.agent = agent
         self.destination = None
         self.history = []
+        self.stop = False
 
     def get_next_destination(self):
+        self.history = [self.agent.location]
         if self.agent.destinations:
             self.destination = self.agent.destinations.pop()
 
     def get_next_tile(self):
-        pass
+        search_array = [(1, 0), (1, 1), (0, 1), (1, -1), (-1, 0), (-1, 1), (0, -1), (-1, -1)]
+        current_tile = self.agent.location
+        touching_infantry = False
+        next_facing = None
+        next_target = None
+        closest = 10000.0
+        free = 0
+
+        for s in search_array:
+            neighbor = [current_tile[0] + s[0], current_tile[1] + s[1]]
+            neighbor_check = self.agent.check_occupied(neighbor)
+
+            if not neighbor_check:
+                if neighbor not in self.history:
+                    free += 1
+
+                    distance = (mathutils.Vector(self.destination) - mathutils.Vector(neighbor)).length
+                    if bgeutils.diagonal(s):
+                        distance += 0.4
+
+                    if self.agent.reverse:
+                        s = [s[0] * -1, s[1] * -1]
+
+                    if s != self.agent.direction:
+                        distance += 0.2
+
+                    if distance < closest:
+                        closest = distance
+                        next_facing = s
+                        next_target = neighbor
+
+            elif self.agent.agent_type != "INFANTRY":
+                for agent in neighbor_check:
+                    if agent.agent_type == "INFANTRY" and agent.team == self.agent.team:
+                        touching_infantry = True
+
+        return closest, next_facing, next_target, free, touching_infantry
+
+    def update(self):
+
+        if self.agent.movement.done:
+
+            if self.stop:
+                self.stop = False
+                self.destination = None
+
+            if not self.destination:
+                self.get_next_destination()
+
+            if self.destination:
+                closest, next_facing, next_target, free, touching_infantry = self.get_next_tile()
+
+                self.agent.level.manager.debugger.printer([next_facing, next_target], "navigation", decay=120)
+
+                if self.agent.location == self.destination:
+                    self.destination = None
+
+                elif not next_facing:
+                    self.destination = None
+
+                elif free < 6 and closest < 6:
+                    self.history = []
+                    self.agent.waiting = True
+
+                elif next_target:
+                    if touching_infantry:
+                        self.agent.waiting = True
+
+                    else:
+                        if len(self.history) > 25:
+                            self.history = []
+
+                        if next_facing != self.agent.direction:
+                            self.agent.movement.target_direction = next_facing
+                            self.agent.movement.set_vectors()
+
+                        else:
+                            self.history.append(next_target)
+                            self.agent.movement.target = next_target
+                            self.agent.movement.set_vectors()
+
+                else:
+                    self.destination = None
+
+
 

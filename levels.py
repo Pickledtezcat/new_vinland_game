@@ -37,11 +37,13 @@ class MovementMarker(object):
             else:
                 additive = False
 
+            destination = [int(axis) for axis in self.position]
+
             if "control" in self.level.manager.game_input.keys:
-                command = {"LABEL": "ROTATION_TARGET", "POSITION": self.position, "REVERSE": reverse,
+                command = {"LABEL": "ROTATION_TARGET", "POSITION": destination, "REVERSE": reverse,
                            "ADDITIVE": additive}
             else:
-                command = {"LABEL": "MOVEMENT_TARGET", "POSITION": self.position, "REVERSE": reverse,
+                command = {"LABEL": "MOVEMENT_TARGET", "POSITION": destination, "REVERSE": reverse,
                            "ADDITIVE": additive}
 
             self.owner.commands.append(command)
@@ -218,14 +220,17 @@ class Level(object):
     def get_map(self):
 
         map = {}
-        for x in range(50):
-            for y in range(50):
-                target_position = [x, y, -10.0]
-                origin = [x, y, 10.0]
+        for x in range(100):
+            for y in range(100):
+                x_pos = x + 0.5
+                y_pos = y + 0.5
+
+                target_position = [x_pos, y_pos, -10.0]
+                origin = [x_pos, y_pos, 10.0]
 
                 ray = self.own.rayCast(target_position, origin, 0.0, "ground", 1, 1, 0)
                 if ray[0]:
-                    tile = {"position": [x + 0.5, y + 0.5], "occupied": None, "height": ray[1][2], "normal": list(ray[2])}
+                    tile = {"position": [x_pos, y_pos], "occupied": None, "height": ray[1][2], "normal": list(ray[2])}
 
                     map[bgeutils.get_key((x, y))] = tile
 

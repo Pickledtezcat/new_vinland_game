@@ -9,15 +9,16 @@ import agent_actions
 class Agent(object):
 
     size = 0
-    max_speed = 0.0
-    speed = 0.0
-    handling = 0.0
+    max_speed = 0.02
+    speed = 0.02
+    handling = 0.02
     throttle = 0.0
     throttle_target = 0.0
     turning_speed = 0.01
     damping = 0.1
 
     stance = "FLANK"
+    agent_type = "VEHICLE"
 
     def __init__(self, level, load_name, location, team, direction=None):
 
@@ -46,6 +47,7 @@ class Agent(object):
         self.target = None
         self.reverse = False
         self.selected = False
+        self.waiting = False
 
         self.movement = agent_actions.AgentMovement(self)
         self.navigation = agent_actions.Navigation(self)
@@ -79,7 +81,8 @@ class Agent(object):
                 tile = self.level.map.get(tile_key)
                 if tile:
                     if tile["occupied"]:
-                        occupied.append(tile["occupied"])
+                        if tile["occupied"] != self:
+                            occupied.append(tile["occupied"])
 
         return occupied
 
@@ -105,6 +108,7 @@ class Agent(object):
 
     def set_speed(self):
         self.speed = 0.02
+        self.turning_speed = 0.01
 
     def set_position(self):
         self.movement.initial_position()
@@ -150,6 +154,7 @@ class Agent(object):
                 if additive:
                     self.destinations.append(position)
                 else:
+                    self.navigation.stop = True
                     self.destinations = [position]
 
                 if reverse:
@@ -160,17 +165,18 @@ class Agent(object):
         self.commands = []
 
     def set_starting_state(self):
-        self.state = agent_states.VehicleStartUp(self)
+        self.state = agent_states.AgentStartUp(self)
 
     def state_machine(self):
         self.state.update()
+
         next_state = self.state.transition
         if next_state:
             self.state.end()
             self.state = next_state(self)
 
     def update(self):
-        self.debug_text = self.selected
+        self.debug_text = "{}\n{}".format(self.state.name, self.destinations)
 
         self.process_commands()
         if not self.ended:

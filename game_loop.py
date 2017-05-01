@@ -33,16 +33,22 @@ class DebugPrinter(object):
 
         else:
             debug_text = ""
+            next_generation = []
 
             for item in self.debug_list:
-                debug_text = "{}\n{}".format(item, debug_text)
+                details = item[0]
+                debug_text = "{}\n{}".format(details, debug_text)
+                item[1] -= 1
+
+                if item[1] > 0:
+                    next_generation.append(item)
 
             self.debug_text["Text"] = debug_text
-            self.debug_list = []
+            self.debug_list = next_generation
 
-    def printer(self, data, label=""):
+    def printer(self, data, label="", decay=0):
         info = "{}:{}".format(label, data)
-        self.debug_list.append(info)
+        self.debug_list.append([info, decay])
 
 
 class GameLoop(object):

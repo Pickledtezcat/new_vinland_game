@@ -7,6 +7,7 @@ class AgentState(object):
         self.agent = agent
         self.name = type(self).__name__
         self.transition = None
+        self.count = 0
 
     def end(self):
         pass
@@ -22,28 +23,66 @@ class AgentState(object):
         return False
 
     def process(self):
-        self.agent.movement.update()
+        pass
 
 
-class VehicleStartUp(AgentState):
+class AgentStartUp(AgentState):
 
     def __init__(self, agent):
         super().__init__(agent)
         self.agent.set_position()
 
-        self.transition = AgentMovement
+        self.transition = AgentIdle
 
 
 class AgentMovement(AgentState):
 
     def __init__(self, agent):
         super().__init__(agent)
+        self.agent.navigation.update()
 
     def exit_check(self):
-        return False
+        if self.agent.movement.done:
+
+            if not self.agent.destinations:
+                return AgentIdle
+
+            if self.agent.waiting:
+                return AgentWaiting
+
+    def process(self):
+        self.agent.movement.update()
+
+        if self.agent.movement.done:
+            self.agent.navigation.update()
+
+
+class AgentWaiting(AgentState):
+    def __init__(self, agent):
+        super().__init__(agent)
+
+    def exit_check(self):
+
+        if self.count > 360:
+            return AgentIdle
+
+    def process(self):
+        self.agent.movement.update()
+        self.count += 1
+
+
+class AgentIdle(AgentState):
+    def __init__(self, agent):
+        super().__init__(agent)
+
+    def exit_check(self):
+
+        if self.agent.destinations:
+            return AgentMovement
+
+        if self.agent.waiting:
+            return AgentWaiting
 
     def process(self):
         pass
-
-
 
