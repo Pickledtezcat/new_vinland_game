@@ -88,13 +88,19 @@ class GameLoop(object):
         if self.level:
             self.level.terminate()
 
-        self.level = levels.Level(self)
+        self.level = levels.Level(self, self.next_level)
         self.next_level = None
 
     def level_update(self):
 
         if "save" in self.game_input.keys:
-            self.next_level = True
+
+            saving_agents = self.level.save_agents()
+
+            level_details = {"map": self.level.map,
+                             "agents": saving_agents}
+
+            self.next_level = level_details
 
         if self.next_level:
             self.profile("set_level", one_time=True)

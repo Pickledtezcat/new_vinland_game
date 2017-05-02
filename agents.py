@@ -2,12 +2,11 @@ import bge
 import mathutils
 import bgeutils
 import particles
-import agent_states
+from agent_states import *
 import agent_actions
 
 
 class Agent(object):
-
     size = 0
     max_speed = 0.02
     speed = 0.02
@@ -20,7 +19,7 @@ class Agent(object):
     stance = "FLANK"
     agent_type = "VEHICLE"
 
-    def __init__(self, level, load_name, location, team, direction=None):
+    def __init__(self, level, load_name, location, team, load_dict=None):
 
         self.level = level
         self.load_name = load_name
@@ -38,9 +37,7 @@ class Agent(object):
         self.commands = []
 
         self.location = location
-        self.direction = direction
-        if not direction:
-            self.direction = [1, 0]
+        self.direction = [1, 0]
         self.destinations = []
         self.occupied = []
 
@@ -59,15 +56,51 @@ class Agent(object):
         self.set_starting_state()
         self.level.agents.append(self)
 
-    def set_occupied(self):
+        if load_dict:
+            self.reload(load_dict)
+
+    def save(self):
+
+        save_dict = {"team": self.team, "location": self.location, "direction": self.direction,
+                     "selected": self.selected, "state_name": self.state.name,
+                     "state_count": self.state.count, "movement_target": self.movement.target,
+                     "movement_target_direction": self.movement.target_direction,
+                     "movement_timer": self.movement.timer,
+                     "navigation_destination": self.navigation.destination,
+                     "navigation_history": self.navigation.history, "destinations": self.destinations,
+                     "reverse": self.reverse, "occupied": self.occupied}
+
+        return save_dict
+
+    def reload(self, agent_dict):
+
+        self.direction = agent_dict["direction"]
+        state_class = globals()[agent_dict["state_name"]]
+
+        self.state = state_class(self)
+        self.state.count = agent_dict["state_count"]
+
+        self.movement.load_movement(agent_dict["movement_target"], agent_dict["movement_target_direction"],
+                                    agent_dict["movement_timer"])
+
+        self.navigation.destination = agent_dict["navigation_destination"]
+        self.navigation.history = agent_dict["navigation_history"]
+
+        self.selected = agent_dict["selected"]
+        self.destinations = agent_dict["destinations"]
+        self.reverse = agent_dict["reverse"]
+        self.set_occupied(agent_dict["occupied"])
+
+    def set_occupied(self, occupied_list=None):
 
         x, y = self.location
 
-        for ox in range(self.size):
-            for oy in range(self.size):
-                tile_key = bgeutils.get_key([x + ox, y + oy])
-                self.level.map[tile_key]["occupied"] = self
-                self.occupied.append(tile_key)
+        if not occupied_list:
+            occupied_list = [bgeutils.get_key([x + ox, y + oy]) for ox in range(self.size) for oy in range(self.size)]
+
+        for tile_key in occupied_list:
+            self.level.map[tile_key]["occupied"] = self
+            self.occupied.append(tile_key)
 
     def check_occupied(self, target_tile):
 
@@ -101,7 +134,6 @@ class Agent(object):
         self.debug_label.ended = True
 
     def load_stats(self):
-
         self.size = 3
         self.max_speed = 0.02
         self.handling = 0.02
@@ -165,7 +197,7 @@ class Agent(object):
         self.commands = []
 
     def set_starting_state(self):
-        self.state = agent_states.AgentStartUp(self)
+        self.state = AgentStartUp(self)
 
     def state_machine(self):
         self.state.update()
@@ -182,6 +214,3 @@ class Agent(object):
         if not self.ended:
             if not self.level.paused:
                 self.state_machine()
-
-
-

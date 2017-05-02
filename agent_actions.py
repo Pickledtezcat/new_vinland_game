@@ -65,10 +65,10 @@ class AgentMovement(object):
         if not self.done:
             self.set_position()
 
-    def set_position(self, instant=False):
+    def set_position(self, set_timer=0.0):
 
-        if instant:
-            timer = 1.0
+        if set_timer:
+            timer = set_timer
             damping = 1.0
         else:
             timer = self.timer
@@ -89,7 +89,15 @@ class AgentMovement(object):
         self.agent.tilt_hook.alignAxisToVect(target_vector, 2, 1.0)
 
     def initial_position(self):
-        self.set_position(instant=True)
+        self.set_position(set_timer=1.0)
+
+    def load_movement(self, target, target_direction, timer):
+        self.target = target
+        self.target_direction = target_direction
+        self.timer = timer
+
+        self.set_vectors()
+        self.set_position()
 
 
 class Navigation(object):
@@ -157,8 +165,6 @@ class Navigation(object):
 
             if self.destination:
                 closest, next_facing, next_target, free, touching_infantry = self.get_next_tile()
-
-                self.agent.level.manager.debugger.printer([next_facing, next_target], "navigation", decay=120)
 
                 if self.agent.location == self.destination:
                     self.destination = None

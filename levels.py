@@ -203,7 +203,7 @@ class MouseControl(object):
 
 class Level(object):
 
-    def __init__(self, manager):
+    def __init__(self, manager, load_dict=None):
         self.manager = manager
         self.own = manager.own
         self.user_interface = user_interface.UserInterface(manager)
@@ -211,11 +211,15 @@ class Level(object):
         self.mouse_control = MouseControl(self)
         self.paused = False
 
-        self.map = self.get_map()
+        self.map = {}
         self.agents = []
         self.particles = []
 
-        self.add_agents()
+        if load_dict:
+            self.load_level(load_dict)
+        else:
+            self.get_map()
+            self.add_agents()
 
     def get_map(self):
 
@@ -234,7 +238,7 @@ class Level(object):
 
                     map[bgeutils.get_key((x, y))] = tile
 
-        return map
+        self.map = map
 
     def terminate(self):
         self.user_interface.terminate()
@@ -249,6 +253,27 @@ class Level(object):
         agents.Agent(self, None, [45, 45], 0)
         agents.Agent(self, None, [20, 45], 0)
         agents.Agent(self, None, [30, 45], 0)
+
+    def load_level(self, load_dict):
+        self.map = load_dict["map"]
+        loading_agents = load_dict["agents"]
+
+        for agent_key in loading_agents:
+            loading_agent = loading_agents[agent_key]
+            location = loading_agent["location"]
+            team = loading_agent["team"]
+
+            loaded_agent = agents.Agent(self, None, location, team, load_dict=loading_agent)
+
+    def save_agents(self):
+        agent_id = 1
+
+        saving_agents = {}
+        for agent in self.agents:
+            saving_agents[str(agent_id)] = agent.save()
+            agent_id += 1
+
+        return saving_agents
 
     def mouse_update(self):
         self.mouse_control.update()
