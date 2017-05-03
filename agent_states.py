@@ -76,12 +76,18 @@ class AgentIdle(AgentState):
 
     def exit_check(self):
 
-        if self.agent.destinations:
-            return AgentMovement
+        if self.agent.movement.done:
+            if self.agent.destinations:
+                return AgentMovement
 
-        if self.agent.waiting:
-            return AgentWaiting
+            if self.agent.waiting:
+                return AgentWaiting
 
     def process(self):
-        pass
 
+        if self.agent.movement.done:
+            if self.agent.aim:
+                self.agent.movement.set_aim()
+                self.agent.aim = None
+        else:
+            self.agent.movement.update()
