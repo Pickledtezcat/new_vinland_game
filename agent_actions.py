@@ -39,6 +39,7 @@ class AgentMovement(object):
             self.target_orientation = mathutils.Vector(self.target_direction).to_3d().to_track_quat("Y", "Z").to_matrix().to_3x3()
 
         elif self.target:
+            self.agent.set_occupied(self.target)
             target_tile = self.agent.level.map[bgeutils.get_key(self.target)]
             self.target_vector = mathutils.Vector(target_tile["position"]).to_3d()
             self.target_vector.z = target_tile["height"]
@@ -64,6 +65,9 @@ class AgentMovement(object):
 
         if not self.done:
             self.set_position()
+        else:
+            self.agent.clear_occupied()
+            self.agent.set_occupied(self.agent.location)
 
     def set_position(self, set_timer=0.0):
 
@@ -90,6 +94,7 @@ class AgentMovement(object):
 
     def initial_position(self):
         self.set_position(set_timer=1.0)
+        self.agent.set_occupied(self.agent.location)
 
     def load_movement(self, target, target_direction, timer):
         self.target = target
@@ -172,11 +177,12 @@ class Navigation(object):
                 elif not next_facing:
                     self.destination = None
 
-                elif free < 6 and closest < 6:
-                    self.history = []
-                    self.agent.waiting = True
-
                 elif next_target:
+                    if free < 6 and closest < 3:
+                        if len(self.history) > 25:
+                            self.history = []
+                            self.agent.waiting = True
+
                     if touching_infantry:
                         self.agent.waiting = True
 

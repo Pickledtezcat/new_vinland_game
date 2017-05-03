@@ -91,14 +91,19 @@ class Agent(object):
         self.reverse = agent_dict["reverse"]
         self.set_occupied(agent_dict["occupied"])
 
-    def set_occupied(self, occupied_list=None):
+    def set_occupied(self, target_tile, occupied_list=None):
 
-        x, y = self.location
+        x, y = target_tile
 
         if not occupied_list:
-            occupied_list = [bgeutils.get_key([x + ox, y + oy]) for ox in range(self.size) for oy in range(self.size)]
+            occupied_list = [bgeutils.get_key([x + ox, y + oy]) for ox in range(-self.size, self.size + 1) for oy in range(-self.size, self.size + 1)]
 
         for tile_key in occupied_list:
+            if self.level.manager.debug:
+                marker = self.box.scene.addObject("debug_marker", self.box, 3)
+                marker.worldPosition = mathutils.Vector(self.level.map[tile_key]["position"]).to_3d()
+                marker.worldPosition.z = self.level.map[tile_key]["height"]
+
             self.level.map[tile_key]["occupied"] = self
             self.occupied.append(tile_key)
 
@@ -106,16 +111,15 @@ class Agent(object):
 
         x, y = target_tile
         occupied = []
+        occupied_list = [bgeutils.get_key([x + ox, y + oy]) for ox in range(-self.size, self.size + 1) for oy in
+                         range(-self.size, self.size + 1)]
 
-        for ox in range(self.size):
-            for oy in range(self.size):
-
-                tile_key = bgeutils.get_key([x + ox, y + oy])
-                tile = self.level.map.get(tile_key)
-                if tile:
-                    if tile["occupied"]:
-                        if tile["occupied"] != self:
-                            occupied.append(tile["occupied"])
+        for tile_key in occupied_list:
+            tile = self.level.map.get(tile_key)
+            if tile:
+                if tile["occupied"]:
+                    if tile["occupied"] != self:
+                        occupied.append(tile["occupied"])
 
         return occupied
 
@@ -123,7 +127,7 @@ class Agent(object):
 
         for tile_key in self.occupied:
             self.level.map[tile_key]["occupied"] = None
-        self.occupied = None
+        self.occupied = []
 
     def add_box(self):
         box = self.level.own.scene.addObject("agent", self.level.own, 0)
@@ -134,9 +138,11 @@ class Agent(object):
         self.debug_label.ended = True
 
     def load_stats(self):
-        self.size = 3
+        self.size = 1
         self.max_speed = 0.02
         self.handling = 0.02
+        self.speed = 0.06
+        self.turning_speed = 0.03
 
     def set_speed(self):
         self.speed = 0.02

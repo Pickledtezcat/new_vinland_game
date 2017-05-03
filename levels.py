@@ -15,10 +15,14 @@ class MovementMarker(object):
 
         self.icon = particles.MovementPointIcon(self.level, position)
 
-    def update(self, position=None):
+    def update(self, movement_point, angle):
 
-        if position:
-            self.position = position
+        rotation = mathutils.Euler((0.0, 0.0, angle))
+        new_position = self.offset.to_3d()
+        new_position.rotate(rotation)
+        target_point = movement_point - new_position.to_2d()
+
+        self.position = target_point
         self.icon.set_position(self.position)
 
     def terminate(self):
@@ -108,6 +112,8 @@ class MouseControl(object):
 
         self.center_point = center_point
 
+        self.level.manager.debugger.printer(self.center_point, "center", decay=300)
+
         for selected_agent in selected_agents:
             offset = self.center_point.copy() - selected_agent.box.worldPosition.copy().to_2d()
             target_point = self.movement_point.copy() - offset
@@ -115,22 +121,17 @@ class MouseControl(object):
             self.movement_markers.append(MovementMarker(self.level, selected_agent, target_point, offset))
 
     def update_movement_points(self):
-        vector_start = self.movement_point
+        vector_start = self.movement_point.copy()
         ground_hit = self.level.map[bgeutils.get_key(self.tile_over)]
 
         vector_end = mathutils.Vector(ground_hit["position"])
 
         movement_vector = vector_end - vector_start
-        local_vector = vector_end - self.center_point
+        local_vector = mathutils.Vector([0.0, 1.0])
         angle = movement_vector.angle_signed(local_vector, 0.0)
 
         for marker in self.movement_markers:
-            rotation = mathutils.Euler((0.0, 0.0, angle))
-            new_position = marker.offset.copy().to_3d()
-            new_position.rotate(rotation)
-            target_point = self.movement_point.copy() - new_position.to_2d()
-
-            marker.update(target_point)
+            marker.update(self.movement_point.copy(), angle)
 
     def set_selection_box(self):
 
