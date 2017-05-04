@@ -166,14 +166,10 @@ class MouseControl(object):
                 if occupied.team != 0:
                     target = occupied
 
-            self.level.manager.debugger.printer(occupied, "occupied")
-
             if target:
                 mouse_over = None
                 if self.mouse_over:
                     mouse_over = self.mouse_over["occupied"]
-
-                self.level.manager.debugger.printer(mouse_over, "MOUSEOVER")
 
                 selected_agents = [self.level.agents[agent_id] for agent_id in self.level.agents if
                                    self.level.agents[agent_id].selected]

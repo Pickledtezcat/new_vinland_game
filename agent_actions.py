@@ -226,7 +226,7 @@ class AgentTargeter(object):
             target_vector = (enemy_agent.box.worldPosition.copy() - self.agent.box.worldPosition.copy()).to_2d()
             local_y = self.agent.movement_hook.getAxisVect([0.0, 1.0, 0.0]).to_2d()
 
-            target_angle = local_y.angle_signed(target_vector, 0.0)
+            target_angle = local_y.angle_signed(target_vector, 0.0) * -1.0
             turret_speed = self.agent.turret_speed
 
             turret_difference = abs(self.turret_angle - target_angle)
@@ -238,13 +238,11 @@ class AgentTargeter(object):
             self.turret_on_target = False
             self.hull_on_target = False
 
-            if target_angle < 0.5:
+            if abs(target_angle) < 0.5:
                 self.hull_on_target = True
 
             if turret_difference < 0.5:
                 self.turret_on_target = True
-
-            self.agent.level.manager.debugger.printer((self.hull_on_target, self.turret_on_target), "on target")
 
 
 class AgentAnimator(object):
@@ -255,7 +253,7 @@ class AgentAnimator(object):
 
     def update(self):
         turret_angle = self.agent.agent_targeter.turret_angle
-        turret_matrix = mathutils.Matrix.Rotation(turret_angle * -1.0, 4, 'Z').to_3x3()
+        turret_matrix = mathutils.Matrix.Rotation(turret_angle, 4, 'Z').to_3x3()
         self.turret.localOrientation = turret_matrix
 
 

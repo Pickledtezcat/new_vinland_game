@@ -273,7 +273,7 @@ class Agent(object):
             self.state = next_state(self)
 
     def update(self):
-        self.debug_text = "{}\n{}".format(self.state.name, self.destinations)
+        self.debug_text = "{}\nturret:{}  hull:{}".format(self.state.name, self.agent_targeter.turret_on_target, self.agent_targeter.hull_on_target)
 
         self.process_commands()
         if not self.ended:
