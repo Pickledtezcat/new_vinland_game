@@ -3,10 +3,11 @@ import mathutils
 
 
 class UserInterface(object):
-    def __init__(self, manager):
+    def __init__(self, level):
 
-        self.manager = manager
-        self.cursor = self.manager.own.scene.addObject("cursor", self.manager.own, 0)
+        self.level = level
+        self.manager = self.level.manager
+        self.cursor = self.manager.own.scene.addObject("movement_cursor", self.manager.own, 0)
         self.cursor.setParent(self.manager.main_camera)
         self.bounding_box = self.manager.own.scene.addObject("bounding_box", self.manager.own, 0)
         self.cursor.setParent(self.manager.main_camera)
@@ -59,6 +60,11 @@ class UserInterface(object):
 
             location = mouse_hit[1]
             normal = mouse_hit[2]
+
+            if self.level.mouse_control.context == "TARGET":
+                self.cursor.replaceMesh("target_cursor")
+            else:
+                self.cursor.replaceMesh("movement_cursor")
 
             self.cursor.worldPosition = location
             self.cursor.worldOrientation = normal.to_track_quat("Z", "Y")

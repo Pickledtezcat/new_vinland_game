@@ -12,7 +12,8 @@ def get_keyboard_inputs():
                         "control": (124, "LEFTCNTRTKEY", 0),
                         "alt": (125, "LEFTALTTKEY", 0),
                         "save": (162, "f1", 1),
-                        "pause": (112, "PKEY", 1)}
+                        "pause": (112, "PKEY", 1),
+                        "info": (105, "i_key", 1)}
 
         default_keysx = {"escape": (130, "escape_key", 1),
                         "space": (32, "SPACEKEY", 1),

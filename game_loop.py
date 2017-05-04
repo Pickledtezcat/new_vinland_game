@@ -20,7 +20,7 @@ class DebugPrinter(object):
         debug_text = ""
         self.timer += 1
 
-        if "control" in self.manager.game_input.keys:
+        if "info" in self.manager.game_input.keys:
             if self.timer > 50:
                 self.timer = 0
 

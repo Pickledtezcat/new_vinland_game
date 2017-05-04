@@ -51,6 +51,8 @@ class AgentMovement(AgentState):
                 return AgentWaiting
 
     def process(self):
+        self.agent.agent_targeter.update()
+        self.agent.animator.update()
         self.agent.movement.update()
 
         if self.agent.movement.done:
@@ -66,6 +68,9 @@ class AgentWaiting(AgentState):
             return AgentIdle
 
     def process(self):
+        self.agent.agent_targeter.update()
+        self.agent.animator.update()
+
         self.agent.movement.update()
         self.count += 1
 
@@ -84,6 +89,9 @@ class AgentIdle(AgentState):
                 return AgentWaiting
 
     def process(self):
+
+        self.agent.agent_targeter.update()
+        self.agent.animator.update()
 
         if self.agent.movement.done:
             if self.agent.aim:

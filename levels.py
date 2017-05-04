@@ -63,13 +63,14 @@ class MouseControl(object):
         self.end = None
         self.additive = False
         self.tile_over = [35, 35]
-        self.tile_key = bgeutils.get_key(self.tile_over)
+        self.mouse_over = None
         self.bypass = False
 
         self.movement_point = None
         self.movement_markers = []
         self.center_point = None
         self.rotation_countdown = 8
+        self.context = None
 
         self.pulse = 0
         self.pulsing = False
@@ -82,12 +83,14 @@ class MouseControl(object):
         target_position = camera.worldPosition - screen_vect
         mouse_hit = camera.rayCast(target_position, camera, 200.0, "ground", 0, 1, 0)
 
+        self.mouse_over = None
+
         if mouse_hit[0]:
             tile_over = [round(mouse_hit[1][0]), round(mouse_hit[1][1]) - 1]
             tile_key = bgeutils.get_key(tile_over)
             if self.level.map.get(tile_key):
                 self.tile_over = tile_over
-                self.tile_key = tile_key
+                self.mouse_over = self.level.map[bgeutils.get_key(self.tile_over)]
 
     def reset_movement(self):
         self.movement_point = None
@@ -100,7 +103,8 @@ class MouseControl(object):
 
     def set_movement_points(self):
         self.movement_point = mathutils.Vector(self.tile_over)
-        selected_agents = [agent for agent in self.level.agents if agent.selected]
+
+        selected_agents = [self.level.agents[agent_id] for agent_id in self.level.agents if self.level.agents[agent_id].selected]
 
         center_point = mathutils.Vector().to_2d()
 
@@ -112,8 +116,6 @@ class MouseControl(object):
 
         self.center_point = center_point
 
-        self.level.manager.debugger.printer(self.center_point, "center", decay=300)
-
         for selected_agent in selected_agents:
             offset = self.center_point.copy() - selected_agent.box.worldPosition.copy().to_2d()
             target_point = self.movement_point.copy() - offset
@@ -122,9 +124,8 @@ class MouseControl(object):
 
     def update_movement_points(self):
         vector_start = self.movement_point.copy()
-        ground_hit = self.level.map[bgeutils.get_key(self.tile_over)]
 
-        vector_end = mathutils.Vector(ground_hit["position"])
+        vector_end = mathutils.Vector(self.mouse_over["position"])
 
         movement_vector = vector_end - vector_start
         local_vector = self.movement_point.copy() - self.center_point.copy()
@@ -137,9 +138,8 @@ class MouseControl(object):
     def set_selection_box(self):
 
         additive = "shift" in self.level.manager.game_input.keys
-        mouse_over = self.level.map[bgeutils.get_key(self.tile_over)]
-        if mouse_over:
-            target_agent = mouse_over["occupied"]
+        if self.mouse_over:
+            target_agent = self.mouse_over["occupied"]
         else:
             target_agent = None
 
@@ -149,11 +149,50 @@ class MouseControl(object):
         message = {"LABEL": "SELECT", "X_LIMIT": x_limit, "Y_LIMIT": y_limit, "ADDITIVE": additive,
                    "MOUSE_OVER": target_agent}
 
-        for agent in self.level.agents:
+        active_agents = [self.level.agents[agent_id] for agent_id in self.level.agents if self.level.agents[agent_id].team == 0]
+
+        for agent in active_agents:
             agent.commands.append(message)
 
         self.start = None
         self.end = None
+
+    def set_targets(self):
+        target = None
+
+        if self.mouse_over:
+            occupied = self.mouse_over["occupied"]
+            if occupied:
+                if occupied.team != 0:
+                    target = occupied
+
+            self.level.manager.debugger.printer(occupied, "occupied")
+
+            if target:
+                mouse_over = None
+                if self.mouse_over:
+                    mouse_over = self.mouse_over["occupied"]
+
+                self.level.manager.debugger.printer(mouse_over, "MOUSEOVER")
+
+                selected_agents = [self.level.agents[agent_id] for agent_id in self.level.agents if
+                                   self.level.agents[agent_id].selected]
+
+                if selected_agents:
+                    self.context = "TARGET"
+                    click = "right_button" in self.level.manager.game_input.buttons
+
+                    if click:
+                        target_id = target.agent_id
+                        infantry_index = 0
+                        if target.agent_type == "INFANTRY":
+                            infantry_index = 1
+
+                        message = {"LABEL": "TARGET_ENEMY", "TARGET_ID": target_id,
+                                   "INFANTRY_INDEX": infantry_index}
+
+                        for agent in selected_agents:
+                            agent.commands.append(message)
 
     def update(self):
 
@@ -167,40 +206,48 @@ class MouseControl(object):
         if self.pulsing:
             self.get_tile_over()
 
+        self.context = "NONE"
+
         if not self.bypass:
-            select = "left_drag" in self.level.manager.game_input.buttons
-            movement = "right_drag" in self.level.manager.game_input.buttons
 
-            if not self.start:
-                if movement and self.tile_over:
-                    if not self.movement_markers:
-                        self.set_movement_points()
+            if not self.start and not self.movement_markers:
+                self.set_targets()
 
-                    if self.rotation_countdown > 0:
-                        self.rotation_countdown -= 1
+            if self.context == "NONE":
+                if not self.start:
+                    movement = "right_drag" in self.level.manager.game_input.buttons
+
+                    if movement and self.tile_over:
+                        if not self.movement_markers:
+                            self.set_movement_points()
+
+                        if self.rotation_countdown > 0:
+                            self.rotation_countdown -= 1
+                        else:
+                            if self.pulsing:
+                                self.update_movement_points()
                     else:
-                        if self.pulsing:
-                            self.update_movement_points()
-                else:
-                    if self.movement_markers:
-                        for marker in self.movement_markers:
-                            marker.release()
-                        self.reset_movement()
+                        if self.movement_markers:
+                            for marker in self.movement_markers:
+                                marker.release()
+                            self.reset_movement()
 
-            if not self.movement_markers:
-                if select:
-                    focus = self.level.manager.game_input.virtual_mouse.copy()
-                    if not self.start:
-                        self.start = focus
+                if not self.movement_markers:
+                    select = "left_drag" in self.level.manager.game_input.buttons
 
-                    self.end = focus
-                    self.level.user_interface.set_bounding_box(False, self.start, self.end)
+                    if select:
+                        focus = self.level.manager.game_input.virtual_mouse.copy()
+                        if not self.start:
+                            self.start = focus
 
-                else:
-                    if self.start and self.end:
-                        self.set_selection_box()
+                        self.end = focus
+                        self.level.user_interface.set_bounding_box(False, self.start, self.end)
 
-                    self.level.user_interface.set_bounding_box(True, None, None)
+                    else:
+                        if self.start and self.end:
+                            self.set_selection_box()
+
+                        self.level.user_interface.set_bounding_box(True, None, None)
 
 
 class Level(object):
@@ -208,13 +255,15 @@ class Level(object):
     def __init__(self, manager, load_dict=None):
         self.manager = manager
         self.own = manager.own
-        self.user_interface = user_interface.UserInterface(manager)
+        self.user_interface = user_interface.UserInterface(self)
         self.commands = []
         self.mouse_control = MouseControl(self)
         self.paused = False
+        self.map_size = 100
+        self.agent_id_index = 0
 
         self.map = {}
-        self.agents = []
+        self.agents = {}
         self.particles = []
 
         if load_dict:
@@ -226,8 +275,8 @@ class Level(object):
     def get_map(self):
 
         map = {}
-        for x in range(100):
-            for y in range(100):
+        for x in range(self.map_size):
+            for y in range(self.map_size):
                 x_pos = x + 0.5
                 y_pos = y + 0.5
 
@@ -248,32 +297,33 @@ class Level(object):
         for particle in self.particles:
             particle.terminate()
 
-        for agent in self.agents:
+        for agent_id in self.agents:
+            agent = self.agents[agent_id]
             agent.terminate()
 
     def add_agents(self):
-        agents.Agent(self, None, [45, 45], 0)
-        agents.Agent(self, None, [20, 45], 0)
-        agents.Agent(self, None, [30, 45], 0)
+        for friend in range(4):
+            agents.Agent(self, None, [10 + (10 * self.agent_id_index), 45], 0)
+
+        for enemy in range(4):
+            agents.Agent(self, None, [-30 + (10 * self.agent_id_index), 35], 1)
 
     def load_level(self, load_dict):
         self.map = load_dict["map"]
         loading_agents = load_dict["agents"]
 
-        for agent_key in loading_agents:
-            loading_agent = loading_agents[agent_key]
+        for agent_id in loading_agents:
+            loading_agent = loading_agents[agent_id]
             location = loading_agent["location"]
             team = loading_agent["team"]
-
-            loaded_agent = agents.Agent(self, None, location, team, load_dict=loading_agent)
+            agents.Agent(self, None, location, team, agent_id=agent_id, load_dict=loading_agent)
 
     def save_agents(self):
-        agent_id = 1
 
         saving_agents = {}
-        for agent in self.agents:
-            saving_agents[str(agent_id)] = agent.save()
-            agent_id += 1
+        for agent_id in self.agents:
+            agent = self.agents[agent_id]
+            saving_agents[agent_id] = agent.save()
 
         return saving_agents
 
@@ -294,12 +344,13 @@ class Level(object):
 
     def agent_update(self):
 
-        next_generation = []
+        next_generation = {}
 
-        for agent in self.agents:
+        for agent_id in self.agents:
+            agent = self.agents[agent_id]
             if not agent.ended:
                 agent.update()
-                next_generation.append(agent)
+                next_generation[agent_id] = agent
             else:
                 agent.terminate()
 

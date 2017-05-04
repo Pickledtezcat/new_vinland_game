@@ -7,6 +7,7 @@ import agent_actions
 
 
 class Agent(object):
+
     size = 0
     max_speed = 0.02
     speed = 0.02
@@ -15,13 +16,23 @@ class Agent(object):
     throttle_target = 0.0
     turning_speed = 0.01
     damping = 0.1
+    turret_speed = 0.01
+    base_visual_range = 6
+    visual_range = 6
 
     stance = "FLANK"
     agent_type = "VEHICLE"
 
-    def __init__(self, level, load_name, location, team, load_dict=None):
+    def __init__(self, level, load_name, location, team, agent_id=None, load_dict=None):
 
         self.level = level
+
+        if not agent_id:
+            self.agent_id = "{}${}".format(self.agent_type, self.level.agent_id_index)
+            self.level.agent_id_index += 1
+        else:
+            self.agent_id = agent_id
+
         self.load_name = load_name
         self.team = team
         self.ended = False
@@ -48,14 +59,16 @@ class Agent(object):
         self.waiting = False
 
         self.movement = agent_actions.AgentMovement(self)
-        self.navigation = agent_actions.Navigation(self)
+        self.navigation = agent_actions.AgentNavigation(self)
+        self.agent_targeter = agent_actions.AgentTargeter(self)
+        self.animator = agent_actions.AgentAnimator(self)
 
         self.load_stats()
 
         self.state = None
 
         self.set_starting_state()
-        self.level.agents.append(self)
+        self.level.agents[self.agent_id] = self
 
         if load_dict:
             self.reload(load_dict)
@@ -94,7 +107,7 @@ class Agent(object):
         self.set_occupied(None, agent_dict["occupied"])
 
     def set_occupied(self, target_tile, occupied_list=None):
-        display = True
+        display = False
 
         if not occupied_list:
             x, y = target_tile
@@ -145,8 +158,11 @@ class Agent(object):
         self.handling = 0.02
         self.speed = 0.06
         self.turning_speed = 0.03
+        self.turret_speed = 0.01
+        self.base_visual_range = 6
+        self.visual_range = 6
 
-    def set_speed(self):
+    def update_stats(self):
         self.speed = 0.02
         self.turning_speed = 0.01
 
@@ -235,6 +251,13 @@ class Agent(object):
 
                 self.navigation.stop = True
                 self.aim = best_facing
+
+            if command["LABEL"] == "TARGET_ENEMY":
+                target_id = command["TARGET_ID"]
+                infantry_index = command["INFANTRY_INDEX"]
+
+                self.agent_targeter.enemy_target_id = target_id
+                self.agent_targeter.infantry_index = infantry_index
 
         self.commands = []
 

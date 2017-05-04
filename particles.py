@@ -57,8 +57,10 @@ class MovementPointIcon(Particle):
 
     def set_position(self, position):
         if position:
-            tile = self.level.map.get(bgeutils.get_key(position))
-            if tile:
+            in_map = 0.0 < position[0] < self.level.map_size and 0.0 < position[1] < self.level.map_size
+
+            if in_map:
+                tile = self.level.map[bgeutils.get_key(position)]
                 position = mathutils.Vector(tile["position"]).to_3d()
                 position.z = tile["height"] + 0.5
                 normal = tile["normal"]
