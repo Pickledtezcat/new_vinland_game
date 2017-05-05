@@ -16,6 +16,7 @@ class AgentMovement(object):
         self.target_direction = None
         self.current_orientation = None
         self.target_orientation = None
+        self.scale = 1.0
 
         self.timer = 0.0
         self.done = True
@@ -35,8 +36,12 @@ class AgentMovement(object):
         self.current_orientation = mathutils.Vector(self.agent.direction).to_3d().to_track_quat("Y", "Z").to_matrix().to_3x3()
         self.target_orientation = mathutils.Vector(self.agent.direction).to_3d().to_track_quat("Y", "Z").to_matrix().to_3x3()
 
+        start_direction = mathutils.Vector(self.agent.direction)
+        end_direction = start_direction
+
         if self.target_direction:
             self.target_orientation = mathutils.Vector(self.target_direction).to_3d().to_track_quat("Y", "Z").to_matrix().to_3x3()
+            end_direction = mathutils.Vector(self.target_direction)
 
         elif self.target:
             self.agent.set_occupied(self.target)
@@ -45,11 +50,20 @@ class AgentMovement(object):
             self.target_vector.z = target_tile["height"]
             self.target_normal = mathutils.Vector(target_tile["normal"])
 
+        angle = start_direction.angle(end_direction)
+        self.scale = angle / 3.142
+
         self.done = False
 
     def update(self):
+
+        if self.scale > 0.0:
+            turning_speed = self.agent.turning_speed / self.scale
+        else:
+            turning_speed = self.agent.turning_speed
+
         if self.target_direction:
-            self.timer = min(1.0, self.timer + self.agent.turning_speed)
+            self.timer = min(1.0, self.timer + turning_speed)
             if self.timer >= 1.0:
                 self.agent.direction = self.target_direction
                 self.target_direction = None
@@ -73,6 +87,12 @@ class AgentMovement(object):
         self.target_direction = self.agent.aim
         self.target = None
         self.set_vectors()
+
+    def target_enemy(self):
+        target_direction = self.agent.get_enemy_direction()
+        if target_direction != self.agent.direction:
+            self.target_direction = target_direction
+            self.set_vectors()
 
     def set_position(self, set_timer=0.0):
 
@@ -121,7 +141,7 @@ class AgentNavigation(object):
     def get_next_destination(self):
         self.history = [self.agent.location]
         if self.agent.destinations:
-            self.destination = self.agent.destinations.pop()
+            self.destination = self.agent.destinations.pop(0)
 
     def get_next_tile(self):
         search_array = [(1, 0), (1, 1), (0, 1), (1, -1), (-1, 0), (-1, 1), (0, -1), (-1, -1)]

@@ -88,6 +88,9 @@ class AgentIdle(AgentState):
             if self.agent.waiting:
                 return AgentWaiting
 
+            if self.agent.agent_targeter.enemy_target_id:
+                return AgentCombat
+
     def process(self):
 
         self.agent.agent_targeter.update()
@@ -97,5 +100,34 @@ class AgentIdle(AgentState):
             if self.agent.aim:
                 self.agent.movement.set_aim()
                 self.agent.aim = None
+        else:
+            self.agent.movement.update()
+
+
+class AgentCombat(AgentState):
+    def __init__(self, agent):
+        super().__init__(agent)
+
+        self.agent.movement.target_enemy()
+
+    def exit_check(self):
+
+        if self.agent.movement.done:
+            if not self.agent.agent_targeter.enemy_target_id:
+                return AgentIdle
+
+            if self.agent.destinations:
+                return AgentMovement
+
+            if self.agent.waiting:
+                return AgentWaiting
+
+    def process(self):
+
+        self.agent.agent_targeter.update()
+        self.agent.animator.update()
+
+        if self.agent.movement.done:
+            self.agent.movement.target_enemy()
         else:
             self.agent.movement.update()

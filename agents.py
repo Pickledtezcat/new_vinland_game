@@ -7,7 +7,6 @@ import agent_actions
 
 
 class Agent(object):
-
     size = 0
     max_speed = 0.02
     speed = 0.02
@@ -82,7 +81,11 @@ class Agent(object):
                      "movement_timer": self.movement.timer,
                      "navigation_destination": self.navigation.destination,
                      "navigation_history": self.navigation.history, "destinations": self.destinations,
-                     "reverse": self.reverse, "occupied": self.occupied, "aim": self.aim}
+                     "reverse": self.reverse, "occupied": self.occupied, "aim": self.aim,
+                     "targeter_id": self.agent_targeter.enemy_target_id,
+                     "targeter_infantry_index": self.agent_targeter.infantry_index,
+                     "targeter_angle": self.agent_targeter.turret_angle,
+                     "targeter_elevation": self.agent_targeter.gun_elevation}
 
         return save_dict
 
@@ -106,12 +109,18 @@ class Agent(object):
         self.reverse = agent_dict["reverse"]
         self.set_occupied(None, agent_dict["occupied"])
 
+        self.agent_targeter.enemy_target_id = agent_dict["targeter_id"]
+        self.agent_targeter.infantry_index = agent_dict["targeter_infantry_index"]
+        self.agent_targeter.turret_angle = agent_dict["targeter_angle"]
+        self.agent_targeter.gun_elevation = agent_dict["targeter_elevation"]
+
     def set_occupied(self, target_tile, occupied_list=None):
         display = False
 
         if not occupied_list:
             x, y = target_tile
-            occupied_list = [bgeutils.get_key([x + ox, y + oy]) for ox in range(-self.size, self.size + 1) for oy in range(-self.size, self.size + 1)]
+            occupied_list = [bgeutils.get_key([x + ox, y + oy]) for ox in range(-self.size, self.size + 1) for oy in
+                             range(-self.size, self.size + 1)]
 
         for tile_key in occupied_list:
             if display:
@@ -180,13 +189,20 @@ class Agent(object):
         best_angle = 4.0
 
         for facing in search_array:
-            facing_vector = mathutils.Vector(facing).to_3d()
-            angle = target_vector.angle(facing_vector)
+            facing_vector = mathutils.Vector(facing)
+            angle = target_vector.to_2d().angle(facing_vector)
             if angle < best_angle:
                 best_facing = facing
                 best_angle = angle
 
         return best_facing
+
+    def get_enemy_direction(self):
+        if self.agent_targeter.enemy_target_id:
+            enemy_agent = self.level.agents[self.agent_targeter.enemy_target_id]
+            target_vector = (enemy_agent.box.worldPosition.copy() - self.box.worldPosition.copy()).to_2d()
+
+            return self.get_facing(target_vector)
 
     def process_commands(self):
 
@@ -273,7 +289,10 @@ class Agent(object):
             self.state = next_state(self)
 
     def update(self):
-        self.debug_text = "{}\nturret:{}  hull:{}".format(self.state.name, self.agent_targeter.turret_on_target, self.agent_targeter.hull_on_target)
+        #self.debug_text = "{}\nturret:{}  hull:{}".format(self.state.name, self.agent_targeter.turret_on_target,
+        #                                                  self.agent_targeter.hull_on_target)
+
+        self.debug_text = "{}\n{}".format(self.navigation.destination, self.destinations)
 
         self.process_commands()
         if not self.ended:
