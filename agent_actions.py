@@ -52,8 +52,8 @@ class AgentMovement(object):
 
         angle = start_direction.angle(end_direction)
         self.scale = angle / 3.142
-
         self.done = False
+        self.timer = 0.0
 
     def update(self):
 
@@ -73,15 +73,15 @@ class AgentMovement(object):
             if self.timer >= 1.0:
                 self.agent.location = self.target
                 self.target = None
+
         else:
-            self.timer = 0.0
-            self.done = True
+            if not self.done:
+                self.done = True
+                self.agent.clear_occupied()
+                self.agent.set_occupied(self.agent.location)
 
         if not self.done:
             self.set_position()
-        else:
-            self.agent.clear_occupied()
-            self.agent.set_occupied(self.agent.location)
 
     def set_aim(self):
         self.target_direction = self.agent.aim
@@ -144,7 +144,7 @@ class AgentNavigation(object):
             self.destination = self.agent.destinations.pop(0)
 
     def get_next_tile(self):
-        search_array = [(1, 0), (1, 1), (0, 1), (1, -1), (-1, 0), (-1, 1), (0, -1), (-1, -1)]
+        search_array = [[1, 0], [1, 1], [0, 1], [1, -1], [-1, 0], [-1, 1], [0, -1], [-1, -1]]
         current_tile = self.agent.location
         touching_infantry = False
         next_facing = None
@@ -241,15 +241,19 @@ class AgentTargeter(object):
         self.hull_on_target = False
 
     def update(self):
+        local_y = self.agent.movement_hook.getAxisVect([0.0, 1.0, 0.0]).to_2d()
+
         if self.enemy_target_id:
             enemy_agent = self.agent.level.agents[self.enemy_target_id]
             target_vector = (enemy_agent.box.worldPosition.copy() - self.agent.box.worldPosition.copy()).to_2d()
-            local_y = self.agent.movement_hook.getAxisVect([0.0, 1.0, 0.0]).to_2d()
+        else:
+            target_vector = local_y
 
-            target_angle = local_y.angle_signed(target_vector, 0.0) * -1.0
-            turret_speed = self.agent.turret_speed
+        target_angle = local_y.angle_signed(target_vector, 0.0) * -1.0
+        turret_speed = self.agent.turret_speed
 
-            turret_difference = abs(self.turret_angle - target_angle)
+        turret_difference = abs(self.turret_angle - target_angle)
+        if turret_difference > 0.02:
             scale = turret_difference / 3.142
             turret_speed /= scale
 

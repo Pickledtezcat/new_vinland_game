@@ -13,6 +13,7 @@ class AgentState(object):
         pass
 
     def update(self):
+        self.agent.update_stats()
         exit_check = self.exit_check()
         if exit_check:
             self.transition = exit_check

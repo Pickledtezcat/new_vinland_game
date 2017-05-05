@@ -167,18 +167,13 @@ class MouseControl(object):
                     target = occupied
 
             if target:
-                mouse_over = None
-                if self.mouse_over:
-                    mouse_over = self.mouse_over["occupied"]
+                self.context = "TARGET"
+                click = "right_button" in self.level.manager.game_input.buttons
 
-                selected_agents = [self.level.agents[agent_id] for agent_id in self.level.agents if
-                                   self.level.agents[agent_id].selected]
-
-                if selected_agents:
-                    self.context = "TARGET"
-                    click = "right_button" in self.level.manager.game_input.buttons
-
-                    if click:
+                if click:
+                    selected_agents = [self.level.agents[agent_id] for agent_id in self.level.agents if
+                                       self.level.agents[agent_id].selected]
+                    if selected_agents:
                         target_id = target.agent_id
                         infantry_index = 0
                         if target.agent_type == "INFANTRY":
@@ -194,7 +189,7 @@ class MouseControl(object):
 
         if self.pulse < 0:
             self.pulsing = True
-            self.pulse = 3
+            self.pulse = 5
         else:
             self.pulsing = False
             self.pulse -= 1

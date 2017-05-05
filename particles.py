@@ -9,6 +9,7 @@ class Particle(object):
         self.level = level
         self.ended = False
         self.box = self.add_box()
+        self.timer = 0.0
 
         self.level.particles.append(self)
 
@@ -78,7 +79,14 @@ class MovementPointIcon(Particle):
     def update(self):
 
         if self.released:
-            self.ended = True
+            if self.timer >= 1.0:
+                self.ended = True
+            else:
+                self.timer += 0.02
+                color = bgeutils.smoothstep(1.0 - self.timer)
+                self.box.color = [color, color, color, 1.0]
+
+
 
 
 

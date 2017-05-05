@@ -81,7 +81,7 @@ class Agent(object):
                      "movement_timer": self.movement.timer,
                      "navigation_destination": self.navigation.destination,
                      "navigation_history": self.navigation.history, "destinations": self.destinations,
-                     "reverse": self.reverse, "occupied": self.occupied, "aim": self.aim,
+                     "reverse": self.reverse, "throttle": self.throttle, "occupied": self.occupied, "aim": self.aim,
                      "targeter_id": self.agent_targeter.enemy_target_id,
                      "targeter_infantry_index": self.agent_targeter.infantry_index,
                      "targeter_angle": self.agent_targeter.turret_angle,
@@ -107,6 +107,7 @@ class Agent(object):
         self.destinations = agent_dict["destinations"]
         self.aim = agent_dict["aim"]
         self.reverse = agent_dict["reverse"]
+        self.throttle = agent_dict["throttle"]
         self.set_occupied(None, agent_dict["occupied"])
 
         self.agent_targeter.enemy_target_id = agent_dict["targeter_id"]
@@ -163,17 +164,26 @@ class Agent(object):
 
     def load_stats(self):
         self.size = 1
-        self.max_speed = 0.02
+        self.max_speed = 0.04
         self.handling = 0.02
-        self.speed = 0.06
-        self.turning_speed = 0.03
+        self.speed = 0.02
+        self.turning_speed = 0.01
         self.turret_speed = 0.01
         self.base_visual_range = 6
         self.visual_range = 6
 
     def update_stats(self):
-        self.speed = 0.02
-        self.turning_speed = 0.01
+        if self.movement.target:
+            self.throttle_target = 1.0
+
+        elif self.movement.target_direction:
+            self.throttle_target = 0.3
+        else:
+            self.throttle_target = 0.0
+
+        self.throttle = bgeutils.interpolate_float(self.throttle, self.throttle_target, self.handling)
+        self.speed = self.max_speed * self.throttle
+        self.turning_speed = self.handling * self.throttle
 
     def set_position(self):
         self.movement.initial_position()
@@ -183,7 +193,7 @@ class Agent(object):
         if not target_vector:
             target_vector = self.movement_hook.getAxisVect([0.0, 1.0, 0.0])
 
-        search_array = [(1, 0), (1, 1), (0, 1), (1, -1), (-1, 0), (-1, 1), (0, -1), (-1, -1)]
+        search_array = [[1, 0], [1, 1], [0, 1], [1, -1], [-1, 0], [-1, 1], [0, -1], [-1, -1]]
 
         best_facing = None
         best_angle = 4.0
@@ -266,7 +276,9 @@ class Agent(object):
                 best_facing = self.get_facing(target_vector)
 
                 self.navigation.stop = True
+                self.destinations = []
                 self.aim = best_facing
+                self.agent_targeter.enemy_target_id = None
 
             if command["LABEL"] == "TARGET_ENEMY":
                 target_id = command["TARGET_ID"]
@@ -274,6 +286,8 @@ class Agent(object):
 
                 self.agent_targeter.enemy_target_id = target_id
                 self.agent_targeter.infantry_index = infantry_index
+                self.navigation.stop = True
+                self.destinations = []
 
         self.commands = []
 
@@ -289,10 +303,8 @@ class Agent(object):
             self.state = next_state(self)
 
     def update(self):
-        #self.debug_text = "{}\nturret:{}  hull:{}".format(self.state.name, self.agent_targeter.turret_on_target,
-        #                                                  self.agent_targeter.hull_on_target)
-
-        self.debug_text = "{}\n{}".format(self.navigation.destination, self.destinations)
+        self.debug_text = "{}\nturret:{}  hull:{}".format(self.state.name, self.agent_targeter.turret_on_target,
+                                                          self.agent_targeter.hull_on_target)
 
         self.process_commands()
         if not self.ended:
