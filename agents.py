@@ -74,7 +74,7 @@ class Agent(object):
 
     def save(self):
 
-        save_dict = {"team": self.team, "location": self.location, "direction": self.direction,
+        save_dict = {"agent_type": self.agent_type, "team": self.team, "location": self.location, "direction": self.direction,
                      "selected": self.selected, "state_name": self.state.name,
                      "state_count": self.state.count, "movement_target": self.movement.target,
                      "movement_target_direction": self.movement.target_direction,
@@ -92,10 +92,6 @@ class Agent(object):
     def reload(self, agent_dict):
 
         self.direction = agent_dict["direction"]
-        state_class = globals()[agent_dict["state_name"]]
-
-        self.state = state_class(self)
-        self.state.count = agent_dict["state_count"]
 
         self.movement.load_movement(agent_dict["movement_target"], agent_dict["movement_target_direction"],
                                     agent_dict["movement_timer"])
@@ -114,6 +110,11 @@ class Agent(object):
         self.agent_targeter.infantry_index = agent_dict["targeter_infantry_index"]
         self.agent_targeter.turret_angle = agent_dict["targeter_angle"]
         self.agent_targeter.gun_elevation = agent_dict["targeter_elevation"]
+
+        state_class = globals()[agent_dict["state_name"]]
+
+        self.state = state_class(self)
+        self.state.count = agent_dict["state_count"]
 
     def set_occupied(self, target_tile, occupied_list=None):
         display = False
@@ -209,10 +210,11 @@ class Agent(object):
 
     def get_enemy_direction(self):
         if self.agent_targeter.enemy_target_id:
-            enemy_agent = self.level.agents[self.agent_targeter.enemy_target_id]
-            target_vector = (enemy_agent.box.worldPosition.copy() - self.box.worldPosition.copy()).to_2d()
+            enemy_agent = self.level.agents.get(self.agent_targeter.enemy_target_id)
+            if enemy_agent:
+                target_vector = (enemy_agent.box.worldPosition.copy() - self.box.worldPosition.copy()).to_2d()
 
-            return self.get_facing(target_vector)
+                return self.get_facing(target_vector)
 
     def process_commands(self):
 
@@ -303,10 +305,30 @@ class Agent(object):
             self.state = next_state(self)
 
     def update(self):
-        self.debug_text = "{}\nturret:{}  hull:{}".format(self.state.name, self.agent_targeter.turret_on_target,
-                                                          self.agent_targeter.hull_on_target)
+        self.debug_text = "{} - {}\n{} -  {}".format(self.agent_id, self.state.name, self.direction, self.agent_targeter.hull_on_target)
 
         self.process_commands()
         if not self.ended:
             if not self.level.paused:
                 self.state_machine()
+
+
+class Vehicle(Agent):
+    def __init__(self, level, load_name, location, team, agent_id=None, load_dict=None):
+        self.agent_type = "VEHICLE"
+        super().__init__(level, load_name, location, team, agent_id, load_dict)
+
+
+class Infantry(Agent):
+    def __init__(self, level, load_name, location, team, agent_id=None, load_dict=None):
+        self.agent_type = "INFANTRY"
+
+
+        super().__init__(level, load_name, location, team, agent_id, load_dict)
+
+
+    def add_box(self):
+        box = self.level.own.scene.addObject("agent_infantry", self.level.own, 0)
+        return box
+
+

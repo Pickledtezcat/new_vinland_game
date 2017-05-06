@@ -109,8 +109,6 @@ class AgentCombat(AgentState):
     def __init__(self, agent):
         super().__init__(agent)
 
-        self.agent.movement.target_enemy()
-
     def exit_check(self):
 
         if self.agent.movement.done:

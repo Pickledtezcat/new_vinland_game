@@ -293,11 +293,15 @@ class Level(object):
             agent.terminate()
 
     def add_agents(self):
+
+        for friend in range(2):
+            agents.Infantry(self, None, [10 + (10 * self.agent_id_index), 25], 0)
+
         for friend in range(4):
-            agents.Agent(self, None, [10 + (10 * self.agent_id_index), 45], 0)
+            agents.Vehicle(self, None, [-15 + (10 * self.agent_id_index), 45], 0)
 
         for enemy in range(4):
-            agents.Agent(self, None, [-30 + (10 * self.agent_id_index), 35], 1)
+            agents.Vehicle(self, None, [-30 + (10 * self.agent_id_index), 35], 1)
 
     def load_level(self, load_dict):
         self.map = load_dict["map"]
@@ -307,7 +311,17 @@ class Level(object):
             loading_agent = loading_agents[agent_id]
             location = loading_agent["location"]
             team = loading_agent["team"]
-            agents.Agent(self, None, location, team, agent_id=agent_id, load_dict=loading_agent)
+            agent_type = loading_agent["agent_type"]
+
+            agent_class = agents.Vehicle
+
+            if agent_type == "VEHICLE":
+                agent_class = agents.Vehicle
+
+            elif agent_type == "INFANTRY":
+                agent_class = agents.Infantry
+
+            agent_class(self, None, location, team, agent_id=agent_id, load_dict=loading_agent)
 
     def save_agents(self):
 

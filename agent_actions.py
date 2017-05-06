@@ -90,9 +90,11 @@ class AgentMovement(object):
 
     def target_enemy(self):
         target_direction = self.agent.get_enemy_direction()
-        if target_direction != self.agent.direction:
-            self.target_direction = target_direction
-            self.set_vectors()
+
+        if target_direction:
+            if target_direction != self.agent.direction:
+                self.target_direction = target_direction
+                self.set_vectors()
 
     def set_position(self, set_timer=0.0):
 
@@ -107,15 +109,16 @@ class AgentMovement(object):
         rotation = self.current_orientation.lerp(self.target_orientation, bgeutils.smoothstep(timer))
         self.agent.movement_hook.worldOrientation = rotation
 
-        normal = self.start_normal.lerp(self.target_normal, timer)
+        if self.agent.agent_type != "INFANTRY":
+            normal = self.start_normal.lerp(self.target_normal, timer)
 
-        local_y = self.agent.movement_hook.getAxisVect([0.0, 1.0, 0.0])
-        local_z = self.agent.tilt_hook.getAxisVect([0.0, 0.0, 1.0])
+            local_y = self.agent.movement_hook.getAxisVect([0.0, 1.0, 0.0])
+            local_z = self.agent.tilt_hook.getAxisVect([0.0, 0.0, 1.0])
 
-        target_vector = local_z.lerp(normal, damping)
+            target_vector = local_z.lerp(normal, damping)
 
-        self.agent.tilt_hook.alignAxisToVect(local_y, 1, 1.0)
-        self.agent.tilt_hook.alignAxisToVect(target_vector, 2, 1.0)
+            self.agent.tilt_hook.alignAxisToVect(local_y, 1, 1.0)
+            self.agent.tilt_hook.alignAxisToVect(target_vector, 2, 1.0)
 
     def initial_position(self):
         self.set_position(set_timer=1.0)
@@ -124,10 +127,17 @@ class AgentMovement(object):
     def load_movement(self, target, target_direction, timer):
         self.target = target
         self.target_direction = target_direction
-        self.timer = timer
-
         self.set_vectors()
+        self.timer = timer
         self.set_position()
+
+
+class InfantryMovement(AgentMovement):
+    def __init__(self, agent):
+        super().__init__(agent)
+
+
+
 
 
 class AgentNavigation(object):
@@ -253,20 +263,21 @@ class AgentTargeter(object):
         turret_speed = self.agent.turret_speed
 
         turret_difference = abs(self.turret_angle - target_angle)
+
+        self.turret_on_target = False
+        self.hull_on_target = False
+
+        if abs(target_angle) < 0.5:
+            self.hull_on_target = True
+
+        if turret_difference < 0.5:
+            self.turret_on_target = True
+
         if turret_difference > 0.02:
             scale = turret_difference / 3.142
             turret_speed /= scale
 
             self.turret_angle = bgeutils.interpolate_float(self.turret_angle, target_angle, turret_speed)
-
-            self.turret_on_target = False
-            self.hull_on_target = False
-
-            if abs(target_angle) < 0.5:
-                self.hull_on_target = True
-
-            if turret_difference < 0.5:
-                self.turret_on_target = True
 
 
 class AgentAnimator(object):
@@ -276,8 +287,10 @@ class AgentAnimator(object):
         self.turret = bgeutils.get_ob("agent_turret", self.agent.box.childrenRecursive)
 
     def update(self):
-        turret_angle = self.agent.agent_targeter.turret_angle
-        turret_matrix = mathutils.Matrix.Rotation(turret_angle, 4, 'Z').to_3x3()
-        self.turret.localOrientation = turret_matrix
+
+        if self.turret:
+            turret_angle = self.agent.agent_targeter.turret_angle
+            turret_matrix = mathutils.Matrix.Rotation(turret_angle, 4, 'Z').to_3x3()
+            self.turret.localOrientation = turret_matrix
 
 
