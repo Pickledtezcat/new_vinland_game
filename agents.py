@@ -166,7 +166,7 @@ class Agent(object):
     def load_stats(self):
         self.size = 1
         self.max_speed = 0.04
-        self.handling = 0.02
+        self.handling = 0.01
         self.speed = 0.02
         self.turning_speed = 0.01
         self.turret_speed = 0.01
@@ -175,7 +175,10 @@ class Agent(object):
 
     def update_stats(self):
         if self.movement.target:
-            self.throttle_target = 1.0
+            if self.movement.target == self.navigation.destination:
+                self.throttle_target = 0.3
+            else:
+                self.throttle_target = 1.0
 
         elif self.movement.target_direction:
             self.throttle_target = 0.3

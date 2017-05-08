@@ -66,6 +66,7 @@ class AgentWaiting(AgentState):
 
     def exit_check(self):
         if self.count > 360:
+            self.agent.waiting = False
             return AgentIdle
 
     def process(self):
