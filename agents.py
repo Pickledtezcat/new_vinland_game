@@ -4,6 +4,8 @@ import bgeutils
 import particles
 from agent_states import *
 import agent_actions
+import static_dicts
+import random
 
 
 class Agent(object):
@@ -45,6 +47,7 @@ class Agent(object):
         self.debug_text = "AGENT"
 
         self.commands = []
+        self.soldiers = []
 
         self.location = location
         self.direction = [1, 0]
@@ -235,12 +238,16 @@ class Agent(object):
                     select = False
 
                     if cam.pointInsideFrustum(self.box.worldPosition):
-                        screen_location = cam.getScreenPosition(self.box)
+                        points = [cam.getScreenPosition(self.box)]
+                        for soldier in self.soldiers:
+                            points.append(cam.getScreenPosition(soldier.box))
                         padding = 0.03
 
-                        if x_limit[0] - padding < screen_location[0] < x_limit[1] + padding:
-                            if y_limit[0] - padding < screen_location[1] < y_limit[1] + padding:
-                                select = True
+                        for screen_location in points:
+
+                            if x_limit[0] - padding < screen_location[0] < x_limit[1] + padding:
+                                if y_limit[0] - padding < screen_location[1] < y_limit[1] + padding:
+                                    select = True
 
                     if mouse_over == self and additive:
                         self.selected = False
@@ -310,10 +317,18 @@ class Agent(object):
     def update(self):
         self.debug_text = "{} - {}\n{} -  {}".format(self.agent_id, self.state.name, self.direction, self.agent_targeter.hull_on_target)
 
+        infantry_types = ["INFANTRY", "ARTILLERY"]
+
         self.process_commands()
         if not self.ended:
             if not self.level.paused:
                 self.state_machine()
+
+                if self.agent_type in infantry_types:
+                    self.infantry_update()
+
+    def infantry_update(self):
+        pass
 
 
 class Vehicle(Agent):
@@ -325,13 +340,181 @@ class Vehicle(Agent):
 class Infantry(Agent):
     def __init__(self, level, load_name, location, team, agent_id=None, load_dict=None):
         self.agent_type = "INFANTRY"
-
+        self.avoid_radius = 3
+        self.spacing = 1.5
+        self.prone = False
+        self.size = 1
 
         super().__init__(level, load_name, location, team, agent_id, load_dict)
 
+        squad = static_dicts.squads[load_name]
+        self.squad = [rank for rank in squad if rank != [""]]
+        self.wide = len(self.squad[0])
+        self.deep = len(self.squad)
+        self.formation = []
+        self.add_squad()
+
+    def add_squad(self):
+
+        self.set_formation()
+        index = 0
+
+        for rank in self.squad:
+            for soldier in rank:
+                self.soldiers.append(InfantryMan(self, soldier, index))
+                index += 1
+
+    def set_occupied(self, target_tile, occupied_list=None):
+        pass
+
+    def update_stats(self):
+        self.speed = self.max_speed
+
+    def set_formation(self):
+
+        self.formation = []
+
+        order = [self.deep, self.wide]
+        spacing = self.spacing * 2.0
+        scatter = 0.0
+        y_offset = 0.0
+        x_offset = 0
+
+        if self.stance == "AGGRESSIVE":
+            self.prone = False
+            self.avoid_radius = 3
+            self.max_speed = 0.025
+            order = [self.deep, self.wide]
+            spacing = self.spacing * 1.5
+            scatter = spacing * 0.2
+
+        if self.stance == "SENTRY":
+            self.prone = False
+            self.avoid_radius = 6
+            self.max_speed = 0.02
+            order = [self.deep, self.wide]
+            spacing = self.spacing * 3.0
+            scatter = spacing * 0.5
+
+        if self.stance == "DEFEND":
+            self.prone = True
+            self.avoid_radius = 12
+            self.max_speed = 0.015
+            order = [self.deep, self.wide]
+            spacing = self.spacing * 2.0
+            scatter = spacing * 0.1
+
+        if self.stance == "FLANK":
+            self.prone = False
+            self.avoid_radius = 12
+            self.max_speed = 0.03
+            order = [self.wide, self.deep]
+            spacing = self.spacing
+            scatter = 0.02
+
+        half = spacing * 0.5
+
+        def s_value(scatter_value):
+            return scatter_value - (scatter_value * random.uniform(0.0, 2.0))
+
+        for y in range(order[0]):
+            for x in range(order[1]):
+
+                if order[0] > 1:
+                    y_offset = ((order[0] - 2) * spacing)
+
+                if order[1] % 2 != 0:
+                    x_offset = spacing * 0.5
+
+                x_loc = (-order[1] * half) + (x * spacing) + half + s_value(scatter) + x_offset
+                y_loc = (-order[0] * half) + (y * spacing) + half + s_value(scatter) - y_offset
+
+                self.formation.append(mathutils.Vector([x_loc, y_loc]))
 
     def add_box(self):
         box = self.level.own.scene.addObject("agent_infantry", self.level.own, 0)
         return box
 
+    def infantry_update(self):
+        for soldier in self.soldiers:
+            soldier.update()
 
+
+class InfantryMan(object):
+
+    def __init__(self, agent, infantry_type, index):
+        self.agent = agent
+        self.infantry_type = infantry_type
+
+        self.index = index
+        self.box = self.agent.box.scene.addObject("infantry_dummy", self.agent.box, 0)
+        self.location = self.agent.location
+        self.direction = [0, 1]
+        self.occupied = None
+        self.avoiding = False
+
+        self.speed = 0.02
+
+        self.movement = agent_actions.InfantryAction(self)
+        self.navigation = agent_actions.InfantryNavigation(self)
+
+    def update(self):
+        if self.movement.done:
+            self.navigation.update()
+
+        self.movement.update()
+
+    def set_occupied(self, target_tile):
+        self.agent.level.map[bgeutils.get_key(target_tile)]["occupied"] = self.agent
+        self.occupied = self.location
+
+    def clear_occupied(self):
+        if self.occupied:
+            self.agent.level.map[bgeutils.get_key(self.occupied)]["occupied"] = None
+            self.occupied = None
+
+    def check_occupied(self, target_tile):
+        tile = self.agent.level.map.get(bgeutils.get_key(target_tile))
+        if tile:
+            if tile["occupied"]:
+                return tile["occupied"]
+        else:
+            return self
+
+    def check_too_close(self, target_tile):
+
+        closest = []
+
+        radius = self.agent.avoid_radius
+
+        ox, oy = target_tile
+
+        for x in range(-radius, radius):
+            for y in range(-radius, radius):
+                check_key = (ox + x, oy + y)
+                check_tile = self.agent.level.map.get(check_key)
+
+                if check_tile:
+                    vehicles = ["VEHICLE", "ARTILLERY"]
+                    if check_tile["occupied"]:
+                        if check_tile["occupied"] != self.agent and check_tile["occupied"].agent_type in vehicles:
+                            closest.append(check_tile["occupied"])
+
+        if closest:
+            return closest[0]
+
+    def get_destination(self):
+        self.set_speed()
+
+        location = self.agent.box.worldPosition.copy()
+        location.z = 0.0
+
+        offset = mathutils.Vector(self.agent.formation[self.index]).to_3d()
+        offset.rotate(self.agent.movement_hook.worldOrientation.copy())
+
+        destination = (location + offset).to_2d()
+
+        return [round(axis) for axis in destination]
+
+    def set_speed(self):
+        self.speed = self.agent.speed

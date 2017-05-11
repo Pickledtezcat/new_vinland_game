@@ -295,7 +295,7 @@ class Level(object):
     def add_agents(self):
 
         for friend in range(2):
-            agents.Infantry(self, None, [10 + (10 * self.agent_id_index), 25], 0)
+            agents.Infantry(self, "SUPPORT_36", [10 + (10 * self.agent_id_index), 25], 0)
 
         for friend in range(4):
             agents.Vehicle(self, None, [-15 + (10 * self.agent_id_index), 45], 0)

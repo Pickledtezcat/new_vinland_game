@@ -132,12 +132,139 @@ class AgentMovement(object):
         self.set_position()
 
 
-class InfantryMovement(AgentMovement):
-    def __init__(self, agent):
-        super().__init__(agent)
+class InfantryAction(object):
+
+    def __init__(self, infantryman):
+        self.infantryman = infantryman
+        self.target = None
+        self.direction = None
+        self.timer = 0.0
+        self.done = False
+
+        self.start_vector = None
+        self.target_vector = None
+
+    def set_vectors(self):
+
+        start_tile = self.infantryman.agent.level.map[bgeutils.get_key(self.infantryman.location)]
+        self.start_vector = mathutils.Vector(start_tile["position"]).to_3d()
+        self.start_vector.z = start_tile["height"]
+
+        self.target_vector = self.start_vector
+
+        if self.target:
+            self.infantryman.set_occupied(self.target)
+            target_tile = self.infantryman.agent.level.map[bgeutils.get_key(self.target)]
+            self.target_vector = mathutils.Vector(target_tile["position"]).to_3d()
+            self.target_vector.z = target_tile["height"]
+
+        self.done = False
+        self.timer = 0.0
+
+    def save_movement(self):
+
+        return [self.target, self.timer]
+
+    def load_movement(self, load_details):
+
+        self.target, self.timer = load_details
+        self.set_vectors()
+        self.set_position()
+
+    def update(self):
+
+        if self.target:
+            self.timer = min(1.0, self.timer + self.infantryman.speed)
+            if self.timer >= 1.0:
+                self.infantryman.location = self.target
+                self.target = None
+
+        else:
+            if not self.done:
+                self.done = True
+                self.infantryman.clear_occupied()
+                self.infantryman.set_occupied(self.infantryman.location)
+
+        if not self.done:
+            self.set_position()
+
+    def set_position(self, set_timer=0.0):
+
+        if set_timer:
+            timer = set_timer
+        else:
+            timer = self.timer
+
+        self.infantryman.box.worldPosition = self.start_vector.lerp(self.target_vector, timer)
 
 
+class InfantryNavigation(object):
 
+    def __init__(self, infantryman):
+        self.infantryman = infantryman
+        self.destination = None
+        self.history = []
+        self.stop = False
+        self.avoiding = None
+
+    def get_next_tile(self):
+
+        avoiding = self.infantryman.avoiding
+
+        search_array = [[1, 0], [1, 1], [0, 1], [1, -1], [-1, 0], [-1, 1], [0, -1], [-1, -1]]
+        current_tile = self.infantryman.location
+
+        if avoiding:
+            reference = avoiding.box.worldPosition.copy().to_2d()
+        else:
+            reference = mathutils.Vector(self.destination).to_2d()
+
+        target = current_tile
+        choice = self.infantryman.direction
+
+        closest = 10000.0
+        furthest = 0.0
+
+        for s in search_array:
+            neighbor = [current_tile[0] + s[0], current_tile[1] + s[1]]
+            neighbor_check = self.infantryman.check_occupied(neighbor)
+
+            if not neighbor_check:
+                if neighbor not in self.history:
+
+                    distance = (reference - mathutils.Vector(neighbor)).length
+                    if bgeutils.diagonal(s):
+                        distance += 0.4
+
+                    if avoiding:
+                        if distance > furthest:
+                            furthest = distance
+                            choice = s
+                            target = neighbor
+                    else:
+                        if distance < closest:
+                            closest = distance
+                            choice = s
+                            target = neighbor
+
+        self.infantryman.direction = choice
+        self.infantryman.movement.target = target
+        self.infantryman.movement.set_vectors()
+
+        if len(self.history) > 12:
+            self.history = [self.infantryman.location, target]
+        else:
+            self.history.append(target)
+
+    def update(self):
+        destination = self.infantryman.get_destination()
+        if destination != self.destination:
+            self.destination = destination
+
+        if self.infantryman.location != self.destination:
+            self.get_next_tile()
+        else:
+            self.history = [self.infantryman.location]
 
 
 class AgentNavigation(object):
