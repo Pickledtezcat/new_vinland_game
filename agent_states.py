@@ -65,9 +65,12 @@ class AgentWaiting(AgentState):
         super().__init__(agent)
 
     def exit_check(self):
-        if self.count > 360:
+        if self.count > 60:
             self.agent.waiting = False
-            return AgentIdle
+            if self.agent.navigation.destination:
+                return AgentMovement
+            else:
+                return AgentIdle
 
     def process(self):
         self.agent.agent_targeter.update()

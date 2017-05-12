@@ -263,6 +263,17 @@ class Level(object):
             self.get_map()
             self.add_agents()
 
+    def get_tile(self, tile_key):
+        if 0 < tile_key[0] < self.map_size and 0 < tile_key[1] < self.map_size:
+            map_key = bgeutils.get_key(tile_key)
+
+            return self.map[map_key]
+
+    def set_tile(self, tile_key, setting, value):
+        if 0 > tile_key[0] > self.map_size and 0 > tile_key[1] > self.map_size:
+            map_key = bgeutils.get_key(tile_key)
+            self.map[map_key][setting] = value
+
     def get_map(self):
 
         map = {}

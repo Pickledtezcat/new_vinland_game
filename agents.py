@@ -140,11 +140,11 @@ class Agent(object):
 
         x, y = target_tile
         occupied = []
-        occupied_list = [bgeutils.get_key([x + ox, y + oy]) for ox in range(-self.size, self.size + 1) for oy in
+        occupied_list = [[x + ox, y + oy] for ox in range(-self.size, self.size + 1) for oy in
                          range(-self.size, self.size + 1)]
 
         for tile_key in occupied_list:
-            tile = self.level.map.get(tile_key)
+            tile = self.level.get_tile(tile_key)
             if tile:
                 if tile["occupied"]:
                     if tile["occupied"] != self:
@@ -340,7 +340,7 @@ class Vehicle(Agent):
 class Infantry(Agent):
     def __init__(self, level, load_name, location, team, agent_id=None, load_dict=None):
         self.agent_type = "INFANTRY"
-        self.avoid_radius = 3
+        self.avoid_radius = 4
         self.spacing = 1.5
         self.prone = False
         self.size = 1
@@ -382,7 +382,7 @@ class Infantry(Agent):
 
         if self.stance == "AGGRESSIVE":
             self.prone = False
-            self.avoid_radius = 3
+            self.avoid_radius = 2
             self.max_speed = 0.025
             order = [self.deep, self.wide]
             spacing = self.spacing * 1.5
@@ -390,7 +390,7 @@ class Infantry(Agent):
 
         if self.stance == "SENTRY":
             self.prone = False
-            self.avoid_radius = 6
+            self.avoid_radius = 2
             self.max_speed = 0.02
             order = [self.deep, self.wide]
             spacing = self.spacing * 3.0
@@ -398,7 +398,7 @@ class Infantry(Agent):
 
         if self.stance == "DEFEND":
             self.prone = True
-            self.avoid_radius = 12
+            self.avoid_radius = 4
             self.max_speed = 0.015
             order = [self.deep, self.wide]
             spacing = self.spacing * 2.0
@@ -406,7 +406,7 @@ class Infantry(Agent):
 
         if self.stance == "FLANK":
             self.prone = False
-            self.avoid_radius = 12
+            self.avoid_radius = 3
             self.max_speed = 0.03
             order = [self.wide, self.deep]
             spacing = self.spacing
@@ -451,16 +451,16 @@ class InfantryMan(object):
         self.location = self.agent.location
         self.direction = [0, 1]
         self.occupied = None
-        self.avoiding = False
+        self.prone = False
 
         self.speed = 0.02
 
         self.movement = agent_actions.InfantryAction(self)
-        self.navigation = agent_actions.InfantryNavigation(self)
+        self.behavior = agent_actions.InfantryBehavior(self)
 
     def update(self):
         if self.movement.done:
-            self.navigation.update()
+            self.behavior.update()
 
         self.movement.update()
 
@@ -474,7 +474,7 @@ class InfantryMan(object):
             self.occupied = None
 
     def check_occupied(self, target_tile):
-        tile = self.agent.level.map.get(bgeutils.get_key(target_tile))
+        tile = self.agent.level.get_tile(target_tile)
         if tile:
             if tile["occupied"]:
                 return tile["occupied"]
@@ -491,14 +491,16 @@ class InfantryMan(object):
 
         for x in range(-radius, radius):
             for y in range(-radius, radius):
-                check_key = (ox + x, oy + y)
-                check_tile = self.agent.level.map.get(check_key)
+                check_key = [ox + x, oy + y]
+                check_tile = self.agent.level.get_tile(check_key)
 
                 if check_tile:
                     vehicles = ["VEHICLE", "ARTILLERY"]
-                    if check_tile["occupied"]:
-                        if check_tile["occupied"] != self.agent and check_tile["occupied"].agent_type in vehicles:
-                            closest.append(check_tile["occupied"])
+                    occupant = check_tile["occupied"]
+
+                    if occupant:
+                        if occupant != self.agent and occupant.agent_type in vehicles:
+                            closest.append(occupant)
 
         if closest:
             return closest[0]

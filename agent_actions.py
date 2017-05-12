@@ -198,7 +198,7 @@ class InfantryAction(object):
         self.infantryman.box.worldPosition = self.start_vector.lerp(self.target_vector, timer)
 
 
-class InfantryNavigation(object):
+class InfantryBehavior(object):
 
     def __init__(self, infantryman):
         self.infantryman = infantryman
@@ -206,16 +206,92 @@ class InfantryNavigation(object):
         self.history = []
         self.stop = False
         self.avoiding = None
+        self.prone = False
+        self.action_timer = 1.0
+        self.action = "CHOOSE_TILE"
+
+    def get_action(self):
+
+        if self.action == "DYING":
+            return "DEAD"
+
+        shooting = False
+        dead = False
+
+        if dead:
+            self.action_timer = 0.0
+            return "DYING"
+
+        if self.infantryman.prone:
+            if not self.prone:
+                self.action_timer = 0.0
+                return "GO_PRONE"
+        else:
+            if self.prone:
+                self.action_timer = 0.0
+                return "GET_UP"
+
+        if shooting:
+            self.action_timer = 0.0
+            return "SHOOTING"
+
+        avoiding = self.avoiding
+        self.avoiding = self.infantryman.check_too_close(self.infantryman.location)
+
+        if avoiding and not self.avoiding:
+            self.action_timer = 0.0
+            return "WAIT"
+
+        destination = self.infantryman.get_destination()
+        if destination != self.destination:
+            self.destination = destination
+
+        if self.infantryman.location != self.destination:
+            return "GET_TILE"
+        else:
+            if self.avoiding:
+                return "GET_TILE"
+            elif self.infantryman.agent.agent_type == "ARTILLERY":
+                return "FACE_GUN"
+            elif self.infantryman.agent.agent_targeter.enemy_target_id:
+                return "FACE_TARGET"
+            else:
+                self.action_timer = 0.0
+                return "FINISHED"
+
+    def update(self):
+
+        if self.action != "DEAD":
+            if self.action_timer < 1.0:
+                self.action_timer += 0.01
+            else:
+                if self.action == "GO_PRONE":
+                    self.prone = True
+                if self.action == "GET_UP":
+                    self.prone = False
+
+                self.action = self.get_action()
+
+                if self.action == "GET_TILE":
+                    self.get_next_tile()
+
+                if self.action == "FINISHED":
+                    self.history = [self.infantryman.location]
 
     def get_next_tile(self):
 
-        avoiding = self.infantryman.avoiding
+        avoiding = self.avoiding
 
         search_array = [[1, 0], [1, 1], [0, 1], [1, -1], [-1, 0], [-1, 1], [0, -1], [-1, -1]]
         current_tile = self.infantryman.location
 
         if avoiding:
-            reference = avoiding.box.worldPosition.copy().to_2d()
+            # TODO find a better avoidance algorithm
+
+            destination = mathutils.Vector(self.destination).to_2d()
+            avoider = avoiding.box.worldPosition.copy().to_2d()
+
+            reference = (destination + avoider) / 2.0
         else:
             reference = mathutils.Vector(self.destination).to_2d()
 
@@ -251,20 +327,10 @@ class InfantryNavigation(object):
         self.infantryman.movement.target = target
         self.infantryman.movement.set_vectors()
 
-        if len(self.history) > 12:
+        if len(self.history) > 8:
             self.history = [self.infantryman.location, target]
         else:
             self.history.append(target)
-
-    def update(self):
-        destination = self.infantryman.get_destination()
-        if destination != self.destination:
-            self.destination = destination
-
-        if self.infantryman.location != self.destination:
-            self.get_next_tile()
-        else:
-            self.history = [self.infantryman.location]
 
 
 class AgentNavigation(object):
