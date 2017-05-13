@@ -21,6 +21,7 @@ class Agent(object):
     base_visual_range = 6
     visual_range = 6
 
+    faction = "HRE"
     stance = "FLANK"
     agent_type = "VEHICLE"
 
@@ -78,7 +79,7 @@ class Agent(object):
     def save(self):
 
         save_dict = {"agent_type": self.agent_type, "team": self.team, "location": self.location, "direction": self.direction,
-                     "selected": self.selected, "state_name": self.state.name,
+                     "selected": self.selected, "state_name": self.state.name, "load_name": self.load_name,
                      "state_count": self.state.count, "movement_target": self.movement.target,
                      "movement_target_direction": self.movement.target_direction,
                      "movement_timer": self.movement.timer,
@@ -88,13 +89,15 @@ class Agent(object):
                      "targeter_id": self.agent_targeter.enemy_target_id,
                      "targeter_infantry_index": self.agent_targeter.infantry_index,
                      "targeter_angle": self.agent_targeter.turret_angle,
-                     "targeter_elevation": self.agent_targeter.gun_elevation}
+                     "targeter_elevation": self.agent_targeter.gun_elevation,
+                     "soldiers": [solider.save() for solider in self.soldiers]}
 
         return save_dict
 
     def reload(self, agent_dict):
 
         self.direction = agent_dict["direction"]
+        self.load_name = agent_dict["load_name"]
 
         self.movement.load_movement(agent_dict["movement_target"], agent_dict["movement_target_direction"],
                                     agent_dict["movement_timer"])
@@ -118,6 +121,7 @@ class Agent(object):
 
         self.state = state_class(self)
         self.state.count = agent_dict["state_count"]
+
 
     def set_occupied(self, target_tile, occupied_list=None):
         display = False
@@ -165,6 +169,9 @@ class Agent(object):
     def terminate(self):
         self.box.endObject()
         self.debug_label.ended = True
+
+        for soldier in self.soldiers:
+            soldier.terminate()
 
     def load_stats(self):
         self.size = 1
@@ -347,22 +354,27 @@ class Infantry(Agent):
 
         super().__init__(level, load_name, location, team, agent_id, load_dict)
 
-        squad = static_dicts.squads[load_name]
+        squad = static_dicts.squads[self.load_name]
         self.squad = [rank for rank in squad if rank != [""]]
         self.wide = len(self.squad[0])
         self.deep = len(self.squad)
         self.formation = []
-        self.add_squad()
+        self.add_squad(load_dict)
 
-    def add_squad(self):
+    def add_squad(self, load_dict):
 
         self.set_formation()
         index = 0
 
-        for rank in self.squad:
-            for soldier in rank:
-                self.soldiers.append(InfantryMan(self, soldier, index))
-                index += 1
+        if load_dict:
+            for soldier_details in load_dict["soldiers"]:
+                solider = soldier_details["infantry_type"]
+                self.soldiers.append(InfantryMan(self, solider, index, load_dict=soldier_details))
+        else:
+            for rank in self.squad:
+                for soldier in rank:
+                    self.soldiers.append(InfantryMan(self, soldier, index))
+                    index += 1
 
     def set_occupied(self, target_tile, occupied_list=None):
         pass
@@ -442,12 +454,15 @@ class Infantry(Agent):
 
 class InfantryMan(object):
 
-    def __init__(self, agent, infantry_type, index):
+    def __init__(self, agent, infantry_type, index, load_dict=None):
         self.agent = agent
         self.infantry_type = infantry_type
+        self.mesh_name = static_dicts.soldiers()[self.infantry_type]["mesh_name"]
+        # TODO add other infantry stats here
 
         self.index = index
         self.box = self.agent.box.scene.addObject("infantry_dummy", self.agent.box, 0)
+        self.sprite = self.box.children[0]
         self.location = self.agent.location
         self.direction = [0, 1]
         self.occupied = None
@@ -457,12 +472,20 @@ class InfantryMan(object):
 
         self.movement = agent_actions.InfantryAction(self)
         self.behavior = agent_actions.InfantryBehavior(self)
+        self.animation = agent_actions.InfantryAnimation(self)
+
+        if load_dict:
+            self.reload(load_dict)
+
+    def terminate(self):
+        self.box.endObject()
 
     def update(self):
         if self.movement.done:
             self.behavior.update()
 
         self.movement.update()
+        self.animation.update()
 
     def set_occupied(self, target_tile):
         self.agent.level.map[bgeutils.get_key(target_tile)]["occupied"] = self.agent
@@ -520,3 +543,32 @@ class InfantryMan(object):
 
     def set_speed(self):
         self.speed = self.agent.speed
+
+    def save(self):
+
+        save_dict = {"movement_target": self.movement.target, "movement_timer": self.movement.timer,
+                     "destination": self.behavior.destination, "history": self.behavior.history,
+                     "behavior_prone": self.behavior.prone, "index": self.index, "prone": self.prone,
+                     "direction": self.direction, "location": self.location, "infantry_type": self.infantry_type,
+                     "occupied": self.occupied}
+
+        return save_dict
+
+    def reload(self, load_dict):
+
+        self.index = load_dict["index"]
+        self.prone = load_dict["prone"]
+        self.direction = load_dict["direction"]
+        self.location = load_dict["location"]
+
+        self.mesh_name = static_dicts.soldiers()[self.infantry_type]["mesh_name"]
+
+        self.movement.set_vectors()
+        self.movement.set_position()
+
+        self.behavior.destination = load_dict["destination"]
+        self.behavior.history = load_dict["history"]
+        self.behavior.prone = load_dict["behavior_prone"]
+
+        self.behavior.update()
+        self.animation.update()

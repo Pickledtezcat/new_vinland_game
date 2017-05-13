@@ -252,16 +252,20 @@ class Level(object):
         self.paused = False
         self.map_size = 100
         self.agent_id_index = 0
+        self.loaded = False
 
         self.map = {}
         self.agents = {}
         self.particles = []
 
         if load_dict:
+            self.assets_loaded = True
+            self.loaded = True
             self.load_level(load_dict)
         else:
+            infantry_path = bge.logic.expandPath("//infantry_sprites/hre_summer_sprites.blend")
+            self.assets_loaded = bge.logic.LibLoad(infantry_path, "Scene")
             self.get_map()
-            self.add_agents()
 
     def get_tile(self, tile_key):
         if 0 < tile_key[0] < self.map_size and 0 < tile_key[1] < self.map_size:
@@ -292,6 +296,16 @@ class Level(object):
                     map[bgeutils.get_key((x, y))] = tile
 
         self.map = map
+
+    def save_map(self):
+        new_map = {}
+
+        for tile_key in self.map:
+            tile = self.map[tile_key]
+            tile["occupied"] = None
+            new_map[tile_key] = tile
+
+        return new_map
 
     def terminate(self):
         self.user_interface.terminate()
@@ -381,7 +395,12 @@ class Level(object):
         self.user_interface.update()
 
     def update(self):
-        self.mouse_update()
-        self.user_interface_update()
-        self.agent_update()
-        self.particle_update()
+        if self.assets_loaded and not self.loaded:
+            self.loaded = True
+            self.add_agents()
+
+        else:
+            self.mouse_update()
+            self.user_interface_update()
+            self.agent_update()
+            self.particle_update()

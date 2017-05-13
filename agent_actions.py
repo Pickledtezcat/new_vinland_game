@@ -1,6 +1,7 @@
 import bge
 import bgeutils
 import mathutils
+import random
 
 
 class AgentMovement(object):
@@ -161,16 +162,6 @@ class InfantryAction(object):
         self.done = False
         self.timer = 0.0
 
-    def save_movement(self):
-
-        return [self.target, self.timer]
-
-    def load_movement(self, load_details):
-
-        self.target, self.timer = load_details
-        self.set_vectors()
-        self.set_position()
-
     def update(self):
 
         if self.target:
@@ -198,6 +189,117 @@ class InfantryAction(object):
         self.infantryman.box.worldPosition = self.start_vector.lerp(self.target_vector, timer)
 
 
+class InfantryAnimation(object):
+
+    def __init__(self, infantryman):
+        self.infantryman = infantryman
+        self.last_frame = 0
+        self.frame = 0.0
+        self.north = random.choice(["NE", "NW"])
+        self.faction = self.infantryman.agent.faction
+
+    def get_vector(self, target_vector):
+
+        search_array = [[1, 0], [1, 1], [0, 1], [1, -1], [-1, 0], [-1, 1], [0, -1], [-1, -1]]
+
+        best_facing = None
+        best_angle = 4.0
+
+        for facing in search_array:
+            facing_vector = mathutils.Vector(facing)
+            angle = facing_vector.angle(target_vector.to_2d())
+            if angle < best_angle:
+                best_facing = facing
+                best_angle = angle
+
+        return best_facing
+
+    def get_target_direction(self, action):
+
+        if action == "FACE_TARGET":
+
+            target = self.infantryman.agent.level.agents.get(self.infantryman.agent.agent_targeter.enemy_target_id)
+            if target:
+                target_vector = target.box.worldPosition.copy() - self.infantryman.box.worldPosition.copy()
+                return self.get_vector(target_vector)
+
+        return self.infantryman.direction
+
+    def update(self):
+
+        behavior = self.infantryman.behavior
+        prone = self.infantryman.behavior.prone
+        timed_actions = ["DYING", "GO_PRONE", "GET_UP", "SHOOTING", "WAIT", "FINISHED", "FACE_TARGET"]
+        dead_actions = ["DYING", "DEAD"]
+
+        if behavior.action in timed_actions:
+            self.frame = behavior.action_timer * 4.0
+        elif behavior.action == "DEAD":
+            self.frame = 4.0
+        else:
+            next_frame = self.frame + (self.infantryman.speed * 4.0)
+            if next_frame < 4.0:
+                self.frame = next_frame
+            else:
+                self.frame = 0.0
+
+        frame_number = min(3, int(self.frame))
+
+        if behavior.action == "GET_TILE":
+            if prone:
+                action = "prone_crawl"
+            else:
+                action = "walk"
+
+        elif behavior.action == "GO_PRONE":
+            action = "go_prone"
+
+        elif behavior.action == "GET_UP":
+            action = "get_up"
+
+        elif behavior.action == "SHOOT":
+            if prone:
+                action = "prone_shoot"
+            else:
+                action = "shoot"
+
+        elif behavior in dead_actions:
+            if prone:
+                action = "prone_death"
+            else:
+                action = "death"
+
+        else:
+            if prone:
+                action = "go_prone"
+                frame_number = 4
+            else:
+                action = "default"
+
+        if frame_number != self.last_frame:
+            self.infantryman.sprite.visible = True
+            self.last_frame = frame_number
+            if action == "default":
+                if random.uniform(0.0, 1.0) < 0.8:
+                    frame_number = 0
+
+            north = self.north
+            directions_dict = {(-1, -1): "W",
+                               (-1, 0): "NW",
+                               (-1, 1): north,
+                               (0, 1): "NE",
+                               (1, 1): "E",
+                               (1, 0): "SE",
+                               (1, -1): "S",
+                               (0, -1): "SW"}
+
+            direction = self.get_target_direction(behavior.action)
+            sprite_direction = directions_dict[tuple(direction)]
+            mesh_name = self.infantryman.mesh_name
+            frame_name = "{}_{}_{}${}_{}".format(self.faction, mesh_name, action, sprite_direction, frame_number)
+            self.infantryman.sprite.replaceMesh(frame_name)
+
+
 class InfantryBehavior(object):
 
     def __init__(self, infantryman):
@@ -208,7 +310,7 @@ class InfantryBehavior(object):
         self.avoiding = None
         self.prone = False
         self.action_timer = 1.0
-        self.action = "CHOOSE_TILE"
+        self.action = "GET_TILE"
 
     def get_action(self):
 
@@ -252,8 +354,10 @@ class InfantryBehavior(object):
             if self.avoiding:
                 return "GET_TILE"
             elif self.infantryman.agent.agent_type == "ARTILLERY":
+                self.action_timer = 0.0
                 return "FACE_GUN"
             elif self.infantryman.agent.agent_targeter.enemy_target_id:
+                self.action_timer = 0.0
                 return "FACE_TARGET"
             else:
                 self.action_timer = 0.0
@@ -286,12 +390,10 @@ class InfantryBehavior(object):
         current_tile = self.infantryman.location
 
         if avoiding:
-            # TODO find a better avoidance algorithm
+            local_y = avoiding.box.getAxisVect([0.0, 1.0, 0.0])
+            local_y.length = avoiding.size
 
-            destination = mathutils.Vector(self.destination).to_2d()
-            avoider = avoiding.box.worldPosition.copy().to_2d()
-
-            reference = (destination + avoider) / 2.0
+            reference = (avoiding.box.worldPosition.copy() + local_y).to_2d()
         else:
             reference = mathutils.Vector(self.destination).to_2d()
 

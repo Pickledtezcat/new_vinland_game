@@ -96,8 +96,9 @@ class GameLoop(object):
         if "save" in self.game_input.keys:
 
             saving_agents = self.level.save_agents()
+            saved_map = self.level.save_map()
 
-            level_details = {"map": self.level.map,
+            level_details = {"map": saved_map,
                              "agents": saving_agents}
 
             self.next_level = level_details
