@@ -89,7 +89,7 @@ class Agent(object):
                      "targeter_id": self.agent_targeter.enemy_target_id,
                      "targeter_infantry_index": self.agent_targeter.infantry_index,
                      "targeter_angle": self.agent_targeter.turret_angle,
-                     "targeter_elevation": self.agent_targeter.gun_elevation,
+                     "targeter_elevation": self.agent_targeter.gun_elevation, "stance": self.stance,
                      "soldiers": [solider.save() for solider in self.soldiers]}
 
         return save_dict
@@ -111,6 +111,7 @@ class Agent(object):
         self.reverse = agent_dict["reverse"]
         self.throttle = agent_dict["throttle"]
         self.set_occupied(None, agent_dict["occupied"])
+        self.stance = agent_dict["stance"]
 
         self.agent_targeter.enemy_target_id = agent_dict["targeter_id"]
         self.agent_targeter.infantry_index = agent_dict["targeter_infantry_index"]
@@ -121,7 +122,6 @@ class Agent(object):
 
         self.state = state_class(self)
         self.state.count = agent_dict["state_count"]
-
 
     def set_occupied(self, target_tile, occupied_list=None):
         display = False
@@ -287,11 +287,12 @@ class Agent(object):
                 reverse = command["REVERSE"]
 
                 if reverse:
+                    target_vector = self.box.worldPosition.copy() - mathutils.Vector(position).to_3d()
                     self.reverse = True
                 else:
+                    target_vector = mathutils.Vector(position).to_3d() - self.box.worldPosition.copy()
                     self.reverse = False
 
-                target_vector = mathutils.Vector(position).to_3d() - self.box.worldPosition.copy()
                 best_facing = self.get_facing(target_vector)
 
                 self.navigation.stop = True
@@ -308,6 +309,11 @@ class Agent(object):
                 self.navigation.stop = True
                 self.destinations = []
 
+            if command["LABEL"] == "STANCE_CHANGE":
+                stance = command["STANCE"]
+                self.stance = stance
+                self.set_formation()
+
         self.commands = []
 
     def set_starting_state(self):
@@ -322,7 +328,14 @@ class Agent(object):
             self.state = next_state(self)
 
     def update(self):
-        self.debug_text = "{} - {}\n{} -  {}".format(self.agent_id, self.state.name, self.direction, self.agent_targeter.hull_on_target)
+        #self.debug_text = "{} - {}\n{} -  {}".format(self.agent_id, self.state.name, self.direction, self.agent_targeter.hull_on_target)
+
+        debug_icon = {"AGGRESSIVE": "[A]",
+                      "SENTRY": "[S]",
+                      "DEFEND": "[D]",
+                      "FLANK": "[F]"}
+
+        self.debug_text = debug_icon[self.stance]
 
         infantry_types = ["INFANTRY", "ARTILLERY"]
 
@@ -335,6 +348,9 @@ class Agent(object):
                     self.infantry_update()
 
     def infantry_update(self):
+        pass
+
+    def set_formation(self):
         pass
 
 
@@ -351,11 +367,13 @@ class Infantry(Agent):
         self.spacing = 1.5
         self.prone = False
         self.size = 1
+        self.walk_mod = 1.0
 
         super().__init__(level, load_name, location, team, agent_id, load_dict)
 
         squad = static_dicts.squads[self.load_name]
         self.squad = [rank for rank in squad if rank != [""]]
+        self.squad.reverse()
         self.wide = len(self.squad[0])
         self.deep = len(self.squad)
         self.formation = []
@@ -380,7 +398,10 @@ class Infantry(Agent):
         pass
 
     def update_stats(self):
-        self.speed = self.max_speed
+
+        infantry_speed = [soldier.speed for soldier in self.soldiers]
+
+        self.speed = min(infantry_speed)
 
     def set_formation(self):
 
@@ -395,7 +416,7 @@ class Infantry(Agent):
         if self.stance == "AGGRESSIVE":
             self.prone = False
             self.avoid_radius = 2
-            self.max_speed = 0.025
+            self.walk_mod = 0.85
             order = [self.deep, self.wide]
             spacing = self.spacing * 1.5
             scatter = spacing * 0.2
@@ -403,7 +424,7 @@ class Infantry(Agent):
         if self.stance == "SENTRY":
             self.prone = False
             self.avoid_radius = 2
-            self.max_speed = 0.02
+            self.walk_mod = 0.75
             order = [self.deep, self.wide]
             spacing = self.spacing * 3.0
             scatter = spacing * 0.5
@@ -411,15 +432,15 @@ class Infantry(Agent):
         if self.stance == "DEFEND":
             self.prone = True
             self.avoid_radius = 4
-            self.max_speed = 0.015
+            self.walk_mod = 0.5
             order = [self.deep, self.wide]
             spacing = self.spacing * 2.0
             scatter = spacing * 0.1
 
         if self.stance == "FLANK":
             self.prone = False
-            self.avoid_radius = 3
-            self.max_speed = 0.03
+            self.avoid_radius = 4
+            self.walk_mod = 1.0
             order = [self.wide, self.deep]
             spacing = self.spacing
             scatter = 0.02
@@ -429,14 +450,14 @@ class Infantry(Agent):
         def s_value(scatter_value):
             return scatter_value - (scatter_value * random.uniform(0.0, 2.0))
 
+        if order[0] > 1:
+            y_offset = spacing
+
+        if order[1] % 2 != 0:
+            x_offset = spacing * 0.5
+
         for y in range(order[0]):
             for x in range(order[1]):
-
-                if order[0] > 1:
-                    y_offset = ((order[0] - 2) * spacing)
-
-                if order[1] % 2 != 0:
-                    x_offset = spacing * 0.5
 
                 x_loc = (-order[1] * half) + (x * spacing) + half + s_value(scatter) + x_offset
                 y_loc = (-order[0] * half) + (y * spacing) + half + s_value(scatter) - y_offset
@@ -466,7 +487,6 @@ class InfantryMan(object):
         self.location = self.agent.location
         self.direction = [0, 1]
         self.occupied = None
-        self.prone = False
 
         self.speed = 0.02
 
@@ -523,7 +543,8 @@ class InfantryMan(object):
 
                     if occupant:
                         if occupant != self.agent and occupant.agent_type in vehicles:
-                            closest.append(occupant)
+                            if occupant.navigation.destination:
+                                closest.append(occupant)
 
         if closest:
             return closest[0]
@@ -542,13 +563,14 @@ class InfantryMan(object):
         return [round(axis) for axis in destination]
 
     def set_speed(self):
-        self.speed = self.agent.speed
+        base_speed = static_dicts.soldiers()[self.infantry_type]["speed"]
+        self.speed = (base_speed * self.agent.walk_mod) * 0.01
 
     def save(self):
 
         save_dict = {"movement_target": self.movement.target, "movement_timer": self.movement.timer,
                      "destination": self.behavior.destination, "history": self.behavior.history,
-                     "behavior_prone": self.behavior.prone, "index": self.index, "prone": self.prone,
+                     "behavior_prone": self.behavior.prone, "index": self.index, "prone": self.agent.prone,
                      "direction": self.direction, "location": self.location, "infantry_type": self.infantry_type,
                      "occupied": self.occupied}
 
@@ -557,7 +579,7 @@ class InfantryMan(object):
     def reload(self, load_dict):
 
         self.index = load_dict["index"]
-        self.prone = load_dict["prone"]
+        self.agent.prone = load_dict["prone"]
         self.direction = load_dict["direction"]
         self.location = load_dict["location"]
 

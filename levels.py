@@ -319,14 +319,16 @@ class Level(object):
 
     def add_agents(self):
 
-        for friend in range(2):
-            agents.Infantry(self, "SUPPORT_36", [10 + (10 * self.agent_id_index), 25], 0)
+        for friend in range(4):
+            agents.Vehicle(self, None, [35 + (10 * friend), 45], 0)
+
+        infantry = ["SUPPORT_36", "SCOUT", "HEAVY_ANTI-TANK_TEAM", "RIFLEMEN_39"]
 
         for friend in range(4):
-            agents.Vehicle(self, None, [-15 + (10 * self.agent_id_index), 45], 0)
+            agents.Infantry(self, infantry[friend], [35 + (10 * friend), 25], 0)
 
         for enemy in range(4):
-            agents.Vehicle(self, None, [-30 + (10 * self.agent_id_index), 35], 1)
+            agents.Vehicle(self, None, [35 + (10 * enemy), 35], 1)
 
     def load_level(self, load_dict):
         self.map = load_dict["map"]
@@ -387,9 +389,26 @@ class Level(object):
         self.agents = next_generation
 
     def user_interface_update(self):
-        # temporary
+        # TODO write a full interface with button control
         if "pause" in self.manager.game_input.keys:
             self.paused = not self.paused
+
+        command = None
+
+        if "a" in self.manager.game_input.keys:
+            command = {"LABEL": "STANCE_CHANGE", "STANCE": "AGGRESSIVE"}
+        if "s" in self.manager.game_input.keys:
+            command = {"LABEL": "STANCE_CHANGE", "STANCE": "SENTRY"}
+        if "d" in self.manager.game_input.keys:
+            command = {"LABEL": "STANCE_CHANGE", "STANCE": "DEFEND"}
+        if "f" in self.manager.game_input.keys:
+            command = {"LABEL": "STANCE_CHANGE", "STANCE": "FLANK"}
+
+        if command:
+            for agent_key in self.agents:
+                agent = self.agents[agent_key]
+                if agent.team == 0 and agent.selected:
+                    agent.commands.append(command)
 
         self.manager.debugger.printer(self.paused, "paused")
         self.user_interface.update()

@@ -217,7 +217,6 @@ class InfantryAnimation(object):
     def get_target_direction(self, action):
 
         if action == "FACE_TARGET":
-
             target = self.infantryman.agent.level.agents.get(self.infantryman.agent.agent_targeter.enemy_target_id)
             if target:
                 target_vector = target.box.worldPosition.copy() - self.infantryman.box.worldPosition.copy()
@@ -237,7 +236,11 @@ class InfantryAnimation(object):
         elif behavior.action == "DEAD":
             self.frame = 4.0
         else:
-            next_frame = self.frame + (self.infantryman.speed * 4.0)
+            animation_mod = 6.0
+            if prone:
+                animation_mod = 8.0
+
+            next_frame = self.frame + (self.infantryman.speed * animation_mod)
             if next_frame < 4.0:
                 self.frame = next_frame
             else:
@@ -272,7 +275,6 @@ class InfantryAnimation(object):
         else:
             if prone:
                 action = "go_prone"
-                frame_number = 4
             else:
                 action = "default"
 
@@ -282,6 +284,9 @@ class InfantryAnimation(object):
             if action == "default":
                 if random.uniform(0.0, 1.0) < 0.8:
                     frame_number = 0
+
+            if action == "go_prone":
+                frame_number = 3
 
             north = self.north
             directions_dict = {(-1, -1): "W",
@@ -324,7 +329,7 @@ class InfantryBehavior(object):
             self.action_timer = 0.0
             return "DYING"
 
-        if self.infantryman.prone:
+        if self.infantryman.agent.prone:
             if not self.prone:
                 self.action_timer = 0.0
                 return "GO_PRONE"
@@ -353,21 +358,22 @@ class InfantryBehavior(object):
         else:
             if self.avoiding:
                 return "GET_TILE"
-            elif self.infantryman.agent.agent_type == "ARTILLERY":
+            if self.infantryman.agent.agent_type == "ARTILLERY":
                 self.action_timer = 0.0
+                self.history = [self.infantryman.location]
                 return "FACE_GUN"
-            elif self.infantryman.agent.agent_targeter.enemy_target_id:
+            if self.infantryman.agent.agent_targeter.enemy_target_id:
                 self.action_timer = 0.0
+                self.history = [self.infantryman.location]
                 return "FACE_TARGET"
-            else:
-                self.action_timer = 0.0
-                return "FINISHED"
+            self.action_timer = 0.0
+            self.history = [self.infantryman.location]
+            return "FINISHED"
 
     def update(self):
-
         if self.action != "DEAD":
             if self.action_timer < 1.0:
-                self.action_timer += 0.01
+                self.action_timer = min(1.0, self.action_timer + 0.02)
             else:
                 if self.action == "GO_PRONE":
                     self.prone = True
@@ -378,9 +384,6 @@ class InfantryBehavior(object):
 
                 if self.action == "GET_TILE":
                     self.get_next_tile()
-
-                if self.action == "FINISHED":
-                    self.history = [self.infantryman.location]
 
     def get_next_tile(self):
 
@@ -402,12 +405,14 @@ class InfantryBehavior(object):
 
         closest = 10000.0
         furthest = 0.0
+        free = 0
 
         for s in search_array:
             neighbor = [current_tile[0] + s[0], current_tile[1] + s[1]]
             neighbor_check = self.infantryman.check_occupied(neighbor)
 
             if not neighbor_check:
+                free += 1
                 if neighbor not in self.history:
 
                     distance = (reference - mathutils.Vector(neighbor)).length
@@ -425,14 +430,17 @@ class InfantryBehavior(object):
                             choice = s
                             target = neighbor
 
-        self.infantryman.direction = choice
-        self.infantryman.movement.target = target
-        self.infantryman.movement.set_vectors()
+        if free > 0:
+            self.infantryman.direction = choice
+            self.infantryman.movement.target = target
+            self.infantryman.movement.set_vectors()
 
-        if len(self.history) > 8:
-            self.history = [self.infantryman.location, target]
+            if len(self.history) > 8:
+                self.history = [self.infantryman.location, target]
+            else:
+                self.history.append(target)
         else:
-            self.history.append(target)
+            self.action = "WAIT"
 
 
 class AgentNavigation(object):
