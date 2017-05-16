@@ -6,10 +6,10 @@ import math
 
 class CameraControl(object):
 
-    def __init__(self, manager):
-        self.manager = manager
-        self.main_camera = self.manager.main_camera
-        self.camera_hook = self.manager.main_camera.parent
+    def __init__(self, level):
+        self.level = level
+        self.main_camera = self.level.manager.main_camera
+        self.camera_hook = self.level.manager.main_camera.parent
         self.in_zoom = bgeutils.get_ob("in_zoom", self.camera_hook.children).localTransform
         self.out_zoom = bgeutils.get_ob("out_zoom", self.camera_hook.children).localTransform
         self.sun_lamp = bgeutils.get_ob("sun_lamp", self.camera_hook.children)
@@ -28,13 +28,13 @@ class CameraControl(object):
         if self.zoom_in:
             self.zoom_timer = min(1.0, self.zoom_timer + 0.01)
             step = bgeutils.smoothstep(self.zoom_timer)
-            if "wheel_down" in self.manager.game_input.buttons:
+            if "wheel_down" in self.level.manager.game_input.buttons:
                 self.zoom_in = False
 
         else:
             self.zoom_timer = max(0.0, self.zoom_timer - 0.01)
             step = bgeutils.smoothstep(self.zoom_timer)
-            if "wheel_up" in self.manager.game_input.buttons:
+            if "wheel_up" in self.level.manager.game_input.buttons:
                 self.zoom_in = True
 
         self.main_camera.localTransform = self.out_zoom.lerp(self.in_zoom, step)
@@ -48,7 +48,7 @@ class CameraControl(object):
         else:
             speed = 0.007
 
-        mouse_position = self.manager.game_input.virtual_mouse
+        mouse_position = self.level.manager.game_input.virtual_mouse
         x, y = mouse_position
 
         cam_scroll = x < 0.01 or x > 0.99 or y < 0.01 or y > 0.99

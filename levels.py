@@ -4,6 +4,8 @@ import bgeutils
 import agents
 import mathutils
 import particles
+import camera_control
+import game_audio
 
 
 class MovementMarker(object):
@@ -248,6 +250,9 @@ class Level(object):
     def __init__(self, manager, load_dict=None):
         self.manager = manager
         self.own = manager.own
+        self.camera_controller = camera_control.CameraControl(self)
+        self.listener = self.camera_controller.camera_hook
+        self.game_audio = game_audio.Audio(self)
         self.user_interface = user_interface.UserInterface(self)
         self.commands = []
         self.mouse_control = MouseControl(self)
@@ -424,13 +429,15 @@ class Level(object):
 
         self.commands = []
 
-    def update(self):
-        if self.assets_loaded and not self.loaded:
+    def load(self):
+        if self.assets_loaded:
             self.loaded = True
             self.add_agents()
 
-        else:
-            self.mouse_update()
-            self.user_interface_update()
-            self.agent_update()
-            self.particle_update()
+    def update(self):
+        self.camera_controller.update()
+        self.game_audio.update()
+        self.mouse_update()
+        self.user_interface_update()
+        self.agent_update()
+        self.particle_update()

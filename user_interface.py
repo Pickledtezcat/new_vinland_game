@@ -10,7 +10,6 @@ class UserInterface(object):
         self.cursor = self.manager.own.scene.addObject("movement_cursor", self.manager.own, 0)
         self.cursor.setParent(self.manager.main_camera)
         self.bounding_box = self.manager.own.scene.addObject("bounding_box", self.manager.own, 0)
-        self.cursor.setParent(self.manager.main_camera)
 
     def terminate(self):
         self.cursor.endObject()
@@ -70,6 +69,42 @@ class UserInterface(object):
             self.cursor.worldOrientation = normal.to_track_quat("Z", "Y")
 
 
+class MenuInterface(object):
+
+    def __init__(self, level):
+        self.level = level
+        self.manager = self.level.manager
+        self.cursor = self.manager.own.scene.addObject("movement_cursor", self.manager.own, 0)
+        self.cursor.setParent(self.manager.main_camera)
+
+    def terminate(self):
+        self.cursor.endObject()
+
+    def mouse_ray(self, position):
+        x, y = position
+
+        camera = self.manager.main_camera
+        screen_vect = camera.getScreenVect(x, y)
+        target_position = camera.worldPosition - screen_vect
+        mouse_hit = camera.rayCast(target_position, camera, 7.0, "cursor_plane", 0, 1, 0)
+
+        return mouse_hit
+
+    def update(self):
+
+        mouse_hit = self.mouse_ray(self.manager.game_input.virtual_mouse)
+
+        if mouse_hit[0]:
+
+            location = mouse_hit[1]
+
+            # TODO add context sensitive cursor for menus
+
+            # if self.level.context == "TARGET":
+            #     self.cursor.replaceMesh("target_cursor")
+            # else:
+            #     self.cursor.replaceMesh("movement_cursor")
+            self.cursor.worldPosition = location
 
 
 

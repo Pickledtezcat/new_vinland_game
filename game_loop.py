@@ -4,6 +4,8 @@ import game_input
 import levels
 import bgeutils
 import time
+import json
+import menus
 
 
 class DebugPrinter(object):
@@ -55,6 +57,7 @@ class GameLoop(object):
 
     def __init__(self, cont):
         self.debug = True
+        self.load_settings()
 
         self.cont = cont
         self.own = cont.owner
@@ -62,36 +65,63 @@ class GameLoop(object):
         self.main_camera = self.scene.active_camera
         self.debugger = DebugPrinter(self)
 
-        self.camera = camera_control.CameraControl(self)
         self.game_input = game_input.GameInput()
         self.next_level = None
         self.level = None
 
         self.profile("set_level", one_time=True)
 
+    def load_settings(self):
+        in_path = bge.logic.expandPath("//saves/saves.txt")
+        with open(in_path, "r") as infile:
+            bge.logic.globalDict = json.load(infile)
+
+        if not bge.logic.globalDict.get("version"):
+            bge.logic.globalDict["version"] = "0.1a"
+            bge.logic.globalDict["sounds"] = []
+            bge.logic.globalDict["profiles"] = {}
+            bge.logic.globalDict["current_game_mode"] = None
+            bge.logic.globalDict["next_game_mode"] = "MENU_MODE"
+            bge.logic.globalDict["next_level"] = None
+            self.add_new_profile("Default Profile")
+            self.save_settings()
+
+    def save_settings(self):
+        out_path = bge.logic.expandPath("//saves/saves.txt")
+        with open(out_path, "w") as outfile:
+            json.dump(bge.logic.globalDict, outfile)
+
+    def add_new_profile(self, profile_name):
+        default_profile = {"version": "0.1a", "volume": 1.0, "sensitivity": 0.95, "vehicles": {}, "editing": None,
+                           "inventory": {}, "game_turn": 0, "faction": "vinland", "money": 5000, "saved_game": None}
+        bge.logic.globalDict["profiles"][profile_name] = default_profile
+        bge.logic.globalDict["active_profile"] = profile_name
+
     def update(self):
         self.profile("input_update")
-        self.profile("camera_update")
         self.profile("debugger_update")
         self.profile("level_update")
 
     def input_update(self):
         self.game_input.update()
 
-    def camera_update(self):
-        self.camera.update()
-
     def debugger_update(self):
         self.debugger.update()
 
     def set_level(self):
+        # TODO finish designing menu/game interface
+        # get level from globalDict and load it, switch from menu blend to game blend as required.
+
         if self.level:
             self.level.terminate()
 
-        self.level = levels.Level(self, self.next_level)
+        self.level = menus.StartMenu(self)#levels.Level(self, self.next_level)
         self.next_level = None
 
     def level_update(self):
+
+        # temporary method for saving
+        # from now save in active profile
 
         if "save" in self.game_input.keys:
 
@@ -106,12 +136,14 @@ class GameLoop(object):
         if self.next_level:
             self.profile("set_level", one_time=True)
         else:
-            self.level.update()
+            if self.level.loaded:
+                self.level.update()
+            else:
+                self.level.load()
 
     def profile(self, method_name, one_time=False):
 
         loop_methods = {"debugger_update": self.debugger_update,
-                        "camera_update": self.camera_update,
                         "input_update": self.input_update,
                         "set_level": self.set_level,
                         "level_update": self.level_update}
