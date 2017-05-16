@@ -45,16 +45,16 @@ def soldiers():
                     "ENGINEER": ["ENGINEER", 2, 2, 3, 0, 3, ""],
                     "GUN CREW": ["ENGINEER", 3, 3, 3, 0, 3, ""],
                     "MEDIC": ["ENGINEER", 3, 2, 3, 0, 3, ""],
-                    "MACHINE_GUNNER": ["MG", 2, 4, 3, 2, 3, ""],
-                    "LIGHT_MACHINE_GUNNER": ["MG", 3, 4, 3, 1, 4, ""],
+                    "MACHINE_GUNNER": ["MG", 2, 4, 3, 2, 3, "RAPID_FIRE"],
+                    "LIGHT_MACHINE_GUNNER": ["MG", 3, 4, 3, 1, 4, "RAPID_FIRE"],
                     "ANTI-TANK_RIFLE": ["ANTI_TANK", 3, 4, 3, 2, 1, ""],
                     "HEAVY_ANTI-TANK_RIFLE": ["ANTI_TANK", 2, 4, 3, 3, 1, ""],
                     "LIGHT_ANTI-TANK_RIFLE": ["RIFLE", 3, 3, 3, 2, 1, ""],
                     "RIFLEMAN": ["RIFLE", 3, 3, 3, 1, 1, ""],
                     "SEMI-AUTO_RIFLE": ["RIFLE", 3, 3, 3, 1, 2, ""],
                     "MARKSMAN": ["RIFLE", 3, 3, 4, 1, 1, ""],
-                    "SUB_MACHINE_GUNNER": ["SMG", 3, 4, 3, 0, 3, ""],
-                    "SHOCK_TROOPER": ["SMG", 4, 5, 3, 0, 3, ""],
+                    "SUB_MACHINE_GUNNER": ["SMG", 3, 4, 3, 0, 3, "RAPID_FIRE"],
+                    "SHOCK_TROOPER": ["SMG", 4, 5, 3, 0, 3, "RAPID_FIRE"],
                     "COMBAT_OFFICER": ["SMG", 4, 4, 4, 0, 2, ""]}
 
     label_keys = ["mesh_name", "speed", "toughness", "base_view", "power", "ROF", "special"]

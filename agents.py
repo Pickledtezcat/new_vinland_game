@@ -78,7 +78,8 @@ class Agent(object):
 
     def save(self):
 
-        save_dict = {"agent_type": self.agent_type, "team": self.team, "location": self.location, "direction": self.direction,
+        save_dict = {"agent_type": self.agent_type, "team": self.team, "location": self.location,
+                     "direction": self.direction,
                      "selected": self.selected, "state_name": self.state.name, "load_name": self.load_name,
                      "state_count": self.state.count, "movement_target": self.movement.target,
                      "movement_target_direction": self.movement.target_direction,
@@ -232,13 +233,13 @@ class Agent(object):
     def process_commands(self):
 
         for command in self.commands:
-            if command['LABEL'] == "SELECT":
+            if command['label'] == "SELECT":
                 if self.team == 0:
 
-                    x_limit = command["X_LIMIT"]
-                    y_limit = command["Y_LIMIT"]
-                    additive = command["ADDITIVE"]
-                    mouse_over = command["MOUSE_OVER"]
+                    x_limit = command["x_limit"]
+                    y_limit = command["y_limit"]
+                    additive = command["additive"]
+                    mouse_over = command["mouse_over"]
 
                     cam = self.level.manager.main_camera
 
@@ -266,10 +267,10 @@ class Agent(object):
                         if not select:
                             self.selected = False
 
-            if command["LABEL"] == "MOVEMENT_TARGET":
-                position = command["POSITION"]
-                reverse = command["REVERSE"]
-                additive = command["ADDITIVE"]
+            if command["label"] == "MOVEMENT_TARGET":
+                position = command["position"]
+                reverse = command["reverse"]
+                additive = command["additive"]
 
                 if additive:
                     self.destinations.append(position)
@@ -282,9 +283,9 @@ class Agent(object):
                 else:
                     self.reverse = False
 
-            if command["LABEL"] == "ROTATION_TARGET":
-                position = command["POSITION"]
-                reverse = command["REVERSE"]
+            if command["label"] == "ROTATION_TARGET":
+                position = command["position"]
+                reverse = command["reverse"]
 
                 if reverse:
                     target_vector = self.box.worldPosition.copy() - mathutils.Vector(position).to_3d()
@@ -300,17 +301,17 @@ class Agent(object):
                 self.aim = best_facing
                 self.agent_targeter.enemy_target_id = None
 
-            if command["LABEL"] == "TARGET_ENEMY":
-                target_id = command["TARGET_ID"]
-                infantry_index = command["INFANTRY_INDEX"]
+            if command["label"] == "TARGET_ENEMY":
+                target_id = command["target_id"]
+                infantry_index = command["infantry_index"]
 
                 self.agent_targeter.enemy_target_id = target_id
                 self.agent_targeter.infantry_index = infantry_index
                 self.navigation.stop = True
                 self.destinations = []
 
-            if command["LABEL"] == "STANCE_CHANGE":
-                stance = command["STANCE"]
+            if command["label"] == "STANCE_CHANGE":
+                stance = command["stance"]
                 self.stance = stance
                 self.set_formation()
 
@@ -328,7 +329,7 @@ class Agent(object):
             self.state = next_state(self)
 
     def update(self):
-        #self.debug_text = "{} - {}\n{} -  {}".format(self.agent_id, self.state.name, self.direction, self.agent_targeter.hull_on_target)
+        # self.debug_text = "{} - {}\n{} -  {}".format(self.agent_id, self.state.name, self.direction, self.agent_targeter.hull_on_target)
 
         debug_icon = {"AGGRESSIVE": "[A]",
                       "SENTRY": "[S]",
@@ -434,8 +435,8 @@ class Infantry(Agent):
             self.avoid_radius = 4
             self.walk_mod = 0.5
             order = [self.deep, self.wide]
-            spacing = self.spacing * 2.0
-            scatter = spacing * 0.1
+            spacing = self.spacing * 2.5
+            scatter = spacing * 0.3
 
         if self.stance == "FLANK":
             self.prone = False
@@ -458,7 +459,6 @@ class Infantry(Agent):
 
         for y in range(order[0]):
             for x in range(order[1]):
-
                 x_loc = (-order[1] * half) + (x * spacing) + half + s_value(scatter) + x_offset
                 y_loc = (-order[0] * half) + (y * spacing) + half + s_value(scatter) - y_offset
 
@@ -474,11 +474,22 @@ class Infantry(Agent):
 
 
 class InfantryMan(object):
-
     def __init__(self, agent, infantry_type, index, load_dict=None):
         self.agent = agent
         self.infantry_type = infantry_type
-        self.mesh_name = static_dicts.soldiers()[self.infantry_type]["mesh_name"]
+
+        stats = static_dicts.soldiers()[self.infantry_type]
+
+        self.mesh_name = stats["mesh_name"]
+        self.toughness = stats["toughness"]
+        self.view = stats["base_view"]
+        self.base_speed = stats["speed"]
+        self.power = stats["power"]
+        self.rof = stats["ROF"]
+        self.special = stats["special"]
+
+        self.weapon = SoldierWeapon(self, self.power, self.rof, self.special)
+
         # TODO add other infantry stats here
 
         self.index = index
@@ -506,6 +517,7 @@ class InfantryMan(object):
 
         self.movement.update()
         self.animation.update()
+        self.weapon.update()
 
     def set_occupied(self, target_tile):
         self.agent.level.map[bgeutils.get_key(target_tile)]["occupied"] = self.agent
@@ -563,8 +575,7 @@ class InfantryMan(object):
         return [round(axis) for axis in destination]
 
     def set_speed(self):
-        base_speed = static_dicts.soldiers()[self.infantry_type]["speed"]
-        self.speed = (base_speed * self.agent.walk_mod) * 0.01
+        self.speed = (self.base_speed * self.agent.walk_mod) * 0.01
 
     def save(self):
 
@@ -572,7 +583,8 @@ class InfantryMan(object):
                      "destination": self.behavior.destination, "history": self.behavior.history,
                      "behavior_prone": self.behavior.prone, "index": self.index, "prone": self.agent.prone,
                      "direction": self.direction, "location": self.location, "infantry_type": self.infantry_type,
-                     "occupied": self.occupied}
+                     "occupied": self.occupied, "weapon_timer": self.weapon.timer, "weapon_ready": self.weapon.ready,
+                     "weapon_ammo": self.weapon.ammo}
 
         return save_dict
 
@@ -592,5 +604,44 @@ class InfantryMan(object):
         self.behavior.history = load_dict["history"]
         self.behavior.prone = load_dict["behavior_prone"]
 
+        self.weapon.timer = load_dict["weapon_timer"]
+        self.weapon.ready = load_dict["weapon_ready"]
+        self.weapon.ammo = load_dict["weapon_ammo"]
+
         self.behavior.update()
         self.animation.update()
+
+
+class SoldierWeapon(object):
+    def __init__(self, infantryman, power, rof, special):
+        self.weapon_type = "INFANTRY_WEAPON"
+        self.infantryman = infantryman
+        self.power = power
+        self.recharge = rof * 0.005
+        self.special = special
+        self.timer = 0.0
+        self.ammo = 1.0
+        self.ready = False
+
+    def update(self):
+
+        if self.ammo > 0.0:
+            if not self.ready:
+                self.timer = min(1.0, self.timer + self.recharge)
+                if self.timer >= 1.0:
+                    self.timer = 0.0
+                    self.ready = True
+
+    def shoot_weapon(self):
+        target = self.infantryman.agent.agent_targeter.enemy_target_id
+
+        if target and self.ready:
+            command = {"label": "SHOOT", "origin": self, "owner": self.infantryman.agent, "target_id": target}
+            self.infantryman.agent.level.commands.append(command)
+            self.ready = False
+            self.timer = 0.0
+            self.ammo -= 0.01
+
+            return True
+
+        return False

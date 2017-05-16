@@ -44,11 +44,11 @@ class MovementMarker(object):
             destination = [int(axis) for axis in self.position]
 
             if "control" in self.level.manager.game_input.keys:
-                command = {"LABEL": "ROTATION_TARGET", "POSITION": destination, "REVERSE": reverse,
-                           "ADDITIVE": additive}
+                command = {"label": "ROTATION_TARGET", "position": destination, "reverse": reverse,
+                           "additive": additive}
             else:
-                command = {"LABEL": "MOVEMENT_TARGET", "POSITION": destination, "REVERSE": reverse,
-                           "ADDITIVE": additive}
+                command = {"label": "MOVEMENT_TARGET", "position": destination, "reverse": reverse,
+                           "additive": additive}
 
             self.owner.commands.append(command)
 
@@ -146,8 +146,8 @@ class MouseControl(object):
         x_limit = sorted([self.start[0], self.end[0]])
         y_limit = sorted([self.start[1], self.end[1]])
 
-        message = {"LABEL": "SELECT", "X_LIMIT": x_limit, "Y_LIMIT": y_limit, "ADDITIVE": additive,
-                   "MOUSE_OVER": target_agent}
+        message = {"label": "SELECT", "x_limit": x_limit, "y_limit": y_limit, "additive": additive,
+                   "mouse_over": target_agent}
 
         active_agents = [self.level.agents[agent_id] for agent_id in self.level.agents if self.level.agents[agent_id].team == 0]
 
@@ -177,10 +177,12 @@ class MouseControl(object):
                         target_id = target.agent_id
                         infantry_index = 0
                         if target.agent_type == "INFANTRY":
+                            # TODO get infantry index from closest position to mouse cursor
+
                             infantry_index = 1
 
-                        message = {"LABEL": "TARGET_ENEMY", "TARGET_ID": target_id,
-                                   "INFANTRY_INDEX": infantry_index}
+                        message = {"label": "TARGET_ENEMY", "target_id": target_id,
+                                   "infantry_index": infantry_index}
 
                         for agent in selected_agents:
                             agent.commands.append(message)
@@ -257,6 +259,8 @@ class Level(object):
         self.map = {}
         self.agents = {}
         self.particles = []
+        self.messages = []
+        self.bullets = []
 
         if load_dict:
             self.assets_loaded = True
@@ -396,13 +400,13 @@ class Level(object):
         command = None
 
         if "a" in self.manager.game_input.keys:
-            command = {"LABEL": "STANCE_CHANGE", "STANCE": "AGGRESSIVE"}
+            command = {"label": "STANCE_CHANGE", "stance": "AGGRESSIVE"}
         if "s" in self.manager.game_input.keys:
-            command = {"LABEL": "STANCE_CHANGE", "STANCE": "SENTRY"}
+            command = {"label": "STANCE_CHANGE", "stance": "SENTRY"}
         if "d" in self.manager.game_input.keys:
-            command = {"LABEL": "STANCE_CHANGE", "STANCE": "DEFEND"}
+            command = {"label": "STANCE_CHANGE", "stance": "DEFEND"}
         if "f" in self.manager.game_input.keys:
-            command = {"LABEL": "STANCE_CHANGE", "STANCE": "FLANK"}
+            command = {"label": "STANCE_CHANGE", "stance": "FLANK"}
 
         if command:
             for agent_key in self.agents:
@@ -412,6 +416,13 @@ class Level(object):
 
         self.manager.debugger.printer(self.paused, "paused")
         self.user_interface.update()
+
+    def process_commands(self):
+
+        for command in self.commands:
+            pass
+
+        self.commands = []
 
     def update(self):
         if self.assets_loaded and not self.loaded:

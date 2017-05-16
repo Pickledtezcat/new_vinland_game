@@ -3,7 +3,6 @@ import bgeutils
 import mathutils
 import random
 
-
 class AgentMovement(object):
 
     def __init__(self, agent):
@@ -197,6 +196,8 @@ class InfantryAnimation(object):
         self.frame = 0.0
         self.north = random.choice(["NE", "NW"])
         self.faction = self.infantryman.agent.faction
+        self.set_frame("default", 0)
+        self.infantryman.sprite.visible = True
 
     def get_vector(self, target_vector):
 
@@ -216,7 +217,9 @@ class InfantryAnimation(object):
 
     def get_target_direction(self, action):
 
-        if action == "FACE_TARGET":
+        shooting_actions = ["FACE_TARGET", "SHOOTING"]
+
+        if action in shooting_actions:
             target = self.infantryman.agent.level.agents.get(self.infantryman.agent.agent_targeter.enemy_target_id)
             if target:
                 target_vector = target.box.worldPosition.copy() - self.infantryman.box.worldPosition.copy()
@@ -233,6 +236,16 @@ class InfantryAnimation(object):
 
         if behavior.action in timed_actions:
             self.frame = behavior.action_timer * 4.0
+
+            if behavior.action == "SHOOTING" and self.infantryman.special == "RAPID_FIRE":
+
+                action_time = behavior.action_timer * 16
+                remainder = action_time % 4
+                self.frame = remainder * 4.0
+                print(self.frame)
+
+            # TODO find out how to rapid fire
+
         elif behavior.action == "DEAD":
             self.frame = 4.0
         else:
@@ -260,7 +273,7 @@ class InfantryAnimation(object):
         elif behavior.action == "GET_UP":
             action = "get_up"
 
-        elif behavior.action == "SHOOT":
+        elif behavior.action == "SHOOTING":
             if prone:
                 action = "prone_shoot"
             else:
@@ -273,36 +286,37 @@ class InfantryAnimation(object):
                 action = "death"
 
         else:
-            if prone:
-                action = "go_prone"
-            else:
-                action = "default"
+            action = "default"
 
         if frame_number != self.last_frame:
-            self.infantryman.sprite.visible = True
-            self.last_frame = frame_number
-            if action == "default":
+            self.set_frame(action, frame_number)
+
+    def set_frame(self, action, frame_number):
+        self.last_frame = frame_number
+
+        if action == "default":
+            if self.infantryman.behavior.prone:
+                action = "go_prone"
+                frame_number = 3
+            else:
                 if random.uniform(0.0, 1.0) < 0.8:
                     frame_number = 0
 
-            if action == "go_prone":
-                frame_number = 3
+        north = self.north
+        directions_dict = {(-1, -1): "W",
+                           (-1, 0): "NW",
+                           (-1, 1): north,
+                           (0, 1): "NE",
+                           (1, 1): "E",
+                           (1, 0): "SE",
+                           (1, -1): "S",
+                           (0, -1): "SW"}
 
-            north = self.north
-            directions_dict = {(-1, -1): "W",
-                               (-1, 0): "NW",
-                               (-1, 1): north,
-                               (0, 1): "NE",
-                               (1, 1): "E",
-                               (1, 0): "SE",
-                               (1, -1): "S",
-                               (0, -1): "SW"}
-
-            direction = self.get_target_direction(behavior.action)
-            sprite_direction = directions_dict[tuple(direction)]
-            mesh_name = self.infantryman.mesh_name
-            frame_name = "{}_{}_{}${}_{}".format(self.faction, mesh_name, action, sprite_direction, frame_number)
-            self.infantryman.sprite.replaceMesh(frame_name)
+        direction = self.get_target_direction(self.infantryman.behavior.action)
+        sprite_direction = directions_dict[tuple(direction)]
+        mesh_name = self.infantryman.mesh_name
+        frame_name = "{}_{}_{}${}_{}".format(self.faction, mesh_name, action, sprite_direction, frame_number)
+        self.infantryman.sprite.replaceMesh(frame_name)
 
 
 class InfantryBehavior(object):
@@ -322,7 +336,7 @@ class InfantryBehavior(object):
         if self.action == "DYING":
             return "DEAD"
 
-        shooting = False
+        shooting = self.infantryman.weapon.shoot_weapon()
         dead = False
 
         if dead:
