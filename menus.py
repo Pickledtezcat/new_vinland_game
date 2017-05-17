@@ -1,9 +1,7 @@
 import bge
 import bgeutils
 import mathutils
-import random
 import game_audio
-import json
 import user_interface
 
 button_info = {"medium_button": {"size": (1.0, 0.5)},
@@ -262,10 +260,10 @@ class StartWidget(Widget):
         spacing = button_size[1] + 0.1
 
         Button(self, "large_button", 0.0, zero + spacing, "Set\nProfile",
-               bgeutils.GeneralMessage("NEW_LEVEL", ProfileManagerMenu))
+               bgeutils.GeneralMessage("NEW_LEVEL", "ProfileManagerMenu"))
         Button(self, "large_button", 0.0, zero, "Vehicle\nbuilder",
-               bgeutils.GeneralMessage("NEW_LEVEL", VehicleManagerMenu))
-        Button(self, "large_button", 0.0, zero - spacing, "Start\nGame", bgeutils.GeneralMessage("NOTHING"))
+               bgeutils.GeneralMessage("NEW_LEVEL", "VehicleManagerMenu"))
+        Button(self, "large_button", 0.0, zero - spacing, "Start\nGame", bgeutils.GeneralMessage("NEW_LEVEL", "Level"))
         Button(self, "large_button", 0.0, zero - (spacing * 2.0), "Exit", bgeutils.GeneralMessage("EXIT"))
 
 
@@ -285,7 +283,7 @@ class AddProfileWidget(Widget):
 
         profile_name = TextButton(self, "text_box", 0.0, zero + spacing, "<<Enter name>>", None)
         Button(self, "large_button", 0.0, zero, "Add\nProfile", bgeutils.GeneralMessage("SAVE_PROFILE", profile_name))
-        Button(self, "large_button", 0.0, zero - spacing, "Go\nBack", bgeutils.GeneralMessage("NEW_LEVEL", StartMenu))
+        Button(self, "large_button", 0.0, zero - spacing, "Go\nBack", bgeutils.GeneralMessage("NEW_LEVEL", "StartMenu"))
 
     def process_commands(self):
         for command in self.commands:
@@ -299,10 +297,10 @@ class AddProfileWidget(Widget):
                 profile_name_button = command.content
                 if profile_name_button.text_contents:
                     if profile_name_button.text_contents not in bge.logic.globalDict["profiles"]:
-                        self.menu.manager.add_new_profile(profile_name_button.text_contents)
-                        self.menu.manager.save_settings()
+                        bgeutils.add_new_profile(profile_name_button.text_contents)
+                        bgeutils.save_settings()
 
-                        self.menu.new_level = ProfileManagerMenu
+                        self.menu.new_level = "ProfileManagerMenu"
 
         self.commands = []
 
@@ -351,16 +349,16 @@ class LoadProfileWidget(Widget):
 
             if command.header == "LOAD_PROFILE":
                 bge.logic.globalDict["active_profile"] = command.content
-                self.menu.manager.save_settings()
-                self.menu.new_level = ProfileManagerMenu
+                bgeutils.save_settings()
+                self.menu.new_level = "ProfileManagerMenu"
 
             if command.header == "REMOVE_PROFILE":
                 if command.content in bge.logic.globalDict["profiles"] and command.content != "Default Profile":
                     del (bge.logic.globalDict["profiles"][command.content])
                     bge.logic.globalDict["active_profile"] = [name for name in bge.logic.globalDict["profiles"]][0]
-                    self.menu.manager.save_settings()
+                    bgeutils.save_settings()
 
-                    self.menu.new_level = ProfileManagerMenu
+                    self.menu.new_level = "ProfileManagerMenu"
 
         self.commands = []
 
@@ -384,7 +382,7 @@ class ProfileDetails(Widget):
             DisplayTextButton(self, "display_text_box", 0.0, y, label, None)
             y -= 1.0
 
-        Button(self, "large_button", 0.0, y, "Go\nBack", bgeutils.GeneralMessage("NEW_LEVEL", StartMenu))
+        Button(self, "large_button", 0.0, y, "Go\nBack", bgeutils.GeneralMessage("NEW_LEVEL", "StartMenu"))
 
 
 class VehicleName(Widget):
@@ -410,7 +408,7 @@ class Menu(object):
         self.new_level = None
 
     def load(self):
-        if self.loading >= 3:
+        if self.loading >= 0:
             self.activate()
             self.loaded = True
         else:
@@ -480,8 +478,12 @@ class Menu(object):
         self.user_interface.update()
 
         if self.new_level:
+            if "Menu" in self.new_level:
+                bge.logic.globalDict["next_game_mode"] = "MENU_MODE"
+            else:
+                bge.logic.globalDict["next_game_mode"] = "GAME_MODE"
 
-            self.manager.load_menu(self.new_level)
+            bge.logic.globalDict["next_level"] = str(self.new_level)
 
 
 class StartMenu(Menu):

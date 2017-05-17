@@ -93,6 +93,7 @@ class Agent(object):
                      "targeter_elevation": self.agent_targeter.gun_elevation, "stance": self.stance,
                      "soldiers": [solider.save() for solider in self.soldiers]}
 
+        self.clear_occupied()
         return save_dict
 
     def reload(self, agent_dict):
@@ -138,7 +139,7 @@ class Agent(object):
                 marker.worldPosition = mathutils.Vector(self.level.map[tile_key]["position"]).to_3d()
                 marker.worldPosition.z = self.level.map[tile_key]["height"]
 
-            self.level.map[tile_key]["occupied"] = self
+            self.level.map[tile_key]["occupied"] = self.agent_id
             self.occupied.append(tile_key)
 
     def check_occupied(self, target_tile):
@@ -151,9 +152,13 @@ class Agent(object):
         for tile_key in occupied_list:
             tile = self.level.get_tile(tile_key)
             if tile:
-                if tile["occupied"]:
-                    if tile["occupied"] != self:
-                        occupied.append(tile["occupied"])
+                occupier_id = tile["occupied"]
+
+                if occupier_id:
+                    occupier = self.level.agents.get(occupier_id)
+
+                    if occupier and occupier != self:
+                        occupied.append(occupier)
 
         return occupied
 
@@ -401,7 +406,6 @@ class Infantry(Agent):
     def update_stats(self):
 
         infantry_speed = [soldier.speed for soldier in self.soldiers]
-
         self.speed = min(infantry_speed)
 
     def set_formation(self):
@@ -520,7 +524,7 @@ class InfantryMan(object):
         self.weapon.update()
 
     def set_occupied(self, target_tile):
-        self.agent.level.map[bgeutils.get_key(target_tile)]["occupied"] = self.agent
+        self.agent.level.map[bgeutils.get_key(target_tile)]["occupied"] = self.agent.agent_id
         self.occupied = self.location
 
     def clear_occupied(self):
@@ -531,8 +535,11 @@ class InfantryMan(object):
     def check_occupied(self, target_tile):
         tile = self.agent.level.get_tile(target_tile)
         if tile:
-            if tile["occupied"]:
-                return tile["occupied"]
+            occupier_id = tile["occupied"]
+            if occupier_id:
+                occupier = self.agent.level.agents.get(occupier_id)
+                if occupier:
+                    return occupier
         else:
             return self
 
@@ -551,12 +558,13 @@ class InfantryMan(object):
 
                 if check_tile:
                     vehicles = ["VEHICLE", "ARTILLERY"]
-                    occupant = check_tile["occupied"]
-
-                    if occupant:
-                        if occupant != self.agent and occupant.agent_type in vehicles:
-                            if occupant.navigation.destination:
-                                closest.append(occupant)
+                    occupier_id = check_tile["occupied"]
+                    if occupier_id:
+                        occupant = self.agent.level.agents.get(occupier_id)
+                        if occupant:
+                            if occupant != self.agent and occupant.agent_type in vehicles:
+                                if occupant.navigation.destination:
+                                    closest.append(occupant)
 
         if closest:
             return closest[0]
@@ -586,6 +594,7 @@ class InfantryMan(object):
                      "occupied": self.occupied, "weapon_timer": self.weapon.timer, "weapon_ready": self.weapon.ready,
                      "weapon_ammo": self.weapon.ammo}
 
+        self.clear_occupied()
         return save_dict
 
     def reload(self, load_dict):

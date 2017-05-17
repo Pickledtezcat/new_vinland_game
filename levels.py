@@ -163,10 +163,12 @@ class MouseControl(object):
         target = None
 
         if self.mouse_over:
-            occupied = self.mouse_over["occupied"]
-            if occupied:
-                if occupied.team != 0:
-                    target = occupied
+            occupier_id = self.mouse_over["occupied"]
+
+            if occupier_id:
+                occupant = self.level.agents[occupier_id]
+                if occupant.team != 0:
+                    target = occupant
 
             if target:
                 self.context = "TARGET"
@@ -247,9 +249,10 @@ class MouseControl(object):
 
 class Level(object):
 
-    def __init__(self, manager, load_dict=None):
+    def __init__(self, manager):
         self.manager = manager
         self.own = manager.own
+        self.scene = self.own.scene
         self.camera_controller = camera_control.CameraControl(self)
         self.listener = self.camera_controller.camera_hook
         self.game_audio = game_audio.Audio(self)
@@ -267,13 +270,13 @@ class Level(object):
         self.messages = []
         self.bullets = []
 
-        if load_dict:
-            self.assets_loaded = True
-            self.loaded = True
-            self.load_level(load_dict)
+        infantry_path = bge.logic.expandPath("//infantry_sprites/hre_summer_sprites.blend")
+        self.assets_loaded = bge.logic.LibLoad(infantry_path, "Scene")
+        self.load_dict = bge.logic.globalDict["profiles"][bge.logic.globalDict["active_profile"]]["saved_game"]
+
+        if self.load_dict:
+            self.load_level(self.load_dict)
         else:
-            infantry_path = bge.logic.expandPath("//infantry_sprites/hre_summer_sprites.blend")
-            self.assets_loaded = bge.logic.LibLoad(infantry_path, "Scene")
             self.get_map()
 
     def get_tile(self, tile_key):
@@ -305,16 +308,6 @@ class Level(object):
                     map[bgeutils.get_key((x, y))] = tile
 
         self.map = map
-
-    def save_map(self):
-        new_map = {}
-
-        for tile_key in self.map:
-            tile = self.map[tile_key]
-            tile["occupied"] = None
-            new_map[tile_key] = tile
-
-        return new_map
 
     def terminate(self):
         self.user_interface.terminate()
@@ -359,14 +352,27 @@ class Level(object):
 
             agent_class(self, None, location, team, agent_id=agent_id, load_dict=loading_agent)
 
-    def save_agents(self):
+    def save_level(self):
+        if "save" in self.manager.game_input.keys:
 
-        saving_agents = {}
-        for agent_id in self.agents:
-            agent = self.agents[agent_id]
-            saving_agents[agent_id] = agent.save()
+            saving_agents = {}
+            for agent_id in self.agents:
+                agent = self.agents[agent_id]
+                saving_agents[agent_id] = agent.save()
 
-        return saving_agents
+            saved_map = {}
+            for tile_key in self.map:
+                tile = self.map[tile_key].copy()
+
+                tile["occupied"] = None
+                saved_map[tile_key] = tile
+
+            level_details = {"map": saved_map,
+                             "agents": saving_agents}
+
+            bge.logic.globalDict["profiles"][bge.logic.globalDict["active_profile"]]["saved_game"] = level_details
+            bge.logic.globalDict["next_game_mode"] = "MENU_MODE"
+            bge.logic.globalDict["next_level"] = "StartMenu"
 
     def mouse_update(self):
         self.mouse_control.update()
@@ -422,6 +428,12 @@ class Level(object):
         self.manager.debugger.printer(self.paused, "paused")
         self.user_interface.update()
 
+        if "escape" in self.manager.game_input.keys:
+            bge.logic.globalDict["next_game_mode"] = "MENU_MODE"
+            bge.logic.globalDict["next_level"] = "StartMenu"
+
+        self.save_level()
+
     def process_commands(self):
 
         for command in self.commands:
@@ -432,12 +444,13 @@ class Level(object):
     def load(self):
         if self.assets_loaded:
             self.loaded = True
-            self.add_agents()
+            if not self.load_dict:
+                self.add_agents()
 
     def update(self):
         self.camera_controller.update()
         self.game_audio.update()
         self.mouse_update()
-        self.user_interface_update()
         self.agent_update()
         self.particle_update()
+        self.user_interface_update()

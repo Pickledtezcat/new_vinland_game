@@ -3,6 +3,7 @@ import bgeutils
 import mathutils
 import random
 
+
 class AgentMovement(object):
 
     def __init__(self, agent):

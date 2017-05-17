@@ -1,5 +1,8 @@
 import bge
 import mathutils
+import json
+
+vinland_version = "0.1"
 
 
 class GeneralMessage(object):
@@ -86,3 +89,32 @@ def split_in_lines(contents, line_length, center=False):
         new_lines.append(new_contents)
 
     return "\n".join(new_lines)
+
+
+def load_settings():
+    in_path = bge.logic.expandPath("//saves/saves.txt")
+    with open(in_path, "r") as infile:
+        bge.logic.globalDict = json.load(infile)
+
+    if not bge.logic.globalDict.get("version"):
+        bge.logic.globalDict["version"] = vinland_version
+        bge.logic.globalDict["sounds"] = []
+        bge.logic.globalDict["profiles"] = {}
+        bge.logic.globalDict["current_game_mode"] = "MENU_MODE"
+        bge.logic.globalDict["next_game_mode"] = "MENU_MODE"
+        bge.logic.globalDict["next_level"] = None
+        add_new_profile("Default Profile")
+        save_settings()
+
+
+def save_settings():
+    out_path = bge.logic.expandPath("//saves/saves.txt")
+    with open(out_path, "w") as outfile:
+        json.dump(bge.logic.globalDict, outfile)
+
+
+def add_new_profile(profile_name):
+    default_profile = {"version": vinland_version, "volume": 1.0, "sensitivity": 0.95, "vehicles": {}, "editing": None,
+                       "inventory": {}, "game_turn": 0, "faction": "vinland", "money": 5000, "saved_game": None}
+    bge.logic.globalDict["profiles"][profile_name] = default_profile
+    bge.logic.globalDict["active_profile"] = profile_name
