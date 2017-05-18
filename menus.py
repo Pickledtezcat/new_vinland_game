@@ -478,11 +478,6 @@ class Menu(object):
         self.user_interface.update()
 
         if self.new_level:
-            if "Menu" in self.new_level:
-                bge.logic.globalDict["next_game_mode"] = "MENU_MODE"
-            else:
-                bge.logic.globalDict["next_game_mode"] = "GAME_MODE"
-
             bge.logic.globalDict["next_level"] = str(self.new_level)
 
 

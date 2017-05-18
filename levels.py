@@ -272,9 +272,11 @@ class Level(object):
 
         infantry_path = bge.logic.expandPath("//infantry_sprites/hre_summer_sprites.blend")
         self.assets_loaded = bge.logic.LibLoad(infantry_path, "Scene")
-        self.load_dict = bge.logic.globalDict["profiles"][bge.logic.globalDict["active_profile"]]["saved_game"]
 
-        if self.load_dict:
+        self.load_dict = None
+        load_name = bge.logic.globalDict["profiles"][bge.logic.globalDict["active_profile"]]["saved_game"]
+        if load_name:
+            self.load_dict = bgeutils.load_level()
             self.load_level(self.load_dict)
         else:
             self.get_map()
@@ -353,26 +355,22 @@ class Level(object):
             agent_class(self, None, location, team, agent_id=agent_id, load_dict=loading_agent)
 
     def save_level(self):
-        if "save" in self.manager.game_input.keys:
+        saving_agents = {}
+        for agent_id in self.agents:
+            agent = self.agents[agent_id]
+            saving_agents[agent_id] = agent.save()
 
-            saving_agents = {}
-            for agent_id in self.agents:
-                agent = self.agents[agent_id]
-                saving_agents[agent_id] = agent.save()
+        saved_map = {}
+        for tile_key in self.map:
+            tile = self.map[tile_key]
+            tile["occupied"] = None
+            saved_map[tile_key] = tile
 
-            saved_map = {}
-            for tile_key in self.map:
-                tile = self.map[tile_key].copy()
+        level_details = {"map": saved_map,
+                         "agents": saving_agents}
 
-                tile["occupied"] = None
-                saved_map[tile_key] = tile
-
-            level_details = {"map": saved_map,
-                             "agents": saving_agents}
-
-            bge.logic.globalDict["profiles"][bge.logic.globalDict["active_profile"]]["saved_game"] = level_details
-            bge.logic.globalDict["next_game_mode"] = "MENU_MODE"
-            bge.logic.globalDict["next_level"] = "StartMenu"
+        bgeutils.save_level(level_details)
+        bge.logic.globalDict["next_level"] = "StartMenu"
 
     def mouse_update(self):
         self.mouse_control.update()
@@ -429,10 +427,7 @@ class Level(object):
         self.user_interface.update()
 
         if "escape" in self.manager.game_input.keys:
-            bge.logic.globalDict["next_game_mode"] = "MENU_MODE"
-            bge.logic.globalDict["next_level"] = "StartMenu"
-
-        self.save_level()
+            self.save_level()
 
     def process_commands(self):
 

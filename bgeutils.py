@@ -91,6 +91,24 @@ def split_in_lines(contents, line_length, center=False):
     return "\n".join(new_lines)
 
 
+def save_level(level):
+    save_name = "level_{}".format(bge.logic.globalDict["active_profile"])
+    bge.logic.globalDict["profiles"][bge.logic.globalDict["active_profile"]]["saved_game"] = save_name
+
+    out_path = bge.logic.expandPath("//saves/{}.txt".format(save_name))
+    with open(out_path, "w") as outfile:
+        json.dump(level, outfile)
+
+
+def load_level():
+    load_name = bge.logic.globalDict["profiles"][bge.logic.globalDict["active_profile"]]["saved_game"]
+    in_path = bge.logic.expandPath("//saves/{}.txt".format(load_name))
+    with open(in_path, "r") as infile:
+        level = json.load(infile)
+
+    return level
+
+
 def load_settings():
     in_path = bge.logic.expandPath("//saves/saves.txt")
     with open(in_path, "r") as infile:
@@ -100,11 +118,13 @@ def load_settings():
         bge.logic.globalDict["version"] = vinland_version
         bge.logic.globalDict["sounds"] = []
         bge.logic.globalDict["profiles"] = {}
-        bge.logic.globalDict["current_game_mode"] = "MENU_MODE"
-        bge.logic.globalDict["next_game_mode"] = "MENU_MODE"
-        bge.logic.globalDict["next_level"] = None
+        bge.logic.globalDict["game_mode"] = "MENU_MODE"
+        bge.logic.globalDict["mode_change"] = False
+        bge.logic.globalDict["next_level"] = "StartMenu"
         add_new_profile("Default Profile")
         save_settings()
+
+    bge.logic.globalDict["mode_change"] = False
 
 
 def save_settings():

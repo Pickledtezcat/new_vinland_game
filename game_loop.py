@@ -54,13 +54,11 @@ class GameLoop(object):
 
     def __init__(self, cont):
         self.debug = True
-
         self.cont = cont
         self.own = cont.owner
         self.scene = self.own.scene
         self.main_camera = self.scene.active_camera
         self.debugger = DebugPrinter(self)
-        self.mode = None
 
         self.game_input = game_input.GameInput()
         self.level = None
@@ -80,20 +78,23 @@ class GameLoop(object):
     def debugger_update(self):
         self.debugger.update()
 
-    def change_mode(self):
+    def set_mode(self):
 
-        if bge.logic.globalDict["next_game_mode"] != bge.logic.globalDict["current_game_mode"]:
-            if bge.logic.globalDict["next_game_mode"] == "MENU_MODE":
-                bge.logic.globalDict["current_game_mode"] = "MENU_MODE"
+        next_menu_mode = "Menu" in bge.logic.globalDict["next_level"]
+        current_menu_mode = bge.logic.globalDict["game_mode"] == "MENU_MODE"
+
+        if next_menu_mode != current_menu_mode:
+            if next_menu_mode:
+                bge.logic.globalDict["game_mode"] = "MENU_MODE"
                 bgeutils.save_settings()
                 bge.logic.startGame("{}{}".format(self.blend_path, "menu_blend.blend"))
 
-            elif bge.logic.globalDict["next_game_mode"] == "GAME_MODE":
-                bge.logic.globalDict["current_game_mode"] = "GAME_MODE"
+            else:
+                bge.logic.globalDict["game_mode"] = "GAME_MODE"
                 bgeutils.save_settings()
                 bge.logic.startGame("{}{}".format(self.blend_path, "game_blend.blend"))
 
-            return True
+            bge.logic.globalDict["mode_change"] = True
 
     def set_level(self):
         if self.level:
@@ -105,21 +106,24 @@ class GameLoop(object):
             level_class = globals()["StartMenu"]
 
         self.level = level_class(self)
+
         bge.logic.globalDict["next_level"] = None
         bgeutils.save_settings()
 
     def level_update(self):
 
-        if not self.mode:
-            self.mode = self.change_mode()
-            if not self.mode:
-                if bge.logic.globalDict["next_level"]:
-                    self.set_level()
-                else:
-                    if self.level.loaded:
-                        self.level.update()
-                    else:
-                        self.level.load()
+        if bge.logic.globalDict["next_level"]:
+            if not bge.logic.globalDict["mode_change"]:
+                self.set_mode()
+
+            if not bge.logic.globalDict["mode_change"]:
+                self.set_level()
+
+        else:
+            if self.level.loaded:
+                self.level.update()
+            else:
+                self.level.load()
 
 
 
