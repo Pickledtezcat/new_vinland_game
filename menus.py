@@ -353,10 +353,16 @@ class LoadProfileWidget(Widget):
                 self.menu.new_level = "ProfileManagerMenu"
 
             if command.header == "REMOVE_PROFILE":
-                if command.content in bge.logic.globalDict["profiles"] and command.content != "Default Profile":
-                    del (bge.logic.globalDict["profiles"][command.content])
-                    bge.logic.globalDict["active_profile"] = [name for name in bge.logic.globalDict["profiles"]][0]
-                    bgeutils.save_settings()
+                if command.content in bge.logic.globalDict["profiles"]:
+                    if command.content == "Default Profile":
+                        del (bge.logic.globalDict["profiles"][command.content])
+                        bgeutils.add_new_profile("Default Profile")
+                        bge.logic.globalDict["active_profile"] = "Default Profile"
+                        bgeutils.save_settings()
+                    else:
+                        del (bge.logic.globalDict["profiles"][command.content])
+                        bge.logic.globalDict["active_profile"] = [name for name in bge.logic.globalDict["profiles"]][0]
+                        bgeutils.save_settings()
 
                     self.menu.new_level = "ProfileManagerMenu"
 

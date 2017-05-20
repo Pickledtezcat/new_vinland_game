@@ -240,10 +240,9 @@ class InfantryAnimation(object):
 
             if behavior.action == "SHOOTING" and self.infantryman.special == "RAPID_FIRE":
 
-                action_time = behavior.action_timer * 16
-                remainder = action_time % 4
-                self.frame = remainder * 4.0
-                print(self.frame)
+                action_time = behavior.action_timer * 12
+                remainder = action_time % 3
+                self.frame = remainder * 3.0
 
             # TODO find out how to rapid fire
 
@@ -280,7 +279,7 @@ class InfantryAnimation(object):
             else:
                 action = "shoot"
 
-        elif behavior in dead_actions:
+        elif behavior.action in dead_actions:
             if prone:
                 action = "prone_death"
             else:
@@ -335,12 +334,14 @@ class InfantryBehavior(object):
     def get_action(self):
 
         if self.action == "DYING":
+            self.infantryman.dead = True
+            self.infantryman.clear_occupied()
             return "DEAD"
 
         shooting = self.infantryman.weapon.shoot_weapon()
-        dead = False
+        dying = self.infantryman.toughness <= 0
 
-        if dead:
+        if dying:
             self.action_timer = 0.0
             return "DYING"
 
@@ -561,7 +562,6 @@ class AgentTargeter(object):
     def __init__(self, agent):
         self.agent = agent
         self.enemy_target_id = None
-        self.infantry_index = 0
         self.turret_angle = 0.0
         self.gun_elevation = 0.0
 
@@ -570,32 +570,38 @@ class AgentTargeter(object):
 
     def update(self):
         local_y = self.agent.movement_hook.getAxisVect([0.0, 1.0, 0.0]).to_2d()
+        enemy_dead = False
 
         if self.enemy_target_id:
             enemy_agent = self.agent.level.agents[self.enemy_target_id]
+            if enemy_agent.dead:
+                enemy_dead = True
             target_vector = (enemy_agent.box.worldPosition.copy() - self.agent.box.worldPosition.copy()).to_2d()
         else:
             target_vector = local_y
 
-        target_angle = local_y.angle_signed(target_vector, 0.0) * -1.0
-        turret_speed = self.agent.turret_speed
+        if enemy_dead:
+            self.enemy_target_id = None
+        else:
+            target_angle = local_y.angle_signed(target_vector, 0.0) * -1.0
+            turret_speed = self.agent.turret_speed
 
-        turret_difference = abs(self.turret_angle - target_angle)
+            turret_difference = abs(self.turret_angle - target_angle)
 
-        self.turret_on_target = False
-        self.hull_on_target = False
+            self.turret_on_target = False
+            self.hull_on_target = False
 
-        if abs(target_angle) < 0.5:
-            self.hull_on_target = True
+            if abs(target_angle) < 0.5:
+                self.hull_on_target = True
 
-        if turret_difference < 0.5:
-            self.turret_on_target = True
+            if turret_difference < 0.5:
+                self.turret_on_target = True
 
-        if turret_difference > 0.02:
-            scale = turret_difference / 3.142
-            turret_speed /= scale
+            if turret_difference > 0.02:
+                scale = turret_difference / 3.142
+                turret_speed /= scale
 
-            self.turret_angle = bgeutils.interpolate_float(self.turret_angle, target_angle, turret_speed)
+                self.turret_angle = bgeutils.interpolate_float(self.turret_angle, target_angle, turret_speed)
 
 
 class AgentAnimator(object):

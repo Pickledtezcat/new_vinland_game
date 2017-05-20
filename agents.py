@@ -20,6 +20,7 @@ class Agent(object):
     turret_speed = 0.01
     base_visual_range = 6
     visual_range = 6
+    accuracy = 6
 
     faction = "HRE"
     stance = "FLANK"
@@ -37,6 +38,7 @@ class Agent(object):
 
         self.load_name = load_name
         self.team = team
+        self.dead = False
         self.ended = False
 
         self.box = self.add_box()
@@ -88,7 +90,6 @@ class Agent(object):
                      "navigation_history": self.navigation.history, "destinations": self.destinations,
                      "reverse": self.reverse, "throttle": self.throttle, "occupied": self.occupied, "aim": self.aim,
                      "targeter_id": self.agent_targeter.enemy_target_id,
-                     "targeter_infantry_index": self.agent_targeter.infantry_index,
                      "targeter_angle": self.agent_targeter.turret_angle,
                      "targeter_elevation": self.agent_targeter.gun_elevation, "stance": self.stance,
                      "soldiers": [solider.save() for solider in self.soldiers]}
@@ -116,7 +117,6 @@ class Agent(object):
         self.stance = agent_dict["stance"]
 
         self.agent_targeter.enemy_target_id = agent_dict["targeter_id"]
-        self.agent_targeter.infantry_index = agent_dict["targeter_infantry_index"]
         self.agent_targeter.turret_angle = agent_dict["targeter_angle"]
         self.agent_targeter.gun_elevation = agent_dict["targeter_elevation"]
 
@@ -308,10 +308,8 @@ class Agent(object):
 
             if command["label"] == "TARGET_ENEMY":
                 target_id = command["target_id"]
-                infantry_index = command["infantry_index"]
 
                 self.agent_targeter.enemy_target_id = target_id
-                self.agent_targeter.infantry_index = infantry_index
                 self.navigation.stop = True
                 self.destinations = []
 
@@ -385,6 +383,9 @@ class Infantry(Agent):
         self.formation = []
         self.add_squad(load_dict)
 
+        infantry_speed = [soldier.speed for soldier in self.soldiers]
+        self.speed = min(infantry_speed)
+
     def add_squad(self, load_dict):
 
         self.set_formation()
@@ -404,9 +405,13 @@ class Infantry(Agent):
         pass
 
     def update_stats(self):
+        dead = True
+        for soldier in self.soldiers:
+            if not soldier.dead:
+                dead = False
 
-        infantry_speed = [soldier.speed for soldier in self.soldiers]
-        self.speed = min(infantry_speed)
+        if dead:
+            self.dead = True
 
     def set_formation(self):
 
@@ -480,6 +485,7 @@ class Infantry(Agent):
 class InfantryMan(object):
     def __init__(self, agent, infantry_type, index, load_dict=None):
         self.agent = agent
+        self.agent_type = "INFANTRYMAN"
         self.infantry_type = infantry_type
 
         stats = static_dicts.soldiers()[self.infantry_type]
@@ -491,8 +497,9 @@ class InfantryMan(object):
         self.power = stats["power"]
         self.rof = stats["ROF"]
         self.special = stats["special"]
+        self.sound = stats["sound"]
 
-        self.weapon = SoldierWeapon(self, self.power, self.rof, self.special)
+        self.weapon = SoldierWeapon(self)
 
         # TODO add other infantry stats here
 
@@ -502,6 +509,7 @@ class InfantryMan(object):
         self.location = self.agent.location
         self.direction = [0, 1]
         self.occupied = None
+        self.dead = False
 
         self.speed = 0.02
 
@@ -518,10 +526,11 @@ class InfantryMan(object):
     def update(self):
         if self.movement.done:
             self.behavior.update()
-
-        self.movement.update()
         self.animation.update()
-        self.weapon.update()
+        self.movement.update()
+
+        if not self.dead:
+            self.weapon.update()
 
     def set_occupied(self, target_tile):
         self.agent.level.map[bgeutils.get_key(target_tile)]["occupied"] = self.agent.agent_id
@@ -583,16 +592,16 @@ class InfantryMan(object):
         return [round(axis) for axis in destination]
 
     def set_speed(self):
-        self.speed = (self.base_speed * self.agent.walk_mod) * 0.01
+        self.speed = (self.base_speed * self.agent.walk_mod) * 0.005
 
     def save(self):
 
         save_dict = {"movement_target": self.movement.target, "movement_timer": self.movement.timer,
                      "destination": self.behavior.destination, "history": self.behavior.history,
-                     "behavior_prone": self.behavior.prone, "index": self.index, "prone": self.agent.prone,
-                     "direction": self.direction, "location": self.location, "infantry_type": self.infantry_type,
-                     "occupied": self.occupied, "weapon_timer": self.weapon.timer, "weapon_ready": self.weapon.ready,
-                     "weapon_ammo": self.weapon.ammo}
+                     "toughness": self.toughness, "behavior_prone": self.behavior.prone, "index": self.index,
+                     "prone": self.agent.prone, "direction": self.direction, "location": self.location,
+                     "infantry_type": self.infantry_type, "occupied": self.occupied, "weapon_timer": self.weapon.timer,
+                     "weapon_ready": self.weapon.ready, "weapon_ammo": self.weapon.ammo, "dead": self.dead}
 
         self.clear_occupied()
         return save_dict
@@ -612,24 +621,29 @@ class InfantryMan(object):
         self.behavior.destination = load_dict["destination"]
         self.behavior.history = load_dict["history"]
         self.behavior.prone = load_dict["behavior_prone"]
+        self.toughness = load_dict["toughness"]
 
         self.weapon.timer = load_dict["weapon_timer"]
         self.weapon.ready = load_dict["weapon_ready"]
         self.weapon.ammo = load_dict["weapon_ammo"]
+        self.dead = load_dict["dead"]
 
         self.behavior.update()
         self.animation.update()
 
 
 class SoldierWeapon(object):
-    def __init__(self, infantryman, power, rof, special):
+    def __init__(self, infantryman):
         self.weapon_type = "INFANTRY_WEAPON"
         self.infantryman = infantryman
-        self.power = power
-        self.recharge = rof * 0.005
-        self.special = special
+        self.power = self.infantryman.power
+        self.sound = self.infantryman.sound
+        self.recharge = (self.infantryman.rof * 0.0025) * random.uniform(0.8, 1.0)
+        self.special = self.infantryman.special
+        self.accuracy = self.infantryman.agent.accuracy
         self.timer = 0.0
         self.ammo = 1.0
+        self.streak = random.randint(0, 3)
         self.ready = False
 
     def update(self):
@@ -642,10 +656,22 @@ class SoldierWeapon(object):
                     self.ready = True
 
     def shoot_weapon(self):
-        target = self.infantryman.agent.agent_targeter.enemy_target_id
+        target_id = self.infantryman.agent.agent_targeter.enemy_target_id
+        target = self.infantryman.agent.level.agents.get(target_id)
 
         if target and self.ready:
-            command = {"label": "SHOOT", "origin": self, "owner": self.infantryman.agent, "target_id": target}
+
+            if self.streak > 2:
+                self.streak = 1
+                streak = True
+            else:
+                streak = False
+                self.streak += 1
+
+            command = {"label": "SMALL_ARMS_SHOOT", "weapon": self, "owner": self.infantryman, "target_id": target_id,
+                       "streak": streak}
+
+            bgeutils.sound_message("SOUND_EFFECT", ("I_{}".format(self.sound), None, 3.0, 1.0))
             self.infantryman.agent.level.commands.append(command)
             self.ready = False
             self.timer = 0.0

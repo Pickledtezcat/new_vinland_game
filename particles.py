@@ -87,6 +87,47 @@ class MovementPointIcon(Particle):
                 self.box.color = [color, color, color, 1.0]
 
 
+class BulletStreak(Particle):
+
+    def __init__(self, level, position, target, delay=0):
+        super().__init__(level)
+
+        position[2] += 0.5
+        target[2] += 0.5
+
+        self.position = position
+        self.target = target
+        self.delay = delay
+        self.place_particle()
+
+    def add_box(self):
+        return self.level.own.scene.addObject("bullet_streak", self.level.own, 0)
+
+    def place_particle(self):
+
+        position = mathutils.Vector(self.position)
+        target = mathutils.Vector(self.target)
+
+        target_vector = target - position
+        self.box.worldPosition = position
+        self.box.worldOrientation = target_vector.to_track_quat("Y", "Z").to_matrix().to_3x3()
+        self.box.localScale.y = target_vector.length
+
+    def update(self):
+
+        if self.delay > 0:
+            self.delay -= 1
+            self.box.color = [0.0, 0.0, 0.0, 1.0]
+        else:
+            self.timer += 0.4
+            color = 1.0 - self.timer
+            self.box.color = [color, color, color, 1.0]
+
+            if self.timer >= 1.0:
+                self.ended = True
+
+
+
 
 
 

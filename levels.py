@@ -6,6 +6,7 @@ import mathutils
 import particles
 import camera_control
 import game_audio
+import random
 
 
 class MovementMarker(object):
@@ -179,14 +180,8 @@ class MouseControl(object):
                                        self.level.agents[agent_id].selected]
                     if selected_agents:
                         target_id = target.agent_id
-                        infantry_index = 0
-                        if target.agent_type == "INFANTRY":
-                            # TODO get infantry index from closest position to mouse cursor
 
-                            infantry_index = 1
-
-                        message = {"label": "TARGET_ENEMY", "target_id": target_id,
-                                   "infantry_index": infantry_index}
+                        message = {"label": "TARGET_ENEMY", "target_id": target_id}
 
                         for agent in selected_agents:
                             agent.commands.append(message)
@@ -326,13 +321,15 @@ class Level(object):
         for friend in range(4):
             agents.Vehicle(self, None, [35 + (10 * friend), 45], 0)
 
-        infantry = ["SUPPORT_36", "SCOUT", "HEAVY_ANTI-TANK_TEAM", "RIFLEMEN_39"]
+        infantry = ["SUPPORT_36", "SCOUT", "HEAVY_ANTI-TANK_TEAM", "RIFLEMEN_39", "ASSAULT_SQUAD_43"]
 
-        for friend in range(4):
+        for friend in range(5):
             agents.Infantry(self, infantry[friend], [35 + (10 * friend), 25], 0)
 
         for enemy in range(4):
             agents.Vehicle(self, None, [35 + (10 * enemy), 35], 1)
+
+        agents.Infantry(self, "SUPPORT_36", [35 + 20, 15], 1)
 
     def load_level(self, load_dict):
         self.map = load_dict["map"]
@@ -429,10 +426,71 @@ class Level(object):
         if "escape" in self.manager.game_input.keys:
             self.save_level()
 
+    def shoot(self, command):
+
+        miss = True
+        weapon = command["weapon"]
+        owner = command["owner"]
+        target = self.agents.get(command["target_id"])
+        streak = command["streak"]
+        rapid_fire = weapon.special == "RAPID_FIRE"
+        accuracy = weapon.accuracy
+        power = weapon.power + 1
+        position = owner.box.worldPosition.copy()
+        closest = 12000.0
+        soldiers = []
+
+        if command["label"] == "SMALL_ARMS_SHOOT":
+            best_target = None
+            hit_location = None
+
+            if target:
+                if target.agent_type == "INFANTRY":
+                    soldiers = [s for s in target.soldiers if s.toughness > 0]
+
+                    if soldiers:
+                        for soldier in soldiers:
+                            target_position = soldier.box.worldPosition.copy()
+                            target_vector = target_position - position
+                            distance = target_vector.length
+
+                            if distance < closest:
+                                closest = distance
+                                best_target = soldier
+
+                        target_distance = closest
+
+                        if rapid_fire:
+                            effective_range = max([(30.0 + accuracy + power) * random.uniform(0.0, 1.0) for _ in range(3)])
+                        else:
+                            effective_range = (accuracy + (power * 30.0)) * random.uniform(0.0, 1.0)
+
+                        if effective_range > target_distance:
+                            miss = False
+
+                    if miss:
+                        if soldiers:
+                            base_location = best_target.box.worldPosition.copy()
+                            random_vector = mathutils.Vector([random.uniform(-3.0, 3.0), random.uniform(-3.0, 3.0), 0.0])
+                            hit_location = base_location + random_vector
+
+                    else:
+                        hit_location = best_target.box.worldPosition.copy()
+                        effective_power = power * random.uniform(0.0, 1.0)
+                        damage = round(effective_power)
+                        best_target.toughness -= damage
+
+            if hit_location and streak:
+                particles.BulletStreak(self, list(position), list(hit_location))
+                if rapid_fire:
+                    particles.BulletStreak(self, list(position), list(hit_location), delay=6)
+                    particles.BulletStreak(self, list(position), list(hit_location), delay=12)
+
     def process_commands(self):
 
         for command in self.commands:
-            pass
+            if "SHOOT" in command["label"]:
+                self.shoot(command)
 
         self.commands = []
 
@@ -442,6 +500,18 @@ class Level(object):
             if not self.load_dict:
                 self.add_agents()
 
+    def sound_update(self):
+
+        for message in bge.logic.globalDict["sounds"]:
+            if message["header"] == "SOUND_EFFECT":
+                sound, owner, attenuation, volume_scale = message["content"]
+                if not owner:
+                    owner = self.listener
+
+                self.game_audio.sound_effect(sound, owner, attenuation=attenuation, volume_scale=volume_scale)
+
+        bge.logic.globalDict["sounds"] = []
+
     def update(self):
         self.camera_controller.update()
         self.game_audio.update()
@@ -449,3 +519,5 @@ class Level(object):
         self.agent_update()
         self.particle_update()
         self.user_interface_update()
+        self.sound_update()
+        self.process_commands()

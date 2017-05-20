@@ -119,11 +119,12 @@ class GameLoop(object):
             if not bge.logic.globalDict["mode_change"]:
                 self.set_level()
 
-        else:
+        if not bge.logic.globalDict["next_level"]:
+            if not self.level.loaded:
+                self.level.load()
+
             if self.level.loaded:
                 self.level.update()
-            else:
-                self.level.load()
 
 
 
