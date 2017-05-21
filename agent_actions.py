@@ -244,8 +244,6 @@ class InfantryAnimation(object):
                 remainder = action_time % 3
                 self.frame = remainder * 3.0
 
-            # TODO find out how to rapid fire
-
         elif behavior.action == "DEAD":
             self.frame = 4.0
         else:
@@ -338,12 +336,23 @@ class InfantryBehavior(object):
             self.infantryman.clear_occupied()
             return "DEAD"
 
-        shooting = self.infantryman.weapon.shoot_weapon()
         dying = self.infantryman.toughness <= 0
 
         if dying:
             self.action_timer = 0.0
             return "DYING"
+
+        avoiding = self.avoiding
+        self.avoiding = self.infantryman.check_too_close(self.infantryman.location)
+
+        if avoiding and not self.avoiding:
+            self.action_timer = 0.0
+            return "WAIT"
+
+        if self.avoiding:
+            return "GET_TILE"
+
+        shooting = self.infantryman.weapon.shoot_weapon()
 
         if self.infantryman.agent.prone:
             if not self.prone:
@@ -358,13 +367,6 @@ class InfantryBehavior(object):
             self.action_timer = 0.0
             return "SHOOTING"
 
-        avoiding = self.avoiding
-        self.avoiding = self.infantryman.check_too_close(self.infantryman.location)
-
-        if avoiding and not self.avoiding:
-            self.action_timer = 0.0
-            return "WAIT"
-
         destination = self.infantryman.get_destination()
         if destination != self.destination:
             self.destination = destination
@@ -372,8 +374,6 @@ class InfantryBehavior(object):
         if self.infantryman.location != self.destination:
             return "GET_TILE"
         else:
-            if self.avoiding:
-                return "GET_TILE"
             if self.infantryman.agent.agent_type == "ARTILLERY":
                 self.action_timer = 0.0
                 self.history = [self.infantryman.location]
@@ -565,10 +565,43 @@ class AgentTargeter(object):
         self.turret_angle = 0.0
         self.gun_elevation = 0.0
 
+        self.check_timer = 0.0
+
         self.turret_on_target = False
         self.hull_on_target = False
 
+    def get_closest_enemy(self):
+        agents = self.agent.level.agents
+
+        closest = 2000
+        best_target = None
+
+        for agent_key in agents:
+            agent = agents[agent_key]
+            if agent.team != self.agent.team and not agent.dead:
+                # TODO get more info, visible etc...
+
+                agent_vector = agent.box.worldPosition.copy() - self.agent.box.worldPosition.copy()
+                distance = agent_vector.length
+
+                if distance < closest:
+                    closest = distance
+                    best_target = agent_key
+
+        return best_target
+
     def update(self):
+
+        if not self.enemy_target_id:
+            if self.check_timer < 0:
+                self.check_timer = 12
+                closest_enemy_id = self.get_closest_enemy()
+                if closest_enemy_id:
+                    self.enemy_target_id = closest_enemy_id
+
+            else:
+                self.check_timer -= 1
+
         local_y = self.agent.movement_hook.getAxisVect([0.0, 1.0, 0.0]).to_2d()
         enemy_dead = False
 

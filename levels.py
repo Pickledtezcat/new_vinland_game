@@ -128,9 +128,13 @@ class MouseControl(object):
     def update_movement_points(self):
         vector_start = self.movement_point.copy()
 
-        vector_end = mathutils.Vector(self.mouse_over["position"])
+        if self.mouse_over:
+            vector_end = mathutils.Vector(self.mouse_over["position"])
+        else:
+            vector_end = mathutils.Vector([0.0, 1.0])
 
         movement_vector = vector_end - vector_start
+
         local_vector = self.movement_point.copy() - self.center_point.copy()
 
         angle = movement_vector.angle_signed(local_vector, 0.0)
@@ -318,18 +322,19 @@ class Level(object):
 
     def add_agents(self):
 
-        for friend in range(4):
-            agents.Vehicle(self, None, [35 + (10 * friend), 45], 0)
+        # for friend in range(4):
+        #     agents.Vehicle(self, None, [35 + (10 * friend), 45], 0)
 
         infantry = ["SUPPORT_36", "SCOUT", "HEAVY_ANTI-TANK_TEAM", "RIFLEMEN_39", "ASSAULT_SQUAD_43"]
 
         for friend in range(5):
-            agents.Infantry(self, infantry[friend], [35 + (10 * friend), 25], 0)
+            agents.Infantry(self, random.choice(infantry), [35 + (10 * friend), 25], 0)
 
-        for enemy in range(4):
-            agents.Vehicle(self, None, [35 + (10 * enemy), 35], 1)
+        # for enemy in range(4):
+        #     agents.Vehicle(self, None, [35 + (10 * enemy), 35], 1)
 
-        agents.Infantry(self, "SUPPORT_36", [35 + 20, 15], 1)
+        for enemy in range(5):
+            agents.Infantry(self, random.choice(infantry), [35 + (10 * enemy), 45], 1)
 
     def load_level(self, load_dict):
         self.map = load_dict["map"]
@@ -435,7 +440,8 @@ class Level(object):
         streak = command["streak"]
         rapid_fire = weapon.special == "RAPID_FIRE"
         accuracy = weapon.accuracy
-        power = weapon.power + 1
+        power = weapon.power
+        weapon_range = weapon.range
         position = owner.box.worldPosition.copy()
         closest = 12000.0
         soldiers = []
@@ -446,6 +452,10 @@ class Level(object):
 
             if target:
                 if target.agent_type == "INFANTRY":
+                    prone_target = target.prone
+                    if prone_target:
+                        accuracy *= 0.5
+
                     soldiers = [s for s in target.soldiers if s.toughness > 0]
 
                     if soldiers:
@@ -461,9 +471,9 @@ class Level(object):
                         target_distance = closest
 
                         if rapid_fire:
-                            effective_range = max([(30.0 + accuracy + power) * random.uniform(0.0, 1.0) for _ in range(3)])
+                            effective_range = max([(accuracy + weapon_range) * random.uniform(0.0, 1.0) for _ in range(3)])
                         else:
-                            effective_range = (accuracy + (power * 30.0)) * random.uniform(0.0, 1.0)
+                            effective_range = (accuracy + weapon_range) * random.uniform(0.0, 1.0)
 
                         if effective_range > target_distance:
                             miss = False
@@ -475,10 +485,14 @@ class Level(object):
                             hit_location = base_location + random_vector
 
                     else:
+                        # TODO target toughness increased when in building
+
                         hit_location = best_target.box.worldPosition.copy()
                         effective_power = power * random.uniform(0.0, 1.0)
-                        damage = round(effective_power)
-                        best_target.toughness -= damage
+
+                        if effective_power > best_target.toughness:
+                            damage = max(1, int(effective_power * 0.5))
+                            best_target.toughness -= damage
 
             if hit_location and streak:
                 particles.BulletStreak(self, list(position), list(hit_location))

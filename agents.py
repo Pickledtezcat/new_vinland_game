@@ -201,6 +201,9 @@ class Agent(object):
         else:
             self.throttle_target = 0.0
 
+        self.set_speed()
+
+    def set_speed(self):
         self.throttle = bgeutils.interpolate_float(self.throttle, self.throttle_target, self.handling)
         self.speed = self.max_speed * self.throttle
         self.turning_speed = self.handling * self.throttle
@@ -413,6 +416,12 @@ class Infantry(Agent):
         if dead:
             self.dead = True
 
+        self.set_speed()
+
+    def set_speed(self):
+        infantry_speed = [soldier.speed for soldier in self.soldiers]
+        self.speed = min(infantry_speed)
+
     def set_formation(self):
 
         self.formation = []
@@ -492,7 +501,6 @@ class InfantryMan(object):
 
         self.mesh_name = stats["mesh_name"]
         self.toughness = stats["toughness"]
-        self.view = stats["base_view"]
         self.base_speed = stats["speed"]
         self.power = stats["power"]
         self.rof = stats["ROF"]
@@ -637,6 +645,7 @@ class SoldierWeapon(object):
         self.weapon_type = "INFANTRY_WEAPON"
         self.infantryman = infantryman
         self.power = self.infantryman.power
+        self.range = self.power * 2.0
         self.sound = self.infantryman.sound
         self.recharge = (self.infantryman.rof * 0.0025) * random.uniform(0.8, 1.0)
         self.special = self.infantryman.special
@@ -645,21 +654,56 @@ class SoldierWeapon(object):
         self.ammo = 1.0
         self.streak = random.randint(0, 3)
         self.ready = False
+        self.in_range = False
+        self.check_timer = 0
 
     def update(self):
 
+        prone = self.infantryman.agent.prone
+
+        if prone:
+            self.accuracy = self.infantryman.agent.accuracy * 2.0
+        else:
+            self.accuracy = self.infantryman.agent.accuracy
+
         if self.ammo > 0.0:
             if not self.ready:
-                self.timer = min(1.0, self.timer + self.recharge)
+                if prone:
+                    recharge = self.recharge * 0.5
+                else:
+                    recharge = self.recharge
+
+                self.timer = min(1.0, self.timer + recharge)
                 if self.timer >= 1.0:
                     self.timer = 0.0
                     self.ready = True
 
-    def shoot_weapon(self):
+            if self.check_timer <= 0:
+                self.check_timer = 8
+                self.in_range = self.check_in_range()
+
+            else:
+                self.check_timer -= 1
+
+        else:
+            self.ready = False
+
+    def check_in_range(self):
+        target_id, target = self.get_target()
+        if target:
+            distance = (target.box.worldPosition.copy() - self.infantryman.box.worldPosition.copy()).length
+            if distance < self.range:
+                return True
+
+    def get_target(self):
         target_id = self.infantryman.agent.agent_targeter.enemy_target_id
         target = self.infantryman.agent.level.agents.get(target_id)
+        return target_id, target
 
-        if target and self.ready:
+    def shoot_weapon(self):
+        target_id, target = self.get_target()
+
+        if target and self.ready and self.in_range:
 
             if self.streak > 2:
                 self.streak = 1
@@ -667,6 +711,9 @@ class SoldierWeapon(object):
             else:
                 streak = False
                 self.streak += 1
+
+            if self.special == "ANTI_TANK":
+                streak = True
 
             command = {"label": "SMALL_ARMS_SHOOT", "weapon": self, "owner": self.infantryman, "target_id": target_id,
                        "streak": streak}
