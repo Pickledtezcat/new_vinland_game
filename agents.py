@@ -22,8 +22,7 @@ class Agent(object):
     visual_range = 6
     accuracy = 6
 
-    faction = "HRE"
-    stance = "FLANK"
+    stance = "AGGRESSIVE"
     agent_type = "VEHICLE"
 
     def __init__(self, level, load_name, location, team, agent_id=None, load_dict=None):
@@ -38,6 +37,8 @@ class Agent(object):
 
         self.load_name = load_name
         self.team = team
+        self.faction = self.level.factions[self.team]
+
         self.dead = False
         self.ended = False
 
@@ -213,7 +214,7 @@ class Agent(object):
 
     def get_facing(self, target_vector):
 
-        if not target_vector:
+        if not target_vector or target_vector.length < 0.001:
             target_vector = self.movement_hook.getAxisVect([0.0, 1.0, 0.0])
 
         search_array = [[1, 0], [1, 1], [0, 1], [1, -1], [-1, 0], [-1, 1], [0, -1], [-1, -1]]
@@ -337,16 +338,24 @@ class Agent(object):
     def update(self):
         # self.debug_text = "{} - {}\n{} -  {}".format(self.agent_id, self.state.name, self.direction, self.agent_targeter.hull_on_target)
 
+        # TODO integrate pause, dead and other behavior in to states
+
         debug_icon = {"AGGRESSIVE": "[A]",
                       "SENTRY": "[S]",
                       "DEFEND": "[D]",
                       "FLANK": "[F]"}
 
-        self.debug_text = debug_icon[self.stance]
+        self.debug_text = ""
+
+        if not self.dead:
+            if self.team == 0:
+                self.debug_text = debug_icon[self.stance]
+            self.process_commands()
+        else:
+            self.selected = False
 
         infantry_types = ["INFANTRY", "ARTILLERY"]
 
-        self.process_commands()
         if not self.ended:
             if not self.level.paused:
                 self.state_machine()

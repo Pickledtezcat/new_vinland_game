@@ -269,8 +269,16 @@ class Level(object):
         self.messages = []
         self.bullets = []
 
-        infantry_path = bge.logic.expandPath("//infantry_sprites/hre_summer_sprites.blend")
-        self.assets_loaded = bge.logic.LibLoad(infantry_path, "Scene")
+        self.factions = {0: "HRE",
+                        1: "VIN"}
+
+        hre_infantry_path = bge.logic.expandPath("//infantry_sprites/hre_summer_sprites.blend")
+        vin_infantry_path = bge.logic.expandPath("//infantry_sprites/vin_summer_sprites.blend")
+
+        self.assets = []
+
+        self.assets.append(bge.logic.LibLoad(hre_infantry_path, "Scene"))
+        self.assets.append(bge.logic.LibLoad(vin_infantry_path, "Scene"))
 
         self.load_dict = None
         load_name = bge.logic.globalDict["profiles"][bge.logic.globalDict["active_profile"]]["saved_game"]
@@ -279,6 +287,13 @@ class Level(object):
             self.load_level(self.load_dict)
         else:
             self.get_map()
+
+    def check_assets_loaded(self):
+        for asset in self.assets:
+            if not asset:
+                return False
+
+        return True
 
     def get_tile(self, tile_key):
         if 0 < tile_key[0] < self.map_size and 0 < tile_key[1] < self.map_size:
@@ -509,7 +524,7 @@ class Level(object):
         self.commands = []
 
     def load(self):
-        if self.assets_loaded:
+        if self.check_assets_loaded():
             self.loaded = True
             if not self.load_dict:
                 self.add_agents()

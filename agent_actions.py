@@ -193,7 +193,7 @@ class InfantryAnimation(object):
 
     def __init__(self, infantryman):
         self.infantryman = infantryman
-        self.last_frame = 0
+        self.last_frame = -1
         self.frame = 0.0
         self.north = random.choice(["NE", "NW"])
         self.faction = self.infantryman.agent.faction
@@ -242,7 +242,7 @@ class InfantryAnimation(object):
 
                 action_time = behavior.action_timer * 12
                 remainder = action_time % 3
-                self.frame = remainder * 3.0
+                self.frame = remainder * 4.0
 
         elif behavior.action == "DEAD":
             self.frame = 4.0
@@ -283,6 +283,9 @@ class InfantryAnimation(object):
             else:
                 action = "death"
 
+            if behavior.action == "DEAD":
+                frame_number = 4
+
         else:
             action = "default"
 
@@ -314,6 +317,8 @@ class InfantryAnimation(object):
         sprite_direction = directions_dict[tuple(direction)]
         mesh_name = self.infantryman.mesh_name
         frame_name = "{}_{}_{}${}_{}".format(self.faction, mesh_name, action, sprite_direction, frame_number)
+        if "death" in frame_name:
+            print(frame_name)
         self.infantryman.sprite.replaceMesh(frame_name)
 
 
