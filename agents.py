@@ -540,9 +540,21 @@ class InfantryMan(object):
     def terminate(self):
         self.box.endObject()
 
+    def close_up_formation(self):
+
+        if self.index < len(self.agent.formation) - 1:
+            next_index = self.index + 1
+
+            next_soldier = [soldier for soldier in self.agent.soldiers if soldier.index == next_index]
+
+            if next_soldier:
+                if next_soldier[0].dead:
+                    # TODO sort formation towards the front
+                    print("closed", self.index, next_soldier[0].index)
+                    self.index = next_index
+
     def update(self):
-        if self.movement.done:
-            self.behavior.update()
+        self.behavior.update()
         self.animation.update()
         self.movement.update()
 
@@ -661,7 +673,7 @@ class SoldierWeapon(object):
         self.accuracy = self.infantryman.agent.accuracy
         self.timer = 0.0
         self.ammo = 1.0
-        self.streak = random.randint(0, 3)
+        self.effect_timer = random.randint(0, 3)
         self.ready = False
         self.in_range = False
         self.check_timer = 0
@@ -714,18 +726,19 @@ class SoldierWeapon(object):
 
         if target and self.ready and self.in_range:
 
-            if self.streak > 2:
-                self.streak = 1
-                streak = True
+            effect = None
+
+            if self.effect_timer > 2:
+                self.effect_timer = 1
+                effect = "YELLOW_STREAK"
             else:
-                streak = False
-                self.streak += 1
+                self.effect_timer += 1
 
             if self.special == "ANTI_TANK":
-                streak = True
+                effect = "RED_STREAK"
 
             command = {"label": "SMALL_ARMS_SHOOT", "weapon": self, "owner": self.infantryman, "target_id": target_id,
-                       "streak": streak}
+                       "effect": effect}
 
             bgeutils.sound_message("SOUND_EFFECT", ("I_{}".format(self.sound), None, 3.0, 1.0))
             self.infantryman.agent.level.commands.append(command)

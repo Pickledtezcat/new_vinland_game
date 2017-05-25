@@ -67,6 +67,7 @@ class MouseControl(object):
         self.additive = False
         self.tile_over = [35, 35]
         self.mouse_over = None
+        self.over_units = []
         self.bypass = False
 
         self.movement_point = None
@@ -90,10 +91,28 @@ class MouseControl(object):
 
         if mouse_hit[0]:
             tile_over = [round(mouse_hit[1][0]), round(mouse_hit[1][1]) - 1]
+
+            self.tile_over = tile_over
             tile_key = bgeutils.get_key(tile_over)
-            if self.level.map.get(tile_key):
-                self.tile_over = tile_over
-                self.mouse_over = self.level.map[bgeutils.get_key(self.tile_over)]
+            mouse_over = self.level.map.get(tile_key)
+
+            if mouse_over:
+                self.mouse_over = mouse_over
+
+            self.over_units = []
+
+            for x in range(-1, 2):
+                for y in range(-1, 2):
+
+                    tx, ty = tile_over
+                    neighbor = [x + tx, y + ty]
+                    neighbor_key = bgeutils.get_key(neighbor)
+                    neighbor_tile = self.level.map.get(neighbor_key)
+
+                    if neighbor_tile:
+                        occupant = neighbor_tile["occupied"]
+                        if occupant:
+                            self.over_units.append(occupant)
 
     def reset_movement(self):
         self.movement_point = None
@@ -165,30 +184,28 @@ class MouseControl(object):
         self.end = None
 
     def set_targets(self):
-        target = None
+        enemy = None
 
-        if self.mouse_over:
-            occupier_id = self.mouse_over["occupied"]
+        if self.over_units:
+            for unit_id in self.over_units:
+                target = self.level.agents[unit_id]
+                if target.team != 0:
+                    enemy = target
 
-            if occupier_id:
-                occupant = self.level.agents[occupier_id]
-                if occupant.team != 0:
-                    target = occupant
+        if enemy:
+            self.context = "TARGET"
+            click = "right_button" in self.level.manager.game_input.buttons
 
-            if target:
-                self.context = "TARGET"
-                click = "right_button" in self.level.manager.game_input.buttons
+            if click:
+                selected_agents = [self.level.agents[agent_id] for agent_id in self.level.agents if
+                                   self.level.agents[agent_id].selected]
+                if selected_agents:
+                    target_id = enemy.agent_id
 
-                if click:
-                    selected_agents = [self.level.agents[agent_id] for agent_id in self.level.agents if
-                                       self.level.agents[agent_id].selected]
-                    if selected_agents:
-                        target_id = target.agent_id
+                    message = {"label": "TARGET_ENEMY", "target_id": target_id}
 
-                        message = {"label": "TARGET_ENEMY", "target_id": target_id}
-
-                        for agent in selected_agents:
-                            agent.commands.append(message)
+                    for agent in selected_agents:
+                        agent.commands.append(message)
 
     def update(self):
 
@@ -337,8 +354,8 @@ class Level(object):
 
     def add_agents(self):
 
-        # for friend in range(4):
-        #     agents.Vehicle(self, None, [35 + (10 * friend), 45], 0)
+        for friend in range(4):
+            agents.Vehicle(self, None, [35 + (10 * friend), 55], 0)
 
         infantry = ["SUPPORT_36", "SCOUT", "HEAVY_ANTI-TANK_TEAM", "RIFLEMEN_39", "ASSAULT_SQUAD_43"]
 
@@ -452,7 +469,7 @@ class Level(object):
         weapon = command["weapon"]
         owner = command["owner"]
         target = self.agents.get(command["target_id"])
-        streak = command["streak"]
+        effect = command["effect"]
         rapid_fire = weapon.special == "RAPID_FIRE"
         accuracy = weapon.accuracy
         power = weapon.power
@@ -509,11 +526,17 @@ class Level(object):
                             damage = max(1, int(effective_power * 0.5))
                             best_target.toughness -= damage
 
-            if hit_location and streak:
-                particles.BulletStreak(self, list(position), list(hit_location))
-                if rapid_fire:
-                    particles.BulletStreak(self, list(position), list(hit_location), delay=6)
-                    particles.BulletStreak(self, list(position), list(hit_location), delay=12)
+            if hit_location and effect:
+
+                if effect == "RED_STREAK":
+                    particles.RedBulletStreak(self, list(position), list(hit_location))
+
+                if effect == "YELLOW_STREAK":
+                    particles.YellowBulletStreak(self, list(position), list(hit_location))
+
+                    if rapid_fire:
+                        particles.YellowBulletStreak(self, list(position), list(hit_location), delay=6)
+                        particles.YellowBulletStreak(self, list(position), list(hit_location), delay=12)
 
     def process_commands(self):
 

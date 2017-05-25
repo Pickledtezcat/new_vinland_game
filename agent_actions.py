@@ -202,6 +202,9 @@ class InfantryAnimation(object):
 
     def get_vector(self, target_vector):
 
+        if target_vector.length <= 0.0:
+            target_vector = mathutils.Vector([0.0, 1.0])
+
         search_array = [[1, 0], [1, 1], [0, 1], [1, -1], [-1, 0], [-1, 1], [0, -1], [-1, -1]]
 
         best_facing = None
@@ -317,8 +320,6 @@ class InfantryAnimation(object):
         sprite_direction = directions_dict[tuple(direction)]
         mesh_name = self.infantryman.mesh_name
         frame_name = "{}_{}_{}${}_{}".format(self.faction, mesh_name, action, sprite_direction, frame_number)
-        if "death" in frame_name:
-            print(frame_name)
         self.infantryman.sprite.replaceMesh(frame_name)
 
 
@@ -344,14 +345,12 @@ class InfantryBehavior(object):
         dying = self.infantryman.toughness <= 0
 
         if dying:
-            self.action_timer = 0.0
             return "DYING"
 
         avoiding = self.avoiding
         self.avoiding = self.infantryman.check_too_close(self.infantryman.location)
 
         if avoiding and not self.avoiding:
-            self.action_timer = 0.0
             return "WAIT"
 
         if self.avoiding:
@@ -361,15 +360,12 @@ class InfantryBehavior(object):
 
         if self.infantryman.agent.prone:
             if not self.prone:
-                self.action_timer = 0.0
                 return "GO_PRONE"
         else:
             if self.prone:
-                self.action_timer = 0.0
                 return "GET_UP"
 
         if shooting:
-            self.action_timer = 0.0
             return "SHOOTING"
 
         destination = self.infantryman.get_destination()
@@ -380,31 +376,33 @@ class InfantryBehavior(object):
             return "GET_TILE"
         else:
             if self.infantryman.agent.agent_type == "ARTILLERY":
-                self.action_timer = 0.0
                 self.history = [self.infantryman.location]
                 return "FACE_GUN"
             if self.infantryman.agent.agent_targeter.enemy_target_id:
-                self.action_timer = 0.0
                 self.history = [self.infantryman.location]
                 return "FACE_TARGET"
-            self.action_timer = 0.0
             self.history = [self.infantryman.location]
             return "FINISHED"
 
     def update(self):
         if self.action != "DEAD":
-            if self.action_timer < 1.0:
-                self.action_timer = min(1.0, self.action_timer + 0.02)
-            else:
-                if self.action == "GO_PRONE":
-                    self.prone = True
-                if self.action == "GET_UP":
-                    self.prone = False
+            if self.infantryman.movement.done:
+                if self.action_timer < 1.0:
+                    self.action_timer = min(1.0, self.action_timer + 0.02)
+                else:
+                    if self.action == "GO_PRONE":
+                        self.prone = True
+                    if self.action == "GET_UP":
+                        self.prone = False
 
-                self.action = self.get_action()
+                    self.action = self.get_action()
 
-                if self.action == "GET_TILE":
-                    self.get_next_tile()
+                    if self.action == "GET_TILE":
+                        self.get_next_tile()
+                        self.infantryman.close_up_formation()
+                    else:
+                        self.action_timer = 0.0
+                        self.infantryman.close_up_formation()
 
     def get_next_tile(self):
 

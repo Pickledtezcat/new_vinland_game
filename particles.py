@@ -92,6 +92,8 @@ class BulletStreak(Particle):
     def __init__(self, level, position, target, delay=0):
         super().__init__(level)
 
+        self.color = [1.0, 1.0, 1.0]
+
         position[2] += 0.5
         target[2] += 0.5
 
@@ -114,18 +116,33 @@ class BulletStreak(Particle):
         self.box.localScale.y = target_vector.length
 
     def update(self):
+        r, g, b = self.color
 
         if self.delay > 0:
             self.delay -= 1
-            self.box.color = [0.0, 0.0, 0.0, 1.0]
+            color = 0.0
         else:
             self.timer += 0.4
             color = 1.0 - self.timer
-            self.box.color = [color, color, color, 1.0]
 
-            if self.timer >= 1.0:
-                self.ended = True
+        self.box.color = [r * color, g * color, b * color, 1.0]
 
+        if self.timer >= 1.0:
+            self.ended = True
+
+
+class YellowBulletStreak(BulletStreak):
+    def __init__(self, level, position, target, delay=0):
+        super().__init__(level, position, target, delay)
+
+        self.color = [0.5, 0.5, 0.0]
+
+
+class RedBulletStreak(BulletStreak):
+    def __init__(self, level, position, target, delay=0):
+        super().__init__(level, position, target, delay)
+
+        self.color = [1.0, 0.0, 0.0]
 
 
 

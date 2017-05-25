@@ -22,8 +22,8 @@ class CameraControl(object):
 
     def zoom(self):
 
-        spot_in = 40.0
-        spot_out = 66.0
+        spot_in = 22.0
+        spot_out = 32.0
 
         if self.zoom_in:
             self.zoom_timer = min(1.0, self.zoom_timer + 0.01)
