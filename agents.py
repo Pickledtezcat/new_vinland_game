@@ -161,6 +161,14 @@ class Agent(object):
                     if occupier and occupier != self:
                         occupied.append(occupier)
 
+                building_id = tile["building"]
+
+                if building_id:
+                    occupier = self.level.buildings.get(building_id)
+
+                    if occupier:
+                        occupied.append(occupier)
+
         return occupied
 
     def clear_occupied(self):
@@ -544,14 +552,18 @@ class InfantryMan(object):
 
         if self.index < len(self.agent.formation) - 1:
             next_index = self.index + 1
+            changed = False
 
             next_soldier = [soldier for soldier in self.agent.soldiers if soldier.index == next_index]
 
             if next_soldier:
                 if next_soldier[0].dead:
                     # TODO sort formation towards the front
-                    print("closed", self.index, next_soldier[0].index)
+                    changed = True
                     self.index = next_index
+
+            if changed:
+                self.agent.navigation.get_next_destination()
 
     def update(self):
         self.behavior.update()
@@ -578,6 +590,13 @@ class InfantryMan(object):
                 occupier = self.agent.level.agents.get(occupier_id)
                 if occupier:
                     return occupier
+
+            building_id = tile["building"]
+            if building_id:
+                occupier = self.agent.level.buildings.get(building_id)
+                if occupier:
+                    return occupier
+
         else:
             return self
 

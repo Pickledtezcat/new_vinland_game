@@ -7,6 +7,7 @@ import particles
 import camera_control
 import game_audio
 import random
+import buildings
 
 
 class MovementMarker(object):
@@ -59,7 +60,6 @@ class MovementMarker(object):
 
 
 class MouseControl(object):
-
     def __init__(self, level):
         self.level = level
         self.start = None
@@ -126,7 +126,8 @@ class MouseControl(object):
     def set_movement_points(self):
         self.movement_point = mathutils.Vector(self.tile_over)
 
-        selected_agents = [self.level.agents[agent_id] for agent_id in self.level.agents if self.level.agents[agent_id].selected]
+        selected_agents = [self.level.agents[agent_id] for agent_id in self.level.agents if
+                           self.level.agents[agent_id].selected]
 
         center_point = mathutils.Vector().to_2d()
 
@@ -175,7 +176,8 @@ class MouseControl(object):
         message = {"label": "SELECT", "x_limit": x_limit, "y_limit": y_limit, "additive": additive,
                    "mouse_over": target_agent}
 
-        active_agents = [self.level.agents[agent_id] for agent_id in self.level.agents if self.level.agents[agent_id].team == 0]
+        active_agents = [self.level.agents[agent_id] for agent_id in self.level.agents if
+                         self.level.agents[agent_id].team == 0]
 
         for agent in active_agents:
             agent.commands.append(message)
@@ -264,8 +266,9 @@ class MouseControl(object):
 
 
 class Level(object):
-
     def __init__(self, manager):
+        print("GAME_MODE")
+
         self.manager = manager
         self.own = manager.own
         self.scene = self.own.scene
@@ -280,14 +283,20 @@ class Level(object):
         self.agent_id_index = 0
         self.loaded = False
 
+        self.agents_added = False
+        self.buildings_added = False
+        self.buildings_mapped = False
+
         self.map = {}
         self.agents = {}
+        self.buildings = {}
         self.particles = []
         self.messages = []
         self.bullets = []
+        # TODO add bullets, for artillery weapons
 
         self.factions = {0: "HRE",
-                        1: "VIN"}
+                         1: "VIN"}
 
         hre_infantry_path = bge.logic.expandPath("//infantry_sprites/hre_summer_sprites.blend")
         vin_infantry_path = bge.logic.expandPath("//infantry_sprites/vin_summer_sprites.blend")
@@ -302,13 +311,27 @@ class Level(object):
         if load_name:
             self.load_dict = bgeutils.load_level()
             self.load_level(self.load_dict)
-        else:
-            self.get_map()
 
-    def check_assets_loaded(self):
+    def check_level_loaded(self):
+
+        if not self.map:
+            self.get_map()
+            return False
+
+        if not self.buildings_added:
+            self.add_buildings()
+            return False
+
         for asset in self.assets:
             if not asset:
                 return False
+
+        if not self.buildings_mapped:
+            self.get_buildings()
+            return False
+
+        if not self.agents_added:
+            self.add_agents()
 
         return True
 
@@ -334,13 +357,34 @@ class Level(object):
                 target_position = [x_pos, y_pos, -10.0]
                 origin = [x_pos, y_pos, 10.0]
 
-                ray = self.own.rayCast(target_position, origin, 0.0, "ground", 1, 1, 0)
+                ray = self.own.rayCast(target_position, origin, 0.0, "ground", 1, 1, 1)
+
                 if ray[0]:
-                    tile = {"position": [x_pos, y_pos], "occupied": None, "height": ray[1][2], "normal": list(ray[2])}
+                    tile = {"position": [x_pos, y_pos], "occupied": None, "height": ray[1][2], "normal": list(ray[2]),
+                            "building": None}
 
                     map[bgeutils.get_key((x, y))] = tile
 
         self.map = map
+
+    def get_buildings(self):
+
+        for x in range(self.map_size):
+            for y in range(self.map_size):
+                x_pos = x + 0.5
+                y_pos = y + 0.5
+
+                target_position = [x_pos, y_pos, -10.0]
+                origin = [x_pos, y_pos, 10.0]
+                tile = self.map.get(bgeutils.get_key((x, y)))
+                if tile:
+                    ray = self.own.rayCast(target_position, origin, 0.0, "building", 0, 1, 0)
+                    if ray[0]:
+                        building_id = ray[0]["building_id"]
+                        print(building_id)
+                        self.map[bgeutils.get_key((x, y))]["building"] = building_id
+
+        self.buildings_mapped = True
 
     def terminate(self):
         self.user_interface.terminate()
@@ -352,21 +396,34 @@ class Level(object):
             agent = self.agents[agent_id]
             agent.terminate()
 
+        for building_id in self.buildings:
+            building = self.buildings[building_id]
+            building.terminate()
+
     def add_agents(self):
 
-        for friend in range(4):
-            agents.Vehicle(self, None, [35 + (10 * friend), 55], 0)
+        # for friend in range(4):
+        #     agents.Vehicle(self, None, [35 + (10 * friend), 55], 0)
 
         infantry = ["SUPPORT_36", "SCOUT", "HEAVY_ANTI-TANK_TEAM", "RIFLEMEN_39", "ASSAULT_SQUAD_43"]
 
-        for friend in range(5):
-            agents.Infantry(self, random.choice(infantry), [35 + (10 * friend), 25], 0)
+        # for friend in range(5):
+        #     agents.Infantry(self, random.choice(infantry), [35 + (10 * friend), 25], 0)
+
+        agents.Infantry(self, "SUPPORT_36", [35, 25], 0)
 
         # for enemy in range(4):
         #     agents.Vehicle(self, None, [35 + (10 * enemy), 35], 1)
 
-        for enemy in range(5):
-            agents.Infantry(self, random.choice(infantry), [35 + (10 * enemy), 45], 1)
+        # for enemy in range(5):
+        #     agents.Infantry(self, random.choice(infantry), [35 + (10 * enemy), 45], 1)
+
+        self.agents_added = True
+
+    def add_buildings(self):
+
+        buildings.Building(self, "basic_house", [35, 40], [1, 1])
+        self.buildings_added = True
 
     def load_level(self, load_dict):
         self.map = load_dict["map"]
@@ -377,6 +434,7 @@ class Level(object):
             location = loading_agent["location"]
             team = loading_agent["team"]
             agent_type = loading_agent["agent_type"]
+            load_name = loading_agent["load_name"]
 
             agent_class = agents.Vehicle
 
@@ -386,7 +444,25 @@ class Level(object):
             elif agent_type == "INFANTRY":
                 agent_class = agents.Infantry
 
-            agent_class(self, None, location, team, agent_id=agent_id, load_dict=loading_agent)
+            agent_class(self, load_name, location, team, agent_id=agent_id, load_dict=loading_agent)
+
+        loading_buildings = load_dict["buildings"]
+
+        for building_id in loading_buildings:
+            loading_building = loading_buildings[building_id]
+            load_name = loading_building["load_name"]
+            location = loading_building["location"]
+            direction = loading_building["direction"]
+            building_type = loading_building["building_type"]
+
+            # TODO different building types
+
+            building_class = buildings.Building
+            building_class(self, load_name, location, direction, building_id=building_id, load_dict=loading_building)
+
+        self.agents_added = True
+        self.buildings_added = True
+        self.buildings_mapped = True
 
     def save_level(self):
         saving_agents = {}
@@ -395,12 +471,19 @@ class Level(object):
             saving_agents[agent_id] = agent.save()
 
         saved_map = {}
+
+        saving_buildings = {}
+        for building_id in self.buildings:
+            building = self.buildings[building_id]
+            saving_buildings[building_id] = building.save()
+
         for tile_key in self.map:
             tile = self.map[tile_key]
             tile["occupied"] = None
             saved_map[tile_key] = tile
 
         level_details = {"map": saved_map,
+                         "buildings": saving_buildings,
                          "agents": saving_agents}
 
         bgeutils.save_level(level_details)
@@ -503,7 +586,8 @@ class Level(object):
                         target_distance = closest
 
                         if rapid_fire:
-                            effective_range = max([(accuracy + weapon_range) * random.uniform(0.0, 1.0) for _ in range(3)])
+                            effective_range = max(
+                                [(accuracy + weapon_range) * random.uniform(0.0, 1.0) for _ in range(3)])
                         else:
                             effective_range = (accuracy + weapon_range) * random.uniform(0.0, 1.0)
 
@@ -513,7 +597,8 @@ class Level(object):
                     if miss:
                         if soldiers:
                             base_location = best_target.box.worldPosition.copy()
-                            random_vector = mathutils.Vector([random.uniform(-3.0, 3.0), random.uniform(-3.0, 3.0), 0.0])
+                            random_vector = mathutils.Vector(
+                                [random.uniform(-3.0, 3.0), random.uniform(-3.0, 3.0), 0.0])
                             hit_location = base_location + random_vector
 
                     else:
@@ -547,10 +632,8 @@ class Level(object):
         self.commands = []
 
     def load(self):
-        if self.check_assets_loaded():
+        if self.check_level_loaded():
             self.loaded = True
-            if not self.load_dict:
-                self.add_agents()
 
     def sound_update(self):
 

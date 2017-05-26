@@ -398,7 +398,9 @@ class VehicleName(Widget):
 # menus
 
 class Menu(object):
+
     def __init__(self, manager):
+        print("MENU_MODE")
         self.manager = manager
         self.loaded = False
         self.loading = 0

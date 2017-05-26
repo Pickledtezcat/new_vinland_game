@@ -198,6 +198,7 @@ class InfantryAnimation(object):
         self.north = random.choice(["NE", "NW"])
         self.faction = self.infantryman.agent.faction
         self.set_frame("default", 0)
+        self.last_action = None
         self.infantryman.sprite.visible = True
 
     def get_vector(self, target_vector):
@@ -289,22 +290,22 @@ class InfantryAnimation(object):
             if behavior.action == "DEAD":
                 frame_number = 4
 
-        else:
+        elif behavior.action == "FIDGET":
             action = "default"
-
-        if frame_number != self.last_frame:
-            self.set_frame(action, frame_number)
-
-    def set_frame(self, action, frame_number):
-        self.last_frame = frame_number
-
-        if action == "default":
+        else:
             if self.infantryman.behavior.prone:
                 action = "go_prone"
                 frame_number = 3
             else:
-                if random.uniform(0.0, 1.0) < 0.8:
-                    frame_number = 0
+                action = "default"
+                frame_number = 0
+
+        if frame_number != self.last_frame or action != self.last_action:
+            self.set_frame(action, frame_number)
+
+    def set_frame(self, action, frame_number):
+        self.last_frame = frame_number
+        self.last_action = action
 
         north = self.north
         directions_dict = {(-1, -1): "W",
@@ -334,6 +335,7 @@ class InfantryBehavior(object):
         self.prone = False
         self.action_timer = 1.0
         self.action = "GET_TILE"
+        self.fidget_count = random.randint(1, 12)
 
     def get_action(self):
 
@@ -382,6 +384,14 @@ class InfantryBehavior(object):
                 self.history = [self.infantryman.location]
                 return "FACE_TARGET"
             self.history = [self.infantryman.location]
+
+            if not self.prone:
+                if self.fidget_count < 0:
+                    self.fidget_count = random.randint(3, 12)
+                    return "FIDGET"
+                else:
+                    self.fidget_count -= 1
+
             return "FINISHED"
 
     def update(self):
