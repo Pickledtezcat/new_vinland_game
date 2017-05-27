@@ -56,6 +56,7 @@ class Agent(object):
         self.location = location
         self.direction = [1, 0]
         self.destinations = []
+        self.enter_building = None
         self.aim = None
         self.occupied = []
 
@@ -82,7 +83,7 @@ class Agent(object):
     def save(self):
 
         save_dict = {"agent_type": self.agent_type, "team": self.team, "location": self.location,
-                     "direction": self.direction,
+                     "direction": self.direction, "enter_building": self.enter_building,
                      "selected": self.selected, "state_name": self.state.name, "load_name": self.load_name,
                      "state_count": self.state.count, "movement_target": self.movement.target,
                      "movement_target_direction": self.movement.target_direction,
@@ -101,6 +102,7 @@ class Agent(object):
     def reload(self, agent_dict):
 
         self.direction = agent_dict["direction"]
+        self.enter_building = agent_dict["enter_building"]
         self.load_name = agent_dict["load_name"]
 
         self.movement.load_movement(agent_dict["movement_target"], agent_dict["movement_target_direction"],
@@ -145,8 +147,14 @@ class Agent(object):
 
     def check_occupied(self, target_tile):
 
-        x, y = target_tile
         occupied = []
+
+        current_tile = self.level.get_tile(self.location)
+        inside = current_tile["occupied"] or current_tile["building"]
+        if inside:
+            return occupied
+
+        x, y = target_tile
         occupied_list = [[x + ox, y + oy] for ox in range(-self.size, self.size + 1) for oy in
                          range(-self.size, self.size + 1)]
 
@@ -161,13 +169,14 @@ class Agent(object):
                     if occupier and occupier != self:
                         occupied.append(occupier)
 
-                building_id = tile["building"]
+                if not self.enter_building:
+                    building_id = tile["building"]
 
-                if building_id:
-                    occupier = self.level.buildings.get(building_id)
+                    if building_id:
+                        occupier = self.level.buildings.get(building_id)
 
-                    if occupier:
-                        occupied.append(occupier)
+                        if occupier:
+                            occupied.append(occupier)
 
         return occupied
 
@@ -285,6 +294,7 @@ class Agent(object):
                             self.selected = False
 
             if command["label"] == "MOVEMENT_TARGET":
+                self.enter_building = None
                 position = command["position"]
                 reverse = command["reverse"]
                 additive = command["additive"]
@@ -301,6 +311,7 @@ class Agent(object):
                     self.reverse = False
 
             if command["label"] == "ROTATION_TARGET":
+                self.enter_building = None
                 position = command["position"]
                 reverse = command["reverse"]
 
@@ -319,6 +330,7 @@ class Agent(object):
                 self.agent_targeter.enemy_target_id = None
 
             if command["label"] == "TARGET_ENEMY":
+                self.enter_building = None
                 target_id = command["target_id"]
 
                 self.agent_targeter.enemy_target_id = target_id
@@ -329,6 +341,19 @@ class Agent(object):
                 stance = command["stance"]
                 self.stance = stance
                 self.set_formation()
+
+            if command["label"] == "ENTER_BUILDING":
+                if self.agent_type == "INFANTRY":
+                    building_id = command["target_id"]
+                    additive = command["additive"]
+                    building = self.level.buildings.get(building_id)
+                    if building:
+                        self.enter_building = building_id
+
+                        if additive:
+                            self.destinations.append(building.location)
+                        else:
+                            self.destinations = [building.location]
 
         self.commands = []
 
@@ -361,6 +386,9 @@ class Agent(object):
             self.process_commands()
         else:
             self.selected = False
+
+        # set debug text over ride
+        self.debug_text = str(self.enter_building)
 
         infantry_types = ["INFANTRY", "ARTILLERY"]
 
@@ -534,6 +562,7 @@ class InfantryMan(object):
         self.location = self.agent.location
         self.direction = [0, 1]
         self.occupied = None
+        self.in_building = None
         self.dead = False
 
         self.speed = 0.02
@@ -628,14 +657,21 @@ class InfantryMan(object):
 
     def get_destination(self):
         self.set_speed()
+        destination = None
 
-        location = self.agent.box.worldPosition.copy()
-        location.z = 0.0
+        if self.agent.enter_building:
+            building = self.agent.level.buildings.get(self.agent.enter_building)
+            if building:
+                destination = building.get_closest_door(list(self.box.worldPosition.copy()))[:2]
 
-        offset = mathutils.Vector(self.agent.formation[self.index]).to_3d()
-        offset.rotate(self.agent.movement_hook.worldOrientation.copy())
+        if not destination:
+            location = self.agent.box.worldPosition.copy()
+            location.z = 0.0
 
-        destination = (location + offset).to_2d()
+            offset = mathutils.Vector(self.agent.formation[self.index]).to_3d()
+            offset.rotate(self.agent.movement_hook.worldOrientation.copy())
+
+            destination = (location + offset).to_2d()
 
         return [round(axis) for axis in destination]
 
@@ -645,7 +681,7 @@ class InfantryMan(object):
     def save(self):
 
         save_dict = {"movement_target": self.movement.target, "movement_timer": self.movement.timer,
-                     "destination": self.behavior.destination, "history": self.behavior.history,
+                     "destination": self.behavior.destination, "history": self.behavior.history, "in_building": self.in_building,
                      "toughness": self.toughness, "behavior_prone": self.behavior.prone, "index": self.index,
                      "prone": self.agent.prone, "direction": self.direction, "location": self.location,
                      "infantry_type": self.infantry_type, "occupied": self.occupied, "weapon_timer": self.weapon.timer,
@@ -660,6 +696,7 @@ class InfantryMan(object):
         self.agent.prone = load_dict["prone"]
         self.direction = load_dict["direction"]
         self.location = load_dict["location"]
+        self.in_building = load_dict["in_building"]
 
         self.mesh_name = static_dicts.soldiers()[self.infantry_type]["mesh_name"]
 

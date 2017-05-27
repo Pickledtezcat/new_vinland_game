@@ -20,7 +20,8 @@ class Building(object):
         self.direction = direction
         self.load_name = load_name
         self.box = None
-        self.mesh = None
+        self.doors = []
+        self.windows = []
 
         self.load_dict = load_dict
         if self.load_dict:
@@ -28,15 +29,62 @@ class Building(object):
 
         self.add_box()
         self.set_location()
+        self.get_doors_and_windows()
 
         self.level.buildings[self.building_id] = self
+
+    def get_closest_door(self, origin):
+
+        closest = 30
+        best_door = None
+
+        for door in self.doors:
+            target_vector = mathutils.Vector(origin) - mathutils.Vector(door)
+            distance = target_vector.length
+            if distance < closest:
+                closest = distance
+                best_door = door
+
+        if best_door:
+            return best_door
+
+    def get_closest_window(self, origin):
+
+        closest = 2000
+        best_window = None
+
+        for window in self.windows:
+            target_vector = mathutils.Vector(origin) - mathutils.Vector(window)
+            distance = target_vector.length
+            if distance < closest:
+                closest = distance
+                best_window = window
+
+        if best_window:
+            return best_window
+
+    def get_doors_and_windows(self):
+
+        doors = bgeutils.get_ob_list("door", self.box.children)
+        windows = bgeutils.get_ob_list("window", self.box.children)
+
+        for door in doors:
+            position = door.worldPosition.copy()
+            location = [round(axis) for axis in position]
+
+            if location not in self.doors:
+                self.doors.append(location)
+
+        for window in windows:
+            position = window.worldPosition.copy()
+            self.windows.append(list(position))
 
     def terminate(self):
         self.box.endObject()
 
     def save(self):
         save_dict = {"load_name": self.load_name, "building_type": self.building_type, "location": self.location,
-                     "direction": self.direction}
+                     "direction": self.direction, "doors": self.doors, "windows": self.windows}
 
         return save_dict
 
@@ -44,6 +92,8 @@ class Building(object):
         self.location = building_dict["location"]
         self.load_name = building_dict["load_name"]
         self.direction = building_dict["direction"]
+        self.doors = building_dict["doors"]
+        self.windows = building_dict["windows"]
 
     def set_location(self):
         location = self.level.map.get(bgeutils.get_key(self.location))
@@ -56,5 +106,4 @@ class Building(object):
 
     def add_box(self):
         self.box = self.level.scene.addObject(self.load_name, self.level.own, 0)
-        self.mesh = bgeutils.get_ob("building_mesh", self.box.childrenRecursive)
         self.box['building_id'] = self.building_id

@@ -62,6 +62,8 @@ class UserInterface(object):
 
             if self.level.mouse_control.context == "TARGET":
                 self.cursor.replaceMesh("target_cursor")
+            elif self.level.mouse_control.context == "BUILDING":
+                self.cursor.replaceMesh("building_cursor")
             else:
                 self.cursor.replaceMesh("movement_cursor")
 

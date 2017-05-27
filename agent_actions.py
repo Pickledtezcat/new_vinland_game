@@ -238,70 +238,77 @@ class InfantryAnimation(object):
         prone = self.infantryman.behavior.prone
         timed_actions = ["DYING", "GO_PRONE", "GET_UP", "SHOOTING", "WAIT", "FINISHED", "FACE_TARGET"]
         dead_actions = ["DYING", "DEAD"]
+        # TODO handle mounted in vehicles
+        mounted = self.infantryman.in_building
 
-        if behavior.action in timed_actions:
-            self.frame = behavior.action_timer * 4.0
-
-            if behavior.action == "SHOOTING" and self.infantryman.special == "RAPID_FIRE":
-
-                action_time = behavior.action_timer * 12
-                remainder = action_time % 3
-                self.frame = remainder * 4.0
-
-        elif behavior.action == "DEAD":
-            self.frame = 4.0
+        if mounted:
+            self.infantryman.sprite.visible = False
         else:
-            animation_mod = 6.0
-            if prone:
-                animation_mod = 8.0
+            self.infantryman.sprite.visible = True
 
-            next_frame = self.frame + (self.infantryman.speed * animation_mod)
-            if next_frame < 4.0:
-                self.frame = next_frame
+            if behavior.action in timed_actions:
+                self.frame = behavior.action_timer * 4.0
+
+                if behavior.action == "SHOOTING" and self.infantryman.special == "RAPID_FIRE":
+
+                    action_time = behavior.action_timer * 12
+                    remainder = action_time % 3
+                    self.frame = remainder * 4.0
+
+            elif behavior.action == "DEAD":
+                self.frame = 4.0
             else:
-                self.frame = 0.0
+                animation_mod = 6.0
+                if prone:
+                    animation_mod = 8.0
 
-        frame_number = min(3, int(self.frame))
+                next_frame = self.frame + (self.infantryman.speed * animation_mod)
+                if next_frame < 4.0:
+                    self.frame = next_frame
+                else:
+                    self.frame = 0.0
 
-        if behavior.action == "GET_TILE":
-            if prone:
-                action = "prone_crawl"
-            else:
-                action = "walk"
+            frame_number = min(3, int(self.frame))
 
-        elif behavior.action == "GO_PRONE":
-            action = "go_prone"
+            if behavior.action == "GET_TILE":
+                if prone:
+                    action = "prone_crawl"
+                else:
+                    action = "walk"
 
-        elif behavior.action == "GET_UP":
-            action = "get_up"
-
-        elif behavior.action == "SHOOTING":
-            if prone:
-                action = "prone_shoot"
-            else:
-                action = "shoot"
-
-        elif behavior.action in dead_actions:
-            if prone:
-                action = "prone_death"
-            else:
-                action = "death"
-
-            if behavior.action == "DEAD":
-                frame_number = 4
-
-        elif behavior.action == "FIDGET":
-            action = "default"
-        else:
-            if self.infantryman.behavior.prone:
+            elif behavior.action == "GO_PRONE":
                 action = "go_prone"
-                frame_number = 3
-            else:
-                action = "default"
-                frame_number = 0
 
-        if frame_number != self.last_frame or action != self.last_action:
-            self.set_frame(action, frame_number)
+            elif behavior.action == "GET_UP":
+                action = "get_up"
+
+            elif behavior.action == "SHOOTING":
+                if prone:
+                    action = "prone_shoot"
+                else:
+                    action = "shoot"
+
+            elif behavior.action in dead_actions:
+                if prone:
+                    action = "prone_death"
+                else:
+                    action = "death"
+
+                if behavior.action == "DEAD":
+                    frame_number = 4
+
+            elif behavior.action == "FIDGET":
+                action = "default"
+            else:
+                if self.infantryman.behavior.prone:
+                    action = "go_prone"
+                    frame_number = 3
+                else:
+                    action = "default"
+                    frame_number = 0
+
+            if frame_number != self.last_frame or action != self.last_action:
+                self.set_frame(action, frame_number)
 
     def set_frame(self, action, frame_number):
         self.last_frame = frame_number
@@ -338,6 +345,9 @@ class InfantryBehavior(object):
         self.fidget_count = random.randint(1, 12)
 
     def get_action(self):
+
+        if not self.infantryman.agent.enter_building:
+            self.infantryman.in_building = False
 
         if self.action == "DYING":
             self.infantryman.dead = True
@@ -377,6 +387,12 @@ class InfantryBehavior(object):
         if self.infantryman.location != self.destination:
             return "GET_TILE"
         else:
+            if self.infantryman.agent.enter_building:
+                self.infantryman.clear_occupied()
+                self.history = [self.infantryman.location]
+                self.infantryman.in_building = self.infantryman.agent.enter_building
+                return "IN_BUILDING"
+
             if self.infantryman.agent.agent_type == "ARTILLERY":
                 self.history = [self.infantryman.location]
                 return "FACE_GUN"

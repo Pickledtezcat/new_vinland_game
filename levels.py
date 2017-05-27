@@ -93,8 +93,7 @@ class MouseControl(object):
             tile_over = [round(mouse_hit[1][0]), round(mouse_hit[1][1]) - 1]
 
             self.tile_over = tile_over
-            tile_key = bgeutils.get_key(tile_over)
-            mouse_over = self.level.map.get(tile_key)
+            mouse_over = self.level.get_tile(tile_over)
 
             if mouse_over:
                 self.mouse_over = mouse_over
@@ -106,8 +105,7 @@ class MouseControl(object):
 
                     tx, ty = tile_over
                     neighbor = [x + tx, y + ty]
-                    neighbor_key = bgeutils.get_key(neighbor)
-                    neighbor_tile = self.level.map.get(neighbor_key)
+                    neighbor_tile = self.level.get_tile(neighbor)
 
                     if neighbor_tile:
                         occupant = neighbor_tile["occupied"]
@@ -208,6 +206,25 @@ class MouseControl(object):
 
                     for agent in selected_agents:
                         agent.commands.append(message)
+
+        elif self.mouse_over:
+            if self.mouse_over["building"]:
+                self.context = "BUILDING"
+
+                click = "right_button" in self.level.manager.game_input.buttons
+                additive = "shift" in self.level.manager.game_input.keys
+
+                if click:
+                    selected_agents = [self.level.agents[agent_id] for agent_id in self.level.agents if
+                                       self.level.agents[agent_id].selected]
+
+                    if selected_agents:
+                        target_id = self.mouse_over["building"]
+
+                        message = {"label": "ENTER_BUILDING", "target_id": target_id, "additive": additive}
+
+                        for agent in selected_agents:
+                            agent.commands.append(message)
 
     def update(self):
 
@@ -342,9 +359,12 @@ class Level(object):
             return self.map[map_key]
 
     def set_tile(self, tile_key, setting, value):
-        if 0 > tile_key[0] > self.map_size and 0 > tile_key[1] > self.map_size:
+        if 0 < tile_key[0] < self.map_size and 0 < tile_key[1] < self.map_size:
             map_key = bgeutils.get_key(tile_key)
-            self.map[map_key][setting] = value
+            try:
+                self.map[map_key][setting] = value
+            except KeyError:
+                print("problem setting tile value")
 
     def get_map(self):
 
@@ -376,13 +396,16 @@ class Level(object):
 
                 target_position = [x_pos, y_pos, -10.0]
                 origin = [x_pos, y_pos, 10.0]
-                tile = self.map.get(bgeutils.get_key((x, y)))
-                if tile:
-                    ray = self.own.rayCast(target_position, origin, 0.0, "building", 0, 1, 0)
-                    if ray[0]:
-                        building_id = ray[0]["building_id"]
-                        print(building_id)
-                        self.map[bgeutils.get_key((x, y))]["building"] = building_id
+
+                ray = self.own.rayCast(target_position, origin, 0.0, "building", 0, 1, 0)
+                if ray[0]:
+                    building_id = ray[0]["building_id"]
+                    self.set_tile((x, y), "building", building_id)
+
+        for building_id in self.buildings:
+            building = self.buildings[building_id]
+            for door_loc in building.doors:
+                self.set_tile(door_loc, "building", None)
 
         self.buildings_mapped = True
 
@@ -407,22 +430,25 @@ class Level(object):
 
         infantry = ["SUPPORT_36", "SCOUT", "HEAVY_ANTI-TANK_TEAM", "RIFLEMEN_39", "ASSAULT_SQUAD_43"]
 
-        # for friend in range(5):
-        #     agents.Infantry(self, random.choice(infantry), [35 + (10 * friend), 25], 0)
+        for friend in range(5):
+            agents.Infantry(self, random.choice(infantry), [35 + (10 * friend), 25], 0)
 
-        agents.Infantry(self, "SUPPORT_36", [35, 25], 0)
+        #agents.Infantry(self, "SUPPORT_36", [35, 25], 0)
 
         # for enemy in range(4):
         #     agents.Vehicle(self, None, [35 + (10 * enemy), 35], 1)
 
-        # for enemy in range(5):
-        #     agents.Infantry(self, random.choice(infantry), [35 + (10 * enemy), 45], 1)
+        for enemy in range(5):
+            agents.Infantry(self, random.choice(infantry), [35 + (10 * enemy), 45], 1)
 
         self.agents_added = True
 
     def add_buildings(self):
 
-        buildings.Building(self, "basic_house", [35, 40], [1, 1])
+        buildings.Building(self, "basic_house", [35, 30], [-1, 1])
+        buildings.Building(self, "basic_house", [45, 30], [1, 0])
+        buildings.Building(self, "basic_house", [55, 30], [0, 1])
+
         self.buildings_added = True
 
     def load_level(self, load_dict):
@@ -559,6 +585,7 @@ class Level(object):
         weapon_range = weapon.range
         position = owner.box.worldPosition.copy()
         closest = 12000.0
+        target_mounted = False
         soldiers = []
 
         if command["label"] == "SMALL_ARMS_SHOOT":
@@ -602,17 +629,31 @@ class Level(object):
                             hit_location = base_location + random_vector
 
                     else:
-                        # TODO target toughness increased when in building
-
                         hit_location = best_target.box.worldPosition.copy()
                         effective_power = power * random.uniform(0.0, 1.0)
+
+                        if owner.in_building:
+                            building = self.buildings.get(owner.in_building)
+                            if building:
+                                closest_window = building.get_closest_window(list(best_target.box.worldPosition.copy()))
+                                if closest_window:
+                                    position = mathutils.Vector(closest_window).to_3d()
+
+                        if best_target.in_building:
+                            if random.randint(0, 3) >= 3:
+                                effective_power = 0.0
+
+                            building = self.buildings.get(best_target.in_building)
+                            if building:
+                                closest_window = building.get_closest_window(list(position))
+                                if closest_window:
+                                    hit_location = mathutils.Vector(closest_window).to_3d()
 
                         if effective_power > best_target.toughness:
                             damage = max(1, int(effective_power * 0.5))
                             best_target.toughness -= damage
 
             if hit_location and effect:
-
                 if effect == "RED_STREAK":
                     particles.RedBulletStreak(self, list(position), list(hit_location))
 
