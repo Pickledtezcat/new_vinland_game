@@ -165,9 +165,11 @@ class Agent(object):
 
                 if occupier_id:
                     occupier = self.level.agents.get(occupier_id)
+                    both_infantry = self.agent_type == "INFANTRY" and occupier.agent_type == "INFANTRY"
 
-                    if occupier and occupier != self:
-                        occupied.append(occupier)
+                    if not both_infantry:
+                        if occupier and occupier != self:
+                            occupied.append(occupier)
 
                 if not self.enter_building:
                     building_id = tile["building"]
@@ -294,7 +296,7 @@ class Agent(object):
                             self.selected = False
 
             if command["label"] == "MOVEMENT_TARGET":
-                self.enter_building = None
+                self.dismount_building()
                 position = command["position"]
                 reverse = command["reverse"]
                 additive = command["additive"]
@@ -311,7 +313,7 @@ class Agent(object):
                     self.reverse = False
 
             if command["label"] == "ROTATION_TARGET":
-                self.enter_building = None
+                self.dismount_building()
                 position = command["position"]
                 reverse = command["reverse"]
 
@@ -330,7 +332,7 @@ class Agent(object):
                 self.agent_targeter.enemy_target_id = None
 
             if command["label"] == "TARGET_ENEMY":
-                self.enter_building = None
+                self.dismount_building()
                 target_id = command["target_id"]
 
                 self.agent_targeter.enemy_target_id = target_id
@@ -344,18 +346,23 @@ class Agent(object):
 
             if command["label"] == "ENTER_BUILDING":
                 if self.agent_type == "INFANTRY":
-                    building_id = command["target_id"]
-                    additive = command["additive"]
-                    building = self.level.buildings.get(building_id)
-                    if building:
-                        self.enter_building = building_id
-
-                        if additive:
-                            self.destinations.append(building.location)
-                        else:
-                            self.destinations = [building.location]
+                    self.mount_building(command["target_id"])
 
         self.commands = []
+
+    def mount_building(self, building_id):
+        building = self.level.buildings.get(building_id)
+        if building:
+            if not building.occupier:
+                self.enter_building = building_id
+                self.destinations = [building.location]
+                building.occupier = self.agent_id
+
+    def dismount_building(self):
+        building = self.level.buildings.get(self.enter_building)
+        if building:
+            building.occupier = None
+            self.enter_building = None
 
     def set_starting_state(self):
         self.state = AgentStartUp(self)
@@ -367,6 +374,9 @@ class Agent(object):
         if next_state:
             self.state.end()
             self.state = next_state(self)
+
+    def check_dead(self):
+        pass
 
     def update(self):
         # self.debug_text = "{} - {}\n{} -  {}".format(self.agent_id, self.state.name, self.direction, self.agent_targeter.hull_on_target)
@@ -381,23 +391,18 @@ class Agent(object):
         self.debug_text = ""
 
         if not self.dead:
+            self.check_dead()
+
             if self.team == 0:
                 self.debug_text = debug_icon[self.stance]
             self.process_commands()
+
         else:
             self.selected = False
-
-        # set debug text over ride
-        self.debug_text = str(self.enter_building)
-
-        infantry_types = ["INFANTRY", "ARTILLERY"]
 
         if not self.ended:
             if not self.level.paused:
                 self.state_machine()
-
-                if self.agent_type in infantry_types:
-                    self.infantry_update()
 
     def infantry_update(self):
         pass
@@ -453,6 +458,9 @@ class Infantry(Agent):
         pass
 
     def update_stats(self):
+        self.set_speed()
+
+    def check_dead(self):
         dead = True
         for soldier in self.soldiers:
             if not soldier.dead:
@@ -461,11 +469,24 @@ class Infantry(Agent):
         if dead:
             self.dead = True
 
-        self.set_speed()
-
     def set_speed(self):
         infantry_speed = [soldier.speed for soldier in self.soldiers]
         self.speed = min(infantry_speed)
+
+    def get_closest_soldier(self, target):
+        closest = 2000
+        closest_soldier = None
+
+        for soldier in self.soldiers:
+            if not soldier.dead:
+                target_vector = soldier.box.worldPosition.copy() - target
+                distance = target_vector.length
+
+                if distance < closest:
+                    closest = distance
+                    closest_soldier = soldier
+
+        return closest_soldier, closest
 
     def set_formation(self):
 
@@ -615,12 +636,16 @@ class InfantryMan(object):
         tile = self.agent.level.get_tile(target_tile)
         if tile:
             occupier_id = tile["occupied"]
+            building_id = tile["building"]
+
             if occupier_id:
                 occupier = self.agent.level.agents.get(occupier_id)
                 if occupier:
+                    if occupier == self.agent and building_id == self.in_building:
+                        return False
+
                     return occupier
 
-            building_id = tile["building"]
             if building_id:
                 occupier = self.agent.level.buildings.get(building_id)
                 if occupier:
@@ -681,7 +706,8 @@ class InfantryMan(object):
     def save(self):
 
         save_dict = {"movement_target": self.movement.target, "movement_timer": self.movement.timer,
-                     "destination": self.behavior.destination, "history": self.behavior.history, "in_building": self.in_building,
+                     "destination": self.behavior.destination, "history": self.behavior.history,
+                     "in_building": self.in_building,
                      "toughness": self.toughness, "behavior_prone": self.behavior.prone, "index": self.index,
                      "prone": self.agent.prone, "direction": self.direction, "location": self.location,
                      "infantry_type": self.infantry_type, "occupied": self.occupied, "weapon_timer": self.weapon.timer,
@@ -722,7 +748,7 @@ class SoldierWeapon(object):
         self.weapon_type = "INFANTRY_WEAPON"
         self.infantryman = infantryman
         self.power = self.infantryman.power
-        self.range = self.power * 2.0
+        self.weapon_range = self.power * 2.0
         self.sound = self.infantryman.sound
         self.recharge = (self.infantryman.rof * 0.0025) * random.uniform(0.8, 1.0)
         self.special = self.infantryman.special
@@ -736,24 +762,24 @@ class SoldierWeapon(object):
 
     def update(self):
 
-        prone = self.infantryman.agent.prone
-
-        if prone:
-            self.accuracy = self.infantryman.agent.accuracy * 2.0
-        else:
-            self.accuracy = self.infantryman.agent.accuracy
-
         if self.ammo > 0.0:
-            if not self.ready:
-                if prone:
-                    recharge = self.recharge * 0.5
-                else:
-                    recharge = self.recharge
+            prone = self.infantryman.agent.prone
 
-                self.timer = min(1.0, self.timer + recharge)
-                if self.timer >= 1.0:
-                    self.timer = 0.0
-                    self.ready = True
+            if prone:
+                self.accuracy = self.infantryman.agent.accuracy * 2.0
+                recharge = self.recharge * 0.5
+            else:
+                self.accuracy = self.infantryman.agent.accuracy
+                recharge = self.recharge
+
+            if self.infantryman.in_building:
+                self.accuracy = self.infantryman.agent.accuracy * 2.0
+                recharge = self.recharge * 10.5
+
+            self.timer = min(1.0, self.timer + recharge)
+            if self.timer >= 1.0:
+                self.timer = 0.0
+                self.ready = True
 
             if self.check_timer <= 0:
                 self.check_timer = 8
@@ -769,13 +795,35 @@ class SoldierWeapon(object):
         target_id, target = self.get_target()
         if target:
             distance = (target.box.worldPosition.copy() - self.infantryman.box.worldPosition.copy()).length
-            if distance < self.range:
+            if distance < self.weapon_range:
                 return True
 
     def get_target(self):
         target_id = self.infantryman.agent.agent_targeter.enemy_target_id
         target = self.infantryman.agent.level.agents.get(target_id)
         return target_id, target
+
+    def get_window(self):
+        target_id, target = self.get_target()
+        building = self.infantryman.agent.level.buildings.get(self.infantryman.in_building)
+
+        valid_windows = []
+
+        if target and building:
+            angle_limit = 1.4
+            windows = building.windows
+
+            for window in windows:
+                window_position = mathutils.Vector(window[0])
+                window_angle = mathutils.Vector(window[1])
+                target_vector = target.box.worldPosition.copy() - window_position
+                target_angle = window_angle.angle(target_vector)
+
+                if target_angle < angle_limit:
+                    valid_windows.append(window_position)
+
+            if valid_windows:
+                return random.choice(valid_windows)
 
     def shoot_weapon(self):
         target_id, target = self.get_target()
@@ -784,19 +832,44 @@ class SoldierWeapon(object):
 
             effect = None
 
-            if self.effect_timer > 2:
+            if self.infantryman.in_building:
+                window_position = self.get_window()
+                if window_position:
+                    origin = window_position
+                else:
+                    return False
+
+            else:
+                origin = self.infantryman.location
+
+            if self.effect_timer > 2 or self.infantryman.in_building:
                 self.effect_timer = 1
-                effect = "YELLOW_STREAK"
+                if self.special == "RAPID_FIRE":
+                    effect = "RAPID_YELLOW_STREAK"
+                else:
+                    effect = "YELLOW_STREAK"
             else:
                 self.effect_timer += 1
 
             if self.special == "ANTI_TANK":
                 effect = "RED_STREAK"
 
-            command = {"label": "SMALL_ARMS_SHOOT", "weapon": self, "owner": self.infantryman, "target_id": target_id,
-                       "effect": effect}
+            if self.special == "RAPID_FIRE":
+                effective_range = max(
+                    [(self.accuracy + self.weapon_range) * random.uniform(0.0, 1.0) for _ in range(3)])
+            else:
+                effective_range = (self.accuracy + self.weapon_range) * random.uniform(0.0, 1.0)
 
-            bgeutils.sound_message("SOUND_EFFECT", ("I_{}".format(self.sound), None, 3.0, 1.0))
+            if self.infantryman.agent.team != 0:
+                effect = None
+
+            effective_power = self.power * random.uniform(0.0, 1.0)
+
+            command = {"label": "SMALL_ARMS_SHOOT", "weapon": self, "owner": self.infantryman, "target_id": target_id,
+                       "effect": effect, "origin": origin, "effective_range": effective_range,
+                       "effective_power": effective_power}
+
+            bgeutils.sound_message("SOUND_EFFECT", ("I_{}".format(self.sound), self.infantryman.box, 0.3, 1.0))
             self.infantryman.agent.level.commands.append(command)
             self.ready = False
             self.timer = 0.0

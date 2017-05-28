@@ -64,6 +64,8 @@ class UserInterface(object):
                 self.cursor.replaceMesh("target_cursor")
             elif self.level.mouse_control.context == "BUILDING":
                 self.cursor.replaceMesh("building_cursor")
+            elif self.level.mouse_control.context == "NO_ENTRY":
+                self.cursor.replaceMesh("no_entry_cursor")
             else:
                 self.cursor.replaceMesh("movement_cursor")
 

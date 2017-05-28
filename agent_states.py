@@ -14,6 +14,7 @@ class AgentState(object):
 
     def update(self):
         self.agent.update_stats()
+        self.agent.infantry_update()
         exit_check = self.exit_check()
         if exit_check:
             self.transition = exit_check
@@ -43,6 +44,9 @@ class AgentMovement(AgentState):
         self.agent.navigation.update()
 
     def exit_check(self):
+        if self.agent.dead:
+            return AgentDead
+
         if self.agent.movement.done:
 
             if not self.agent.destinations:
@@ -65,6 +69,10 @@ class AgentWaiting(AgentState):
         super().__init__(agent)
 
     def exit_check(self):
+
+        if self.agent.dead:
+            return AgentDead
+
         if self.count > 60:
             self.agent.waiting = False
             if self.agent.navigation.destination:
@@ -85,6 +93,9 @@ class AgentIdle(AgentState):
         super().__init__(agent)
 
     def exit_check(self):
+
+        if self.agent.dead:
+            return AgentDead
 
         if self.agent.movement.done:
             if self.agent.destinations:
@@ -115,6 +126,9 @@ class AgentCombat(AgentState):
 
     def exit_check(self):
 
+        if self.agent.dead:
+            return AgentDead
+
         if self.agent.movement.done:
             if not self.agent.agent_targeter.enemy_target_id:
                 return AgentIdle
@@ -134,3 +148,12 @@ class AgentCombat(AgentState):
             self.agent.movement.target_enemy()
         else:
             self.agent.movement.update()
+
+
+class AgentDead(AgentState):
+    def __init__(self, agent):
+        super().__init__(agent)
+
+        # TODO set up all aspects of dying, remove visibility etc...
+
+        self.agent.dismount_building()

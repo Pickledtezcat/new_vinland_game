@@ -209,22 +209,27 @@ class MouseControl(object):
 
         elif self.mouse_over:
             if self.mouse_over["building"]:
-                self.context = "BUILDING"
+                building = self.level.buildings.get(self.mouse_over["building"])
+                if building:
+                    if not building.occupier:
+                        self.context = "BUILDING"
+                        click = "right_button" in self.level.manager.game_input.buttons
 
-                click = "right_button" in self.level.manager.game_input.buttons
-                additive = "shift" in self.level.manager.game_input.keys
+                        if click:
+                            selected_agents = [self.level.agents[agent_id] for agent_id in self.level.agents if
+                                               self.level.agents[agent_id].selected]
 
-                if click:
-                    selected_agents = [self.level.agents[agent_id] for agent_id in self.level.agents if
-                                       self.level.agents[agent_id].selected]
+                            if selected_agents:
+                                target_id = self.mouse_over["building"]
+                                message = {"label": "ENTER_BUILDING", "target_id": target_id}
 
-                    if selected_agents:
-                        target_id = self.mouse_over["building"]
+                                for agent in selected_agents:
+                                    agent.commands.append(message)
 
-                        message = {"label": "ENTER_BUILDING", "target_id": target_id, "additive": additive}
+                    else:
+                        # TODO setup if enemy occupier
 
-                        for agent in selected_agents:
-                            agent.commands.append(message)
+                        self.context = "NO_ENTRY"
 
     def update(self):
 
@@ -431,7 +436,7 @@ class Level(object):
         infantry = ["SUPPORT_36", "SCOUT", "HEAVY_ANTI-TANK_TEAM", "RIFLEMEN_39", "ASSAULT_SQUAD_43"]
 
         for friend in range(5):
-            agents.Infantry(self, random.choice(infantry), [35 + (10 * friend), 25], 0)
+            agents.Infantry(self, random.choice(infantry), [35 + (10 * friend), 45], 0)
 
         #agents.Infantry(self, "SUPPORT_36", [35, 25], 0)
 
@@ -439,15 +444,15 @@ class Level(object):
         #     agents.Vehicle(self, None, [35 + (10 * enemy), 35], 1)
 
         for enemy in range(5):
-            agents.Infantry(self, random.choice(infantry), [35 + (10 * enemy), 45], 1)
+            agents.Infantry(self, random.choice(infantry), [35 + (10 * enemy), 25], 1)
 
         self.agents_added = True
 
     def add_buildings(self):
 
-        buildings.Building(self, "basic_house", [35, 30], [-1, 1])
-        buildings.Building(self, "basic_house", [45, 30], [1, 0])
-        buildings.Building(self, "basic_house", [55, 30], [0, 1])
+        buildings.Building(self, "basic_house", [35, 35], [-1, 1])
+        buildings.Building(self, "basic_house", [45, 35], [1, 0])
+        buildings.Building(self, "basic_house", [55, 35], [0, 1])
 
         self.buildings_added = True
 
@@ -574,95 +579,60 @@ class Level(object):
 
     def shoot(self, command):
 
-        miss = True
+        target_position = None
         weapon = command["weapon"]
         owner = command["owner"]
         target = self.agents.get(command["target_id"])
         effect = command["effect"]
-        rapid_fire = weapon.special == "RAPID_FIRE"
-        accuracy = weapon.accuracy
-        power = weapon.power
-        weapon_range = weapon.range
-        position = owner.box.worldPosition.copy()
-        closest = 12000.0
-        target_mounted = False
-        soldiers = []
+        origin = mathutils.Vector(command["origin"]).to_3d()
+        effective_range = command["effective_range"]
+        effective_power = command["effective_power"]
 
         if command["label"] == "SMALL_ARMS_SHOOT":
             best_target = None
-            hit_location = None
+            target_position = None
 
             if target:
                 if target.agent_type == "INFANTRY":
-                    prone_target = target.prone
-                    if prone_target:
-                        accuracy *= 0.5
 
-                    soldiers = [s for s in target.soldiers if s.toughness > 0]
-
-                    if soldiers:
-                        for soldier in soldiers:
-                            target_position = soldier.box.worldPosition.copy()
-                            target_vector = target_position - position
-                            distance = target_vector.length
-
-                            if distance < closest:
-                                closest = distance
-                                best_target = soldier
-
-                        target_distance = closest
-
-                        if rapid_fire:
-                            effective_range = max(
-                                [(accuracy + weapon_range) * random.uniform(0.0, 1.0) for _ in range(3)])
-                        else:
-                            effective_range = (accuracy + weapon_range) * random.uniform(0.0, 1.0)
-
-                        if effective_range > target_distance:
-                            miss = False
-
-                    if miss:
-                        if soldiers:
-                            base_location = best_target.box.worldPosition.copy()
-                            random_vector = mathutils.Vector(
-                                [random.uniform(-3.0, 3.0), random.uniform(-3.0, 3.0), 0.0])
-                            hit_location = base_location + random_vector
-
-                    else:
-                        hit_location = best_target.box.worldPosition.copy()
-                        effective_power = power * random.uniform(0.0, 1.0)
-
-                        if owner.in_building:
-                            building = self.buildings.get(owner.in_building)
-                            if building:
-                                closest_window = building.get_closest_window(list(best_target.box.worldPosition.copy()))
-                                if closest_window:
-                                    position = mathutils.Vector(closest_window).to_3d()
-
+                    best_target, target_distance = target.get_closest_soldier(origin)
+                    if best_target:
                         if best_target.in_building:
                             if random.randint(0, 3) >= 3:
-                                effective_power = 0.0
+                                target_position = None
 
-                            building = self.buildings.get(best_target.in_building)
-                            if building:
-                                closest_window = building.get_closest_window(list(position))
-                                if closest_window:
-                                    hit_location = mathutils.Vector(closest_window).to_3d()
+                            target_building = self.buildings.get(best_target.in_building)
+                            if target_building:
+                                target_position = target_building.get_closest_window(origin)
+                        else:
+                            target_position = best_target.box.worldPosition.copy()
 
+                        if effective_range < target_distance:
+                            target_position = None
+
+                    if target_position:
                         if effective_power > best_target.toughness:
                             damage = max(1, int(effective_power * 0.5))
                             best_target.toughness -= damage
 
-            if hit_location and effect:
+                    else:
+                        if best_target:
+                            base_location = best_target.box.worldPosition.copy()
+                            random_vector = mathutils.Vector(
+                                [random.uniform(-3.0, 3.0), random.uniform(-3.0, 3.0), 0.0])
+                            target_position = base_location + random_vector
+
+            if target_position and effect:
                 if effect == "RED_STREAK":
-                    particles.RedBulletStreak(self, list(position), list(hit_location))
+                    particles.RedBulletStreak(self, list(origin), list(target_position))
 
                 if effect == "YELLOW_STREAK":
-                    particles.YellowBulletStreak(self, list(position), list(hit_location))
+                    particles.YellowBulletStreak(self, list(origin), list(target_position))
 
-                    if rapid_fire:
-                        particles.YellowBulletStreak(self, list(position), list(hit_location), delay=6)
-                        particles.YellowBulletStreak(self, list(position), list(hit_location), delay=12)
+                if effect == "RAPID_YELLOW_STREAK":
+                    particles.YellowBulletStreak(self, list(origin), list(target_position))
+                    particles.YellowBulletStreak(self, list(origin), list(target_position), delay=6)
+                    particles.YellowBulletStreak(self, list(origin), list(target_position), delay=12)
 
     def process_commands(self):
 

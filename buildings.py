@@ -22,6 +22,7 @@ class Building(object):
         self.box = None
         self.doors = []
         self.windows = []
+        self.occupier = None
 
         self.load_dict = load_dict
         if self.load_dict:
@@ -53,7 +54,9 @@ class Building(object):
         closest = 2000
         best_window = None
 
-        for window in self.windows:
+        for window_list in self.windows:
+            window = window_list[0]
+
             target_vector = mathutils.Vector(origin) - mathutils.Vector(window)
             distance = target_vector.length
             if distance < closest:
@@ -77,14 +80,15 @@ class Building(object):
 
         for window in windows:
             position = window.worldPosition.copy()
-            self.windows.append(list(position))
+            direction = window.getAxisVect([0.0, 1.0, 0.0])
+            self.windows.append([list(position), list(direction)])
 
     def terminate(self):
         self.box.endObject()
 
     def save(self):
         save_dict = {"load_name": self.load_name, "building_type": self.building_type, "location": self.location,
-                     "direction": self.direction, "doors": self.doors, "windows": self.windows}
+                     "direction": self.direction, "doors": self.doors, "windows": self.windows, "occupier": self.occupier}
 
         return save_dict
 
@@ -94,6 +98,7 @@ class Building(object):
         self.direction = building_dict["direction"]
         self.doors = building_dict["doors"]
         self.windows = building_dict["windows"]
+        self.occupier = building_dict["occupier"]
 
     def set_location(self):
         location = self.level.map.get(bgeutils.get_key(self.location))
