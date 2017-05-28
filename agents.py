@@ -707,7 +707,8 @@ class InfantryMan(object):
 
         save_dict = {"movement_target": self.movement.target, "movement_timer": self.movement.timer,
                      "destination": self.behavior.destination, "history": self.behavior.history,
-                     "in_building": self.in_building,
+                     "in_building": self.in_building, "behavior_action": self.behavior.action,
+                     "behavior_timer": self.behavior.action_timer,
                      "toughness": self.toughness, "behavior_prone": self.behavior.prone, "index": self.index,
                      "prone": self.agent.prone, "direction": self.direction, "location": self.location,
                      "infantry_type": self.infantry_type, "occupied": self.occupied, "weapon_timer": self.weapon.timer,
@@ -732,6 +733,8 @@ class InfantryMan(object):
         self.behavior.destination = load_dict["destination"]
         self.behavior.history = load_dict["history"]
         self.behavior.prone = load_dict["behavior_prone"]
+        self.behavior.action = load_dict["behavior_action"]
+        self.behavior.action_timer = load_dict["behavior_timer"]
         self.toughness = load_dict["toughness"]
 
         self.weapon.timer = load_dict["weapon_timer"]
@@ -774,7 +777,7 @@ class SoldierWeapon(object):
 
             if self.infantryman.in_building:
                 self.accuracy = self.infantryman.agent.accuracy * 2.0
-                recharge = self.recharge * 10.5
+                recharge = self.recharge * 0.5
 
             self.timer = min(1.0, self.timer + recharge)
             if self.timer >= 1.0:
@@ -859,9 +862,6 @@ class SoldierWeapon(object):
                     [(self.accuracy + self.weapon_range) * random.uniform(0.0, 1.0) for _ in range(3)])
             else:
                 effective_range = (self.accuracy + self.weapon_range) * random.uniform(0.0, 1.0)
-
-            if self.infantryman.agent.team != 0:
-                effect = None
 
             effective_power = self.power * random.uniform(0.0, 1.0)
 
