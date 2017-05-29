@@ -238,10 +238,8 @@ class InfantryAnimation(object):
         prone = self.infantryman.behavior.prone
         timed_actions = ["DYING", "GO_PRONE", "GET_UP", "SHOOTING", "WAIT", "FINISHED", "FACE_TARGET"]
         dead_actions = ["DYING", "DEAD"]
-        # TODO handle mounted in vehicles
-        mounted = self.infantryman.in_building
 
-        if mounted:
+        if not self.infantryman.visible:
             self.infantryman.sprite.visible = False
         else:
             self.infantryman.sprite.visible = True
@@ -603,21 +601,42 @@ class AgentTargeter(object):
         agents = self.agent.level.agents
 
         closest = 2000
+
         best_target = None
 
         for agent_key in agents:
-            agent = agents[agent_key]
-            if agent.team != self.agent.team and not agent.dead:
-                # TODO get more info, visible etc...
+            enemy_agent = agents[agent_key]
 
-                agent_vector = agent.box.worldPosition.copy() - self.agent.box.worldPosition.copy()
-                distance = agent_vector.length
+            target = self.is_valid_target(enemy_agent)
 
-                if distance < closest:
-                    closest = distance
+            if target:
+                agent_vector, target_distance = target
+
+                if target_distance < closest:
+                    closest = target_distance
                     best_target = agent_key
 
         return best_target
+
+    def is_valid_target(self, target_agent):
+
+        if self.agent.team == target_agent.team:
+            return False
+
+        if target_agent.dead:
+            return False
+
+        if not target_agent.seen:
+            return False
+
+        agent_vector = target_agent.box.worldPosition.copy() - self.agent.box.worldPosition.copy()
+        enemy_distance = agent_vector.length
+        max_visual_range = 32
+
+        if enemy_distance > max_visual_range:
+            return False
+
+        return agent_vector.to_2d(), enemy_distance
 
     def update(self):
 
@@ -625,6 +644,7 @@ class AgentTargeter(object):
             if self.check_timer < 0:
                 self.check_timer = 12
                 closest_enemy_id = self.get_closest_enemy()
+
                 if closest_enemy_id:
                     self.enemy_target_id = closest_enemy_id
 
@@ -632,38 +652,40 @@ class AgentTargeter(object):
                 self.check_timer -= 1
 
         local_y = self.agent.movement_hook.getAxisVect([0.0, 1.0, 0.0]).to_2d()
-        enemy_dead = False
+        target_vector = None
 
         if self.enemy_target_id:
             enemy_agent = self.agent.level.agents[self.enemy_target_id]
-            if enemy_agent.dead:
-                enemy_dead = True
-            target_vector = (enemy_agent.box.worldPosition.copy() - self.agent.box.worldPosition.copy()).to_2d()
-        else:
-            target_vector = local_y
+            target = self.is_valid_target(enemy_agent)
 
-        if enemy_dead:
-            self.enemy_target_id = None
-        else:
+            if target:
+                target_vector, target_distance = target
+            else:
+                self.enemy_target_id = None
+
+        if target_vector:
             target_angle = local_y.angle_signed(target_vector, 0.0) * -1.0
-            turret_speed = self.agent.turret_speed
+        else:
+            target_angle = 0.0
 
-            turret_difference = abs(self.turret_angle - target_angle)
+        turret_speed = self.agent.turret_speed
 
-            self.turret_on_target = False
-            self.hull_on_target = False
+        turret_difference = abs(self.turret_angle - target_angle)
 
-            if abs(target_angle) < 0.5:
-                self.hull_on_target = True
+        self.turret_on_target = False
+        self.hull_on_target = False
 
-            if turret_difference < 0.5:
-                self.turret_on_target = True
+        if abs(target_angle) < 0.5:
+            self.hull_on_target = True
 
-            if turret_difference > 0.02:
-                scale = turret_difference / 3.142
-                turret_speed /= scale
+        if turret_difference < 0.5:
+            self.turret_on_target = True
 
-                self.turret_angle = bgeutils.interpolate_float(self.turret_angle, target_angle, turret_speed)
+        if turret_difference > 0.02:
+            scale = turret_difference / 3.142
+            turret_speed /= scale
+
+            self.turret_angle = bgeutils.interpolate_float(self.turret_angle, target_angle, turret_speed)
 
 
 class AgentAnimator(object):

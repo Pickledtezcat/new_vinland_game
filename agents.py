@@ -18,9 +18,8 @@ class Agent(object):
     turning_speed = 0.01
     damping = 0.1
     turret_speed = 0.01
-    base_visual_range = 6
-    visual_range = 6
     accuracy = 6
+    vision_distance = 0
 
     stance = "AGGRESSIVE"
     agent_type = "VEHICLE"
@@ -41,6 +40,8 @@ class Agent(object):
 
         self.dead = False
         self.ended = False
+        self.visible = True
+        self.seen = False
 
         self.box = self.add_box()
         self.movement_hook = bgeutils.get_ob("hook", self.box.childrenRecursive)
@@ -79,6 +80,35 @@ class Agent(object):
 
         if load_dict:
             self.reload(load_dict)
+
+    def get_visual_range(self):
+
+        visual_range = 1
+
+        # TODO handle vehicle viewing range
+
+        for soldier in self.soldiers:
+            if not soldier.dead:
+
+                if soldier.special == "OFFICER":
+                    visual_range = max(visual_range, 2)
+                if soldier.special == "COMMANDER":
+                    visual_range = max(visual_range, 3)
+                if soldier.special == "OBSERVER":
+                    visual_range = max(visual_range, 3)
+
+        if self.stance == "SENTRY":
+            visual_range = min(3, int(visual_range * 2))
+
+        self.vision_distance = visual_range * 8
+
+        return visual_range
+
+    def set_visible(self, setting):
+        self.visible = setting
+
+    def set_seen(self, setting):
+        self.seen = setting
 
     def save(self):
 
@@ -206,8 +236,6 @@ class Agent(object):
         self.speed = 0.02
         self.turning_speed = 0.01
         self.turret_speed = 0.01
-        self.base_visual_range = 6
-        self.visual_range = 6
 
     def update_stats(self):
         if self.movement.target:
@@ -354,6 +382,7 @@ class Agent(object):
         building = self.level.buildings.get(building_id)
         if building:
             if not building.occupier:
+                self.navigation.stop = True
                 self.enter_building = building_id
                 self.destinations = [building.location]
                 building.occupier = self.agent_id
@@ -458,7 +487,18 @@ class Infantry(Agent):
         pass
 
     def update_stats(self):
+
+        self.set_soldiers_visible()
         self.set_speed()
+
+    def set_soldiers_visible(self):
+        # TODO set other visibility cases
+
+        for soldier in self.soldiers:
+            if soldier.in_building:
+                soldier.visible = False
+            else:
+                soldier.visible = self.visible
 
     def check_dead(self):
         dead = True
@@ -470,8 +510,11 @@ class Infantry(Agent):
             self.dead = True
 
     def set_speed(self):
-        infantry_speed = [soldier.speed for soldier in self.soldiers]
-        self.speed = min(infantry_speed)
+        infantry_speed = [soldier.speed for soldier in self.soldiers if not soldier.dead]
+        if infantry_speed:
+            self.speed = min(infantry_speed)
+        else:
+            self.speed = 0.0
 
     def get_closest_soldier(self, target):
         closest = 2000
@@ -572,6 +615,7 @@ class InfantryMan(object):
         self.rof = stats["ROF"]
         self.special = stats["special"]
         self.sound = stats["sound"]
+        self.visible = True
 
         self.weapon = SoldierWeapon(self)
 
@@ -708,7 +752,7 @@ class InfantryMan(object):
         save_dict = {"movement_target": self.movement.target, "movement_timer": self.movement.timer,
                      "destination": self.behavior.destination, "history": self.behavior.history,
                      "in_building": self.in_building, "behavior_action": self.behavior.action,
-                     "behavior_timer": self.behavior.action_timer,
+                     "behavior_timer": self.behavior.action_timer, "visible": self.visible,
                      "toughness": self.toughness, "behavior_prone": self.behavior.prone, "index": self.index,
                      "prone": self.agent.prone, "direction": self.direction, "location": self.location,
                      "infantry_type": self.infantry_type, "occupied": self.occupied, "weapon_timer": self.weapon.timer,
@@ -724,6 +768,7 @@ class InfantryMan(object):
         self.direction = load_dict["direction"]
         self.location = load_dict["location"]
         self.in_building = load_dict["in_building"]
+        self.visible = load_dict["visible"]
 
         self.mesh_name = static_dicts.soldiers()[self.infantry_type]["mesh_name"]
 
@@ -792,6 +837,9 @@ class SoldierWeapon(object):
                 self.check_timer -= 1
 
         else:
+            self.ready = False
+
+        if self.infantryman.agent.enter_building and not self.infantryman.in_building:
             self.ready = False
 
     def check_in_range(self):

@@ -8,6 +8,7 @@ import camera_control
 import game_audio
 import random
 import buildings
+import LOS
 
 
 class MovementMarker(object):
@@ -189,7 +190,7 @@ class MouseControl(object):
         if self.over_units:
             for unit_id in self.over_units:
                 target = self.level.agents[unit_id]
-                if target.team != 0:
+                if target.team != 0 and target.seen and not target.dead:
                     enemy = target
 
         if enemy:
@@ -301,9 +302,11 @@ class Level(object):
         self.commands = []
         self.mouse_control = MouseControl(self)
         self.paused = False
-        self.map_size = 100
+        self.map_size = 128
         self.agent_id_index = 0
         self.loaded = False
+        self.visibility_timer = 0
+        self.LOS = LOS.VisionPaint(self)
 
         self.agents_added = False
         self.buildings_added = False
@@ -438,7 +441,7 @@ class Level(object):
         for friend in range(5):
             agents.Infantry(self, random.choice(infantry), [35 + (10 * friend), 45], 0)
 
-        #agents.Infantry(self, "SUPPORT_36", [35, 25], 0)
+        # agents.Infantry(self, "SUPPORT_36", [35, 25], 0)
 
         # for enemy in range(4):
         #     agents.Vehicle(self, None, [35 + (10 * enemy), 35], 1)
@@ -658,6 +661,66 @@ class Level(object):
 
         bge.logic.globalDict["sounds"] = []
 
+    def visibility_update(self):
+
+        self.visibility_timer -= 1
+
+        if self.visibility_timer < 0:
+            self.visibility_timer = 12
+            visibility_dict = {}
+
+            seen_agents = []
+
+            for agent_key in self.agents:
+                agent = self.agents[agent_key]
+                agent.set_visible(False)
+                agent.set_seen(False)
+
+            for agent_key in self.agents:
+                agent = self.agents[agent_key]
+
+                if not agent.dead:
+                    enemy = agent.team != 0
+                    visibility_distance = agent.get_visual_range()
+                    max_distance = visibility_distance * 8
+
+                    if not enemy:
+                        visibility_dict[agent_key] = {"enemy": enemy, "distance": visibility_distance,
+                                                      "location": agent.location}
+                        agent.set_visible(True)
+
+                        for enemy_key in self.agents:
+                            enemy = self.agents[enemy_key]
+
+                            if enemy.team != 0:
+                                if enemy_key not in seen_agents:
+                                    distance = agent.box.getDistanceTo(enemy.box)
+                                    if distance <= max_distance:
+                                        seen_agents.append(enemy_key)
+                                        enemy.set_seen(True)
+                                        enemy.set_visible(True)
+                                        visibility_dict[enemy_key] = {"enemy": True, "distance": 0,
+                                                                      "location": enemy.location}
+
+                            else:
+                                if enemy.dead:
+                                    distance = agent.box.getDistanceTo(enemy.box)
+                                    if distance <= max_distance:
+                                        enemy.set_visible(True)
+
+                    else:
+                        for player_key in self.agents:
+                            player = self.agents[player_key]
+
+                            if player.team == 0:
+                                if player_key not in seen_agents:
+                                    distance = agent.box.getDistanceTo(player.box)
+                                    if distance <= max_distance:
+                                        seen_agents.append(player_key)
+                                        player.set_seen(True)
+
+            self.LOS.do_paint(visibility_dict)
+
     def update(self):
         self.camera_controller.update()
         self.game_audio.update()
@@ -667,3 +730,4 @@ class Level(object):
         self.user_interface_update()
         self.sound_update()
         self.process_commands()
+        self.visibility_update()
