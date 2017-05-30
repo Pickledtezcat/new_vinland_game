@@ -8,8 +8,8 @@ class CameraControl(object):
 
     def __init__(self, level):
         self.level = level
-        self.main_camera = self.level.manager.main_camera
-        self.camera_hook = self.level.manager.main_camera.parent
+        self.main_camera = self.level.scene.active_camera
+        self.camera_hook = self.main_camera.parent
         self.in_zoom = bgeutils.get_ob("in_zoom", self.camera_hook.children).localTransform
         self.out_zoom = bgeutils.get_ob("out_zoom", self.camera_hook.children).localTransform
         self.sun_lamp = bgeutils.get_ob("sun_lamp", self.camera_hook.children)

@@ -661,7 +661,23 @@ class Level(object):
 
         bge.logic.globalDict["sounds"] = []
 
+    def inside_camera(self, agent):
+
+        if agent.agent_type == "INFANTRY":
+            soldiers = [soldier for soldier in agent.soldiers if not soldier.dead]
+
+            for soldier in agent.soldiers:
+                if self.camera_controller.main_camera.pointInsideFrustum(soldier.box.worldPosition.copy()):
+                    return True
+
+        else:
+            if self.camera_controller.main_camera.sphereInsideFrustum(agent.box.worldPosition.copy(), 4):
+                return True
+
     def visibility_update(self):
+
+        """visible means the agent can be seen on screen, seen means they can be targeted by AI, suspect means that they
+        can be investigated by AI and suggested on screen"""
 
         self.visibility_timer -= 1
 
@@ -675,6 +691,7 @@ class Level(object):
                 agent = self.agents[agent_key]
                 agent.set_visible(False)
                 agent.set_seen(False)
+                agent.set_suspect(False)
 
             for agent_key in self.agents:
                 agent = self.agents[agent_key]
@@ -683,11 +700,13 @@ class Level(object):
                     enemy = agent.team != 0
                     visibility_distance = agent.get_visual_range()
                     max_distance = visibility_distance * 8
+                    suspect_distance = max_distance * 1.5
 
                     if not enemy:
                         visibility_dict[agent_key] = {"enemy": enemy, "distance": visibility_distance,
                                                       "location": agent.location}
-                        agent.set_visible(True)
+                        if self.inside_camera(agent):
+                            agent.set_visible(True)
 
                         for enemy_key in self.agents:
                             enemy = self.agents[enemy_key]
@@ -702,11 +721,15 @@ class Level(object):
                                         visibility_dict[enemy_key] = {"enemy": True, "distance": 0,
                                                                       "location": enemy.location}
 
+                                    elif distance < suspect_distance:
+                                        enemy.set_suspect(True)
+
                             else:
                                 if enemy.dead:
                                     distance = agent.box.getDistanceTo(enemy.box)
                                     if distance <= max_distance:
-                                        enemy.set_visible(True)
+                                        if self.inside_camera(enemy):
+                                            enemy.set_visible(True)
 
                     else:
                         for player_key in self.agents:
@@ -718,6 +741,8 @@ class Level(object):
                                     if distance <= max_distance:
                                         seen_agents.append(player_key)
                                         player.set_seen(True)
+                                    elif distance < suspect_distance:
+                                        player.set_suspect(True)
 
             self.LOS.do_paint(visibility_dict)
 

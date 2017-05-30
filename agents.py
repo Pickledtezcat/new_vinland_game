@@ -42,6 +42,7 @@ class Agent(object):
         self.ended = False
         self.visible = True
         self.seen = False
+        self.suspect = False
 
         self.box = self.add_box()
         self.movement_hook = bgeutils.get_ob("hook", self.box.childrenRecursive)
@@ -98,7 +99,7 @@ class Agent(object):
                     visual_range = max(visual_range, 3)
 
         if self.stance == "SENTRY":
-            visual_range = min(3, int(visual_range * 2))
+            visual_range = min(3, int(visual_range * 1.5))
 
         self.vision_distance = visual_range * 8
 
@@ -109,6 +110,9 @@ class Agent(object):
 
     def set_seen(self, setting):
         self.seen = setting
+
+    def set_suspect(self, setting):
+        self.suspect = setting
 
     def save(self):
 
@@ -408,24 +412,13 @@ class Agent(object):
         pass
 
     def update(self):
-        # self.debug_text = "{} - {}\n{} -  {}".format(self.agent_id, self.state.name, self.direction, self.agent_targeter.hull_on_target)
-
         # TODO integrate pause, dead and other behavior in to states
-
-        debug_icon = {"AGGRESSIVE": "[A]",
-                      "SENTRY": "[S]",
-                      "DEFEND": "[D]",
-                      "FLANK": "[F]"}
 
         self.debug_text = ""
 
         if not self.dead:
             self.check_dead()
-
-            if self.team == 0:
-                self.debug_text = debug_icon[self.stance]
             self.process_commands()
-
         else:
             self.selected = False
 
