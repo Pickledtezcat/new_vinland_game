@@ -591,9 +591,7 @@ class AgentTargeter(object):
         self.enemy_target_id = None
         self.turret_angle = 0.0
         self.gun_elevation = 0.0
-
         self.check_timer = 0.0
-
         self.turret_on_target = False
         self.hull_on_target = False
 

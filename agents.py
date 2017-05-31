@@ -20,6 +20,7 @@ class Agent(object):
     turret_speed = 0.01
     accuracy = 6
     vision_distance = 0
+    initial_health = 0
 
     stance = "AGGRESSIVE"
     agent_type = "VEHICLE"
@@ -84,7 +85,7 @@ class Agent(object):
 
     def get_visual_range(self):
 
-        visual_range = 1
+        visual_range = 3
 
         # TODO handle vehicle viewing range
 
@@ -92,16 +93,16 @@ class Agent(object):
             if not soldier.dead:
 
                 if soldier.special == "OFFICER":
-                    visual_range = max(visual_range, 2)
+                    visual_range = max(visual_range, 4)
                 if soldier.special == "COMMANDER":
-                    visual_range = max(visual_range, 3)
+                    visual_range = max(visual_range, 5)
                 if soldier.special == "OBSERVER":
-                    visual_range = max(visual_range, 3)
+                    visual_range = max(visual_range, 6)
 
         if self.stance == "SENTRY":
-            visual_range = min(3, int(visual_range * 1.5))
+            visual_range = min(7, visual_range + 1)
 
-        self.vision_distance = visual_range * 8
+        self.vision_distance = visual_range * 6
 
         return visual_range
 
@@ -476,6 +477,12 @@ class Infantry(Agent):
                     self.soldiers.append(InfantryMan(self, soldier, index))
                     index += 1
 
+        health = 0
+        for soldier in self.soldiers:
+            health += soldier.toughness
+
+        self.initial_health = health
+
     def set_occupied(self, target_tile, occupied_list=None):
         pass
 
@@ -789,7 +796,6 @@ class SoldierWeapon(object):
         self.weapon_type = "INFANTRY_WEAPON"
         self.infantryman = infantryman
         self.power = self.infantryman.power
-        self.weapon_range = self.power * 2.0
         self.sound = self.infantryman.sound
         self.recharge = (self.infantryman.rof * 0.0025) * random.uniform(0.8, 1.0)
         self.special = self.infantryman.special
@@ -839,7 +845,7 @@ class SoldierWeapon(object):
         target_id, target = self.get_target()
         if target:
             distance = (target.box.worldPosition.copy() - self.infantryman.box.worldPosition.copy()).length
-            if distance < self.weapon_range:
+            if distance <= 18:
                 return True
 
     def get_target(self):
@@ -882,7 +888,6 @@ class SoldierWeapon(object):
                     origin = window_position
                 else:
                     return False
-
             else:
                 origin = self.infantryman.location
 
@@ -898,12 +903,7 @@ class SoldierWeapon(object):
             if self.special == "ANTI_TANK":
                 effect = "RED_STREAK"
 
-            if self.special == "RAPID_FIRE":
-                effective_range = max(
-                    [(self.accuracy + self.weapon_range) * random.uniform(0.0, 1.0) for _ in range(3)])
-            else:
-                effective_range = (self.accuracy + self.weapon_range) * random.uniform(0.0, 1.0)
-
+            effective_range = self.accuracy + self.power
             effective_power = self.power * random.uniform(0.0, 1.0)
 
             command = {"label": "SMALL_ARMS_SHOOT", "weapon": self, "owner": self.infantryman, "target_id": target_id,

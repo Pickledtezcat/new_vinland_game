@@ -3,7 +3,6 @@ import bge
 import mathutils
 import math
 
-
 class VisionPaint(object):
     def __init__(self, level):
         self.level = level
@@ -13,15 +12,26 @@ class VisionPaint(object):
         self.brush_size = 64
 
         self.brush_dict = {}
-        for i in range(5):
-            inner = 8 * i
-            outer = min(32, int(inner * 1.75))
+        for i in range(3, 8):
+            inner = 18
+            outer = max(19, 6 * i)
             self.brush_dict[i] = self.create_brush(self.brush_size, inner, [0, 0, 255], outer=outer, smooth=True)
 
         self.player_pixel = self.create_brush(1, 1, [0, 255, 0])
         self.enemy_pixel = self.create_brush(1, 1, [255, 0, 0])
 
         self.canvas = self.create_canvas()
+        self.set_infantry_texture()
+
+    def set_infantry_texture(self):
+        for texture_set in self.level.infantry_textures:
+            texture_object = texture_set["owner"]
+            texture_name = texture_set["name"]
+
+            material_id = bge.texture.materialID(texture_object, "MA{}_mat".format(texture_name))
+            object_texture = bge.texture.Texture(texture_object, material_id, textureObj=self.canvas)
+            texture_set["saved"] = object_texture
+            texture_set["saved"].refresh(False)
 
     def create_canvas(self):
         canvas_size = self.canvas_size
@@ -32,6 +42,11 @@ class VisionPaint(object):
         tex.source.load(b'\x00\x00\x00' * (canvas_size * canvas_size), canvas_size, canvas_size)
 
         return tex
+
+    def reload_canvas(self):
+        canvas_size = self.canvas_size
+        self.canvas.source.load(b'\x00\x00\x00' * (canvas_size * canvas_size), canvas_size, canvas_size)
+
 
     def create_brush(self, brush_size, radius, RGB, outer=0, smooth=False):
 
@@ -128,7 +143,7 @@ class VisionPaint(object):
 
     def do_paint(self, paint_dict):
 
-        self.canvas = self.create_canvas()
+        self.reload_canvas()
 
         for paint_key in paint_dict:
             agent = paint_dict[paint_key]
@@ -139,14 +154,13 @@ class VisionPaint(object):
             bx = x - int(self.brush_size * 0.5)
             by = y - int(self.brush_size * 0.5)
 
-            vision_brush = self.brush_dict[distance]
-
             if enemy:
                 agent_brush = self.enemy_pixel
             else:
                 agent_brush = self.player_pixel
 
             if distance > 0:
+                vision_brush = self.brush_dict[distance]
                 self.canvas.source.plot(vision_brush, self.brush_size, self.brush_size, bx, by,
                                         bge.texture.IMB_BLEND_LIGHTEN)
             self.canvas.source.plot(agent_brush, 1, 1, x, y, bge.texture.IMB_BLEND_LIGHTEN)

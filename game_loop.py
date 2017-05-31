@@ -53,6 +53,8 @@ class DebugPrinter(object):
 class GameLoop(object):
 
     def __init__(self, cont):
+        bge.texture.setLogFile(bge.logic.expandPath("//saves/error_log.txt"))
+
         self.debug = True
         self.cont = cont
         self.own = cont.owner
@@ -62,7 +64,6 @@ class GameLoop(object):
 
         self.game_input = game_input.GameInput()
         self.level = None
-        self.blend_path = bge.logic.expandPath("//")
 
         bgeutils.load_settings()
         self.set_level()
@@ -87,18 +88,22 @@ class GameLoop(object):
             if next_menu_mode:
                 bge.logic.globalDict["game_mode"] = "MENU_MODE"
                 bgeutils.save_settings()
-                bge.logic.startGame("{}{}".format(self.blend_path, "menu_blend.blend"))
+                bge.logic.startGame("{}{}".format(bge.logic.expandPath("//"), "menu_blend.blend"))
 
             else:
                 bge.logic.globalDict["game_mode"] = "GAME_MODE"
                 bgeutils.save_settings()
-                bge.logic.startGame("{}{}".format(self.blend_path, "game_blend.blend"))
+                bge.logic.startGame("{}{}".format(bge.logic.expandPath("//"), "game_blend.blend"))
 
             bge.logic.globalDict["mode_change"] = True
 
-    def set_level(self):
+    def end_level(self):
         if self.level:
             self.level.terminate()
+            self.level = None
+            return True
+
+    def set_level(self):
 
         if bge.logic.globalDict["next_level"]:
             level_class = globals()[bge.logic.globalDict["next_level"]]
@@ -113,11 +118,12 @@ class GameLoop(object):
     def level_update(self):
 
         if bge.logic.globalDict["next_level"]:
-            if not bge.logic.globalDict["mode_change"]:
-                self.set_mode()
+            if not self.end_level() or "Menu" in bge.logic.globalDict["next_level"]:
+                if not bge.logic.globalDict["mode_change"]:
+                    self.set_mode()
 
-            if not bge.logic.globalDict["mode_change"]:
-                self.set_level()
+                if not bge.logic.globalDict["mode_change"]:
+                    self.set_level()
 
         if not bge.logic.globalDict["next_level"]:
             if not self.level.loaded:

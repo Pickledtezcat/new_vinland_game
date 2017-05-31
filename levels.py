@@ -306,7 +306,7 @@ class Level(object):
         self.agent_id_index = 0
         self.loaded = False
         self.visibility_timer = 0
-        self.LOS = LOS.VisionPaint(self)
+        self.LOS = None
 
         self.agents_added = False
         self.buildings_added = False
@@ -325,6 +325,8 @@ class Level(object):
 
         hre_infantry_path = bge.logic.expandPath("//infantry_sprites/hre_summer_sprites.blend")
         vin_infantry_path = bge.logic.expandPath("//infantry_sprites/vin_summer_sprites.blend")
+
+        self.infantry_textures = []
 
         self.assets = []
 
@@ -351,6 +353,10 @@ class Level(object):
             if not asset:
                 return False
 
+        if not self.infantry_textures:
+            self.load_infantry_textures()
+            return False
+
         if not self.buildings_mapped:
             self.get_buildings()
             return False
@@ -359,6 +365,16 @@ class Level(object):
             self.add_agents()
 
         return True
+
+    def load_infantry_textures(self):
+        texture_list = ["hre_summer_texture", "vin_summer_texture"]
+        for texture in texture_list:
+            owner = self.scene.addObject(texture, self.own, 0)
+            owner.worldPosition.z = 300
+            texture_set = {"name": texture, "saved": None, "owner": owner}
+            self.infantry_textures.append(texture_set)
+
+        self.LOS = LOS.VisionPaint(self)
 
     def get_tile(self, tile_key):
         if 0 < tile_key[0] < self.map_size and 0 < tile_key[1] < self.map_size:
@@ -430,6 +446,15 @@ class Level(object):
         for building_id in self.buildings:
             building = self.buildings[building_id]
             building.terminate()
+
+        try:
+            del self.LOS.canvas
+
+            for texture_set in self.infantry_textures:
+                del texture_set["saved"]
+        except:
+            print()
+
 
     def add_agents(self):
 
@@ -610,7 +635,12 @@ class Level(object):
                         else:
                             target_position = best_target.box.worldPosition.copy()
 
-                        if effective_range < target_distance:
+                        if best_target.behavior.prone:
+                            effective_range -= 5
+
+                        to_hit = max(1, effective_range - target_distance)
+
+                        if to_hit < random.randint(0, 18):
                             target_position = None
 
                     if target_position:
@@ -666,7 +696,7 @@ class Level(object):
         if agent.agent_type == "INFANTRY":
             soldiers = [soldier for soldier in agent.soldiers if not soldier.dead]
 
-            for soldier in agent.soldiers:
+            for soldier in soldiers:
                 if self.camera_controller.main_camera.pointInsideFrustum(soldier.box.worldPosition.copy()):
                     return True
 
@@ -679,72 +709,73 @@ class Level(object):
         """visible means the agent can be seen on screen, seen means they can be targeted by AI, suspect means that they
         can be investigated by AI and suggested on screen"""
 
-        self.visibility_timer -= 1
+        if self.LOS:
+            self.visibility_timer -= 1
 
-        if self.visibility_timer < 0:
-            self.visibility_timer = 12
-            visibility_dict = {}
+            if self.visibility_timer < 0:
+                self.visibility_timer = 12
+                visibility_dict = {}
 
-            seen_agents = []
+                seen_agents = []
 
-            for agent_key in self.agents:
-                agent = self.agents[agent_key]
-                agent.set_visible(False)
-                agent.set_seen(False)
-                agent.set_suspect(False)
+                for agent_key in self.agents:
+                    agent = self.agents[agent_key]
+                    agent.set_visible(False)
+                    agent.set_seen(False)
+                    agent.set_suspect(False)
 
-            for agent_key in self.agents:
-                agent = self.agents[agent_key]
+                for agent_key in self.agents:
+                    agent = self.agents[agent_key]
 
-                if not agent.dead:
-                    enemy = agent.team != 0
-                    visibility_distance = agent.get_visual_range()
-                    max_distance = visibility_distance * 8
-                    suspect_distance = max_distance * 1.5
+                    if not agent.dead:
+                        enemy = agent.team != 0
+                        visibility_distance = agent.get_visual_range()
+                        max_distance = visibility_distance * 6
+                        suspect_distance = max_distance * 2.0
 
-                    if not enemy:
-                        visibility_dict[agent_key] = {"enemy": enemy, "distance": visibility_distance,
-                                                      "location": agent.location}
-                        if self.inside_camera(agent):
-                            agent.set_visible(True)
+                        if not enemy:
+                            visibility_dict[agent_key] = {"enemy": enemy, "distance": visibility_distance,
+                                                          "location": agent.location}
+                            if self.inside_camera(agent):
+                                agent.set_visible(True)
 
-                        for enemy_key in self.agents:
-                            enemy = self.agents[enemy_key]
+                            for enemy_key in self.agents:
+                                enemy = self.agents[enemy_key]
 
-                            if enemy.team != 0:
-                                if enemy_key not in seen_agents:
-                                    distance = agent.box.getDistanceTo(enemy.box)
-                                    if distance <= max_distance:
-                                        seen_agents.append(enemy_key)
-                                        enemy.set_seen(True)
-                                        enemy.set_visible(True)
-                                        visibility_dict[enemy_key] = {"enemy": True, "distance": 0,
-                                                                      "location": enemy.location}
-
-                                    elif distance < suspect_distance:
-                                        enemy.set_suspect(True)
-
-                            else:
-                                if enemy.dead:
-                                    distance = agent.box.getDistanceTo(enemy.box)
-                                    if distance <= max_distance:
-                                        if self.inside_camera(enemy):
+                                if enemy.team != 0:
+                                    if enemy_key not in seen_agents:
+                                        distance = agent.box.getDistanceTo(enemy.box)
+                                        if distance <= max_distance:
+                                            seen_agents.append(enemy_key)
+                                            enemy.set_seen(True)
                                             enemy.set_visible(True)
+                                            visibility_dict[enemy_key] = {"enemy": True, "distance": 0,
+                                                                          "location": enemy.location}
 
-                    else:
-                        for player_key in self.agents:
-                            player = self.agents[player_key]
+                                        elif distance < suspect_distance:
+                                            enemy.set_suspect(True)
 
-                            if player.team == 0:
-                                if player_key not in seen_agents:
-                                    distance = agent.box.getDistanceTo(player.box)
-                                    if distance <= max_distance:
-                                        seen_agents.append(player_key)
-                                        player.set_seen(True)
-                                    elif distance < suspect_distance:
-                                        player.set_suspect(True)
+                                else:
+                                    if enemy.dead:
+                                        distance = agent.box.getDistanceTo(enemy.box)
+                                        if distance <= max_distance:
+                                            if self.inside_camera(enemy):
+                                                enemy.set_visible(True)
 
-            self.LOS.do_paint(visibility_dict)
+                        else:
+                            for player_key in self.agents:
+                                player = self.agents[player_key]
+
+                                if player.team == 0:
+                                    if player_key not in seen_agents:
+                                        distance = agent.box.getDistanceTo(player.box)
+                                        if distance <= max_distance:
+                                            seen_agents.append(player_key)
+                                            player.set_seen(True)
+                                        elif distance < suspect_distance:
+                                            player.set_suspect(True)
+
+                self.LOS.do_paint(visibility_dict)
 
     def update(self):
         self.camera_controller.update()

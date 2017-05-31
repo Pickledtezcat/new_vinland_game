@@ -114,17 +114,19 @@ class StatusBar(object):
         self.group_number.visible = False
         self.rank_icon.visible = False
 
-        green = [0.0, 1.0, 0.0, 1.0]
-        red = [1.0, 0.0, 0.0, 1.0]
-        hud = [0.07, 0.6, 0.05, 1.0]
-        self.health_bar.color = green
-        self.shock_bar.color = red
+        self.green = [0.0, 1.0, 0.0, 1.0]
+        self.red = [1.0, 0.0, 0.0, 1.0]
+        self.yellow = [0.5, 0.5, 0.0, 1.0]
+        self.hud = [0.07, 0.6, 0.05, 1.0]
+
+        self.health_bar.color = self.green
+        self.shock_bar.color = self.red
         self.shock_bar.localScale.x = 0.0
 
-        self.status_icon.color = hud
-        self.stance_icon.color = hud
-        self.group_number.color = hud
-        self.rank_icon.color = hud
+        self.status_icon.color = self.hud
+        self.stance_icon.color = self.hud
+        self.group_number.color = self.hud
+        self.rank_icon.color = self.hud
 
     def terminate(self):
         self.box.endObject()
@@ -132,7 +134,38 @@ class StatusBar(object):
     def add_box(self):
         return self.level.scene.addObject("status_bar_object", self.level.own, 0)
 
+    def update_health(self):
+
+        initial_health = self.agent.initial_health
+
+        if self.agent.agent_type == "INFANTRY":
+
+            health = 0
+            for soldier in self.agent.soldiers:
+                health += max(0, soldier.toughness)
+
+            if initial_health > 0:
+                health_ratio = health / self.agent.initial_health
+                self.health_bar.localScale.x = health_ratio
+
+                if health_ratio < 0.1:
+                    self.health_bar.color = self.red
+                elif health_ratio < 0.5:
+                    self.health_bar.color = self.yellow
+                else:
+                    self.health_bar.color = self.green
+
+    def secondary_icons(self, setting):
+        self.stance_icon.visible = setting
+
+        if setting:
+            self.stance_icon.replaceMesh("UI_stance_{}".format(self.agent.stance))
+
+        # TODO do other secondary icons
+
     def update(self):
+        self.update_health()
+
         position = self.agent.box.worldPosition.copy()
         position.z += 2.0
         location = self.ui.camera.getScreenPosition(position)
@@ -143,8 +176,13 @@ class StatusBar(object):
             self.box.worldOrientation = screen_normal.to_track_quat("Z", "Y")
 
         if self.agent.team == 0:
-            self.stance_icon.visible = True
-            self.stance_icon.replaceMesh("UI_stance_{}".format(self.agent.stance))
+            if self.agent.selected:
+                self.secondary_icons(True)
+            else:
+                self.secondary_icons(False)
+
+        else:
+            self.secondary_icons(False)
 
 
 class MenuInterface(object):
