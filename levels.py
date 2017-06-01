@@ -164,16 +164,18 @@ class MouseControl(object):
     def set_selection_box(self):
 
         additive = "shift" in self.level.manager.game_input.keys
-        if self.mouse_over:
-            target_agent = self.mouse_over["occupied"]
-        else:
-            target_agent = None
+        box_vector = mathutils.Vector(self.end) - mathutils.Vector(self.start)
+        box_size = box_vector.length
 
         x_limit = sorted([self.start[0], self.end[0]])
         y_limit = sorted([self.start[1], self.end[1]])
 
-        message = {"label": "SELECT", "x_limit": x_limit, "y_limit": y_limit, "additive": additive,
-                   "mouse_over": target_agent}
+        if box_size < 0.01:
+            friends = [friend_id for friend_id in self.over_units if self.level.agents[friend_id].team == 0]
+        else:
+            friends = []
+
+        message = {"label": "SELECT", "x_limit": x_limit, "y_limit": y_limit, "additive": additive, "friends": friends}
 
         active_agents = [self.level.agents[agent_id] for agent_id in self.level.agents if
                          self.level.agents[agent_id].team == 0]
@@ -194,43 +196,47 @@ class MouseControl(object):
                     enemy = target
 
         if enemy:
-            self.context = "TARGET"
-            click = "right_button" in self.level.manager.game_input.buttons
+            selected_agents = [self.level.agents[agent_id] for agent_id in self.level.agents if
+                               self.level.agents[agent_id].selected]
 
-            if click:
-                selected_agents = [self.level.agents[agent_id] for agent_id in self.level.agents if
-                                   self.level.agents[agent_id].selected]
-                if selected_agents:
-                    target_id = enemy.agent_id
+            if selected_agents:
+                self.context = "TARGET"
+                click = "right_button" in self.level.manager.game_input.buttons
 
-                    message = {"label": "TARGET_ENEMY", "target_id": target_id}
+                if click:
+                    selected_agents = [self.level.agents[agent_id] for agent_id in self.level.agents if
+                                       self.level.agents[agent_id].selected]
+                    if selected_agents:
+                        target_id = enemy.agent_id
 
-                    for agent in selected_agents:
-                        agent.commands.append(message)
+                        message = {"label": "TARGET_ENEMY", "target_id": target_id}
+
+                        for agent in selected_agents:
+                            agent.commands.append(message)
 
         elif self.mouse_over:
             if self.mouse_over["building"]:
-                building = self.level.buildings.get(self.mouse_over["building"])
-                if building:
-                    if not building.occupier:
-                        self.context = "BUILDING"
-                        click = "right_button" in self.level.manager.game_input.buttons
+                selected_agents = [self.level.agents[agent_id] for agent_id in self.level.agents if
+                                   self.level.agents[agent_id].selected]
 
-                        if click:
-                            selected_agents = [self.level.agents[agent_id] for agent_id in self.level.agents if
-                                               self.level.agents[agent_id].selected]
+                if selected_agents:
+                    building = self.level.buildings.get(self.mouse_over["building"])
+                    if building:
+                        if not building.occupier:
+                            self.context = "BUILDING"
+                            click = "right_button" in self.level.manager.game_input.buttons
 
-                            if selected_agents:
+                            if click:
                                 target_id = self.mouse_over["building"]
                                 message = {"label": "ENTER_BUILDING", "target_id": target_id}
 
                                 for agent in selected_agents:
                                     agent.commands.append(message)
 
-                    else:
-                        # TODO setup if enemy occupier
+                        else:
+                            # TODO setup if enemy occupier
 
-                        self.context = "NO_ENTRY"
+                            self.context = "NO_ENTRY"
 
     def update(self):
 
@@ -247,7 +253,6 @@ class MouseControl(object):
         self.context = "NONE"
 
         if not self.bypass:
-
             if not self.start and not self.movement_markers:
                 self.set_targets()
 
@@ -694,9 +699,7 @@ class Level(object):
     def inside_camera(self, agent):
 
         if agent.agent_type == "INFANTRY":
-            soldiers = [soldier for soldier in agent.soldiers if not soldier.dead]
-
-            for soldier in soldiers:
+            for soldier in agent.soldiers:
                 if self.camera_controller.main_camera.pointInsideFrustum(soldier.box.worldPosition.copy()):
                     return True
 
@@ -728,13 +731,13 @@ class Level(object):
                     agent = self.agents[agent_key]
 
                     if not agent.dead:
-                        enemy = agent.team != 0
+                        is_enemy = agent.team != 0
                         visibility_distance = agent.get_visual_range()
                         max_distance = visibility_distance * 6
                         suspect_distance = max_distance * 2.0
 
-                        if not enemy:
-                            visibility_dict[agent_key] = {"enemy": enemy, "distance": visibility_distance,
+                        if not is_enemy:
+                            visibility_dict[agent_key] = {"enemy": is_enemy, "distance": visibility_distance,
                                                           "location": agent.location}
                             if self.inside_camera(agent):
                                 agent.set_visible(True)
@@ -744,21 +747,21 @@ class Level(object):
 
                                 if enemy.team != 0:
                                     if enemy_key not in seen_agents:
-                                        distance = agent.box.getDistanceTo(enemy.box)
-                                        if distance <= max_distance:
+                                        enemy_distance = agent.box.getDistanceTo(enemy.box)
+                                        if enemy_distance <= max_distance:
                                             seen_agents.append(enemy_key)
                                             enemy.set_seen(True)
                                             enemy.set_visible(True)
                                             visibility_dict[enemy_key] = {"enemy": True, "distance": 0,
                                                                           "location": enemy.location}
 
-                                        elif distance < suspect_distance:
+                                        elif enemy_distance < suspect_distance:
                                             enemy.set_suspect(True)
 
                                 else:
                                     if enemy.dead:
-                                        distance = agent.box.getDistanceTo(enemy.box)
-                                        if distance <= max_distance:
+                                        friend_distance = agent.box.getDistanceTo(enemy.box)
+                                        if friend_distance <= max_distance:
                                             if self.inside_camera(enemy):
                                                 enemy.set_visible(True)
 
@@ -768,11 +771,11 @@ class Level(object):
 
                                 if player.team == 0:
                                     if player_key not in seen_agents:
-                                        distance = agent.box.getDistanceTo(player.box)
-                                        if distance <= max_distance:
+                                        player_distance = agent.box.getDistanceTo(player.box)
+                                        if player_distance <= max_distance:
                                             seen_agents.append(player_key)
                                             player.set_seen(True)
-                                        elif distance < suspect_distance:
+                                        elif player_distance < suspect_distance:
                                             player.set_suspect(True)
 
                 self.LOS.do_paint(visibility_dict)

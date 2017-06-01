@@ -122,7 +122,7 @@ class Agent(object):
                      "selected": self.selected, "state_name": self.state.name, "load_name": self.load_name,
                      "state_count": self.state.count, "movement_target": self.movement.target,
                      "movement_target_direction": self.movement.target_direction,
-                     "movement_timer": self.movement.timer,
+                     "movement_timer": self.movement.timer, "initial_health": self.initial_health,
                      "navigation_destination": self.navigation.destination,
                      "navigation_history": self.navigation.history, "destinations": self.destinations,
                      "reverse": self.reverse, "throttle": self.throttle, "occupied": self.occupied, "aim": self.aim,
@@ -162,6 +162,8 @@ class Agent(object):
 
         self.state = state_class(self)
         self.state.count = agent_dict["state_count"]
+
+        self.initial_health = agent_dict["initial_health"]
 
     def set_occupied(self, target_tile, occupied_list=None):
         display = False
@@ -294,34 +296,55 @@ class Agent(object):
     def process_commands(self):
 
         for command in self.commands:
-            if command['label'] == "SELECT":
+
+            if command["label"] == "SINGLE_SELECT":
                 if self.team == 0:
-
-                    x_limit = command["x_limit"]
-                    y_limit = command["y_limit"]
                     additive = command["additive"]
-                    mouse_over = command["mouse_over"]
+                    target = command["target"]
+                    if additive:
+                        if self.agent_id == target:
+                            self.selected = not self.selected
 
-                    cam = self.level.manager.main_camera
+                    else:
+                        if self.agent_id == target:
+                            self.selected = True
+                        else:
+                            self.selected = False
 
-                    select = False
+            if command['label'] == "SELECT":
+                x_limit = command["x_limit"]
+                y_limit = command["y_limit"]
+                additive = command["additive"]
+                friends = command["friends"]
 
+                cam = self.level.manager.main_camera
+
+                select = False
+
+                if friends:
+                    if self.agent_id in friends:
+                        if additive:
+                            self.selected = not self.selected
+                        else:
+                            self.selected = True
+
+                    else:
+                        if not additive:
+                            self.selected = False
+
+                else:
                     if cam.pointInsideFrustum(self.box.worldPosition):
                         points = [cam.getScreenPosition(self.box)]
                         for soldier in self.soldiers:
                             points.append(cam.getScreenPosition(soldier.box))
-                        padding = 0.03
 
                         for screen_location in points:
 
-                            if x_limit[0] - padding < screen_location[0] < x_limit[1] + padding:
-                                if y_limit[0] - padding < screen_location[1] < y_limit[1] + padding:
+                            if x_limit[0] < screen_location[0] < x_limit[1]:
+                                if y_limit[0] < screen_location[1] < y_limit[1]:
                                     select = True
 
-                    if mouse_over == self and additive:
-                        self.selected = False
-
-                    elif select:
+                    if select:
                         self.selected = True
 
                     elif not additive:
@@ -347,6 +370,7 @@ class Agent(object):
 
             if command["label"] == "ROTATION_TARGET":
                 self.dismount_building()
+
                 position = command["position"]
                 reverse = command["reverse"]
 
@@ -362,13 +386,13 @@ class Agent(object):
                 self.navigation.stop = True
                 self.destinations = []
                 self.aim = best_facing
-                self.agent_targeter.enemy_target_id = None
+                self.agent_targeter.set_target_id = None
 
             if command["label"] == "TARGET_ENEMY":
-                self.dismount_building()
+                #self.dismount_building()
                 target_id = command["target_id"]
 
-                self.agent_targeter.enemy_target_id = target_id
+                self.agent_targeter.set_target_id = target_id
                 self.navigation.stop = True
                 self.destinations = []
 
@@ -415,6 +439,7 @@ class Agent(object):
     def update(self):
         # TODO integrate pause, dead and other behavior in to states
 
+        # self.debug_text = "{}\n{}".format(str(self.agent_id), str(self.agent_targeter.enemy_target_id))
         self.debug_text = ""
 
         if not self.dead:

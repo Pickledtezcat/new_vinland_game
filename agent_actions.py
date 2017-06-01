@@ -589,6 +589,7 @@ class AgentTargeter(object):
     def __init__(self, agent):
         self.agent = agent
         self.enemy_target_id = None
+        self.set_target_id = None
         self.turret_angle = 0.0
         self.gun_elevation = 0.0
         self.check_timer = 0.0
@@ -629,16 +630,22 @@ class AgentTargeter(object):
 
         agent_vector = target_agent.box.worldPosition.copy() - self.agent.box.worldPosition.copy()
         enemy_distance = agent_vector.length
-        max_visual_range = 32
-
-        if enemy_distance > max_visual_range:
-            return False
 
         return agent_vector.to_2d(), enemy_distance
 
     def update(self):
 
-        if not self.enemy_target_id:
+        """use set_target_id to manually set a target, otherwise automatically gets nearest"""
+
+        if self.set_target_id:
+            set_target = self.agent.level.agents[self.set_target_id]
+            check_set_target = self.is_valid_target(set_target)
+            if check_set_target:
+                self.enemy_target_id = self.set_target_id
+            else:
+                self.set_target_id = None
+
+        else:
             if self.check_timer < 0:
                 self.check_timer = 12
                 closest_enemy_id = self.get_closest_enemy()
@@ -667,7 +674,6 @@ class AgentTargeter(object):
             target_angle = 0.0
 
         turret_speed = self.agent.turret_speed
-
         turret_difference = abs(self.turret_angle - target_angle)
 
         self.turret_on_target = False

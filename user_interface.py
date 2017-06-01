@@ -68,6 +68,8 @@ class UserInterface(object):
 
             if self.level.mouse_control.context == "TARGET":
                 self.cursor.replaceMesh("target_cursor")
+            elif self.level.mouse_control.context == "SELECT":
+                self.cursor.replaceMesh("select_cursor")
             elif self.level.mouse_control.context == "BUILDING":
                 self.cursor.replaceMesh("building_cursor")
             elif self.level.mouse_control.context == "NO_ENTRY":
@@ -163,10 +165,26 @@ class StatusBar(object):
 
         # TODO do other secondary icons
 
-    def update(self):
-        self.update_health()
+    def update_position(self):
 
-        position = self.agent.box.worldPosition.copy()
+        if self.agent.agent_type == "INFANTRY":
+            center = mathutils.Vector()
+            number = 0
+
+            for soldier in self.agent.soldiers:
+                if not soldier.dead:
+                    center += soldier.box.worldPosition.copy()
+                    number += 1
+
+            if number > 0:
+                position = center / number
+            else:
+                self.box.localScale *= 0.0
+                position = self.agent.box.worldPosition.copy()
+
+        else:
+            position = self.agent.box.worldPosition.copy()
+
         position.z += 2.0
         location = self.ui.camera.getScreenPosition(position)
         ray = self.ui.mouse_ray(location)
@@ -174,6 +192,10 @@ class StatusBar(object):
             plane, screen_position, screen_normal = ray
             self.box.worldPosition = screen_position
             self.box.worldOrientation = screen_normal.to_track_quat("Z", "Y")
+
+    def update(self):
+        self.update_health()
+        self.update_position()
 
         if self.agent.team == 0:
             if self.agent.selected:
