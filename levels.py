@@ -9,6 +9,7 @@ import game_audio
 import random
 import buildings
 import LOS
+import map_generation
 
 
 class MovementMarker(object):
@@ -312,6 +313,7 @@ class Level(object):
         self.loaded = False
         self.visibility_timer = 0
         self.LOS = None
+        self.terrain = None
 
         self.agents_added = False
         self.buildings_added = False
@@ -397,6 +399,8 @@ class Level(object):
 
     def get_map(self):
 
+        self.terrain = map_generation.BaseMapGen(self)
+
         map = {}
         for x in range(self.map_size):
             for y in range(self.map_size):
@@ -436,6 +440,7 @@ class Level(object):
             for door_loc in building.doors:
                 self.set_tile(door_loc, "building", None)
 
+        self.terrain.canvas.refresh(True)
         self.buildings_mapped = True
 
     def terminate(self):

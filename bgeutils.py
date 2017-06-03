@@ -138,3 +138,46 @@ def add_new_profile(profile_name):
                        "inventory": {}, "game_turn": 0, "faction": "vinland", "money": 5000, "saved_game": None}
     bge.logic.globalDict["profiles"][profile_name] = default_profile
     bge.logic.globalDict["active_profile"] = profile_name
+
+
+def create_brush(brush_size, radius, RGB, outer=0, smooth=False):
+
+    brush = bytearray(brush_size * brush_size * 4)
+    center = mathutils.Vector([brush_size * 0.5, brush_size * 0.5])
+    rgb = RGB
+    half_rgb = [int(color * 0.5) for color in rgb]
+
+    for x in range(brush_size):
+        for y in range(brush_size):
+            i = y * (brush_size * 4) + x * 4
+            location = mathutils.Vector([x, y])
+            target_vector = location - center
+            length = target_vector.length
+
+            if length == radius and smooth:
+                pixel = half_rgb
+            elif length > radius:
+                if outer > 0 and length < outer:
+                    pixel = half_rgb
+                else:
+                    pixel = [0, 0, 0]
+            else:
+                pixel = rgb
+
+            brush[i] = pixel[0]
+            brush[i + 1] = pixel[1]
+            brush[i + 2] = pixel[2]
+            brush[i + 3] = 255
+
+    return brush
+
+
+def create_pixel(rbga):
+    r, g, b, a = rbga
+    pixel = bytearray(1 * 1 * 4)
+    pixel[0] = r
+    pixel[1] = g
+    pixel[2] = b
+    pixel[3] = a
+
+    return pixel
