@@ -502,11 +502,11 @@ class Infantry(Agent):
                     self.soldiers.append(InfantryMan(self, soldier, index))
                     index += 1
 
-        health = 0
-        for soldier in self.soldiers:
-            health += soldier.toughness
+            health = 0
+            for soldier in self.soldiers:
+                health += soldier.toughness
 
-        self.initial_health = health
+            self.initial_health = health
 
     def set_occupied(self, target_tile, occupied_list=None):
         pass

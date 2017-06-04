@@ -10,9 +10,9 @@ class CameraControl(object):
         self.level = level
         self.main_camera = self.level.scene.active_camera
         self.camera_hook = self.main_camera.parent
-        self.in_zoom = bgeutils.get_ob("in_zoom", self.camera_hook.children).localTransform
-        self.out_zoom = bgeutils.get_ob("out_zoom", self.camera_hook.children).localTransform
-        self.sun_lamp = bgeutils.get_ob("sun_lamp", self.camera_hook.children)
+        self.in_zoom = bgeutils.get_ob("in_zoom", self.camera_hook.childrenRecursive).localTransform
+        self.out_zoom = bgeutils.get_ob("out_zoom", self.camera_hook.childrenRecursive).localTransform
+        self.sun_lamp = bgeutils.get_ob("sun_lamp", self.camera_hook.childrenRecursive)
 
         self.camera_vector = mathutils.Vector([0.0, 0.0, 0.0])
         self.offset = mathutils.Euler((0.0, 0.0, math.radians(45.0)), 'XYZ')

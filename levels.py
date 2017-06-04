@@ -440,7 +440,9 @@ class Level(object):
             for door_loc in building.doors:
                 self.set_tile(door_loc, "building", None)
 
+        #TODO find another way of updating terrain
         self.terrain.canvas.refresh(True)
+        self.terrain.normal.refresh(True)
         self.buildings_mapped = True
 
     def terminate(self):
