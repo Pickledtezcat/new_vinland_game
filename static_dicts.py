@@ -39,25 +39,25 @@ squads = {"COMMANDER": [["COMMANDER"], [""], [""]],
 
 
 def soldiers():
-    all_soldiers = {"COMMANDER": ["OFFICER", 3, 3, 8, 5, "PISTOL", "COMMANDER"],
-                    "OBSERVER": ["OFFICER", 5, 4, 8, 5, "PISTOL", "OBSERVER"],
-                    "OFFICER": ["OFFICER", 5, 6, 8, 5, "PISTOL", "OFFICER"],
-                    "ENGINEER": ["ENGINEER", 4, 3, 9, 4, "PISTOL", ""],
-                    "GUN CREW": ["ENGINEER", 4, 4, 9, 4, "PISTOL", ""],
-                    "MEDIC": ["ENGINEER", 5, 4, 9, 4, "PISTOL", ""],
-                    "MACHINE_GUNNER": ["MG", 3, 6, 16, 4, "MG", "RAPID_FIRE"],
-                    "LIGHT_MACHINE_GUNNER": ["MG", 4, 6, 12, 5, "SMG", "RAPID_FIRE"],
-                    "ANTI-TANK_RIFLE": ["ANTI_TANK", 5, 6, 18, 3, "HEAVY_RIFLE", "ANTI_TANK"],
-                    "HEAVY_ANTI-TANK_RIFLE": ["ANTI_TANK", 3, 6, 25, 3, "ANTI_TANK", "ANTI_TANK"],
-                    "LIGHT_ANTI-TANK_RIFLE": ["RIFLE", 4, 6, 12, 3, "HEAVY_RIFLE", "ANTI_TANK"],
-                    "RIFLEMAN": ["RIFLE", 5, 5, 15, 3, "RIFLE", ""],
-                    "SEMI-AUTO_RIFLE": ["RIFLE", 5, 5, 12, 4, "PISTOL", ""],
-                    "MARKSMAN": ["RIFLE", 4, 4, 15, 3, "HEAVY_RIFLE", ""],
-                    "SUB_MACHINE_GUNNER": ["SMG", 5, 5, 8, 4, "SMG", "RAPID_FIRE"],
-                    "SHOCK_TROOPER": ["SMG", 6, 6, 9, 4, "SMG", "RAPID_FIRE"],
-                    "COMBAT_OFFICER": ["SMG", 6, 6, 9, 5, "PISTOL", "OFFICER"]}
+    all_soldiers = {"COMMANDER": ["OFFICER", 3, 3, 8, 5, 0, "PISTOL", "COMMANDER"],
+                    "OBSERVER": ["OFFICER", 5, 4, 8, 5, 0, "PISTOL", "OBSERVER"],
+                    "OFFICER": ["OFFICER", 5, 6, 8, 5, 0, "PISTOL", "OFFICER"],
+                    "ENGINEER": ["ENGINEER", 4, 3, 9, 4, 0, "PISTOL", ""],
+                    "GUN CREW": ["ENGINEER", 4, 4, 9, 4, 0, "PISTOL", ""],
+                    "MEDIC": ["ENGINEER", 5, 4, 9, 4, 0, "PISTOL", ""],
+                    "MACHINE_GUNNER": ["MG", 3, 6, 16, 4, 0, "MG", "RAPID_FIRE"],
+                    "LIGHT_MACHINE_GUNNER": ["MG", 4, 6, 12, 5, 0, "SMG", "RAPID_FIRE"],
+                    "ANTI-TANK_RIFLE": ["ANTI_TANK", 5, 6, 18, 3, 0, "HEAVY_RIFLE", "ANTI_TANK"],
+                    "HEAVY_ANTI-TANK_RIFLE": ["ANTI_TANK", 3, 6, 25, 3, 0, "ANTI_TANK", "ANTI_TANK"],
+                    "LIGHT_ANTI-TANK_RIFLE": ["RIFLE", 4, 6, 12, 3, 0, "HEAVY_RIFLE", "ANTI_TANK"],
+                    "RIFLEMAN": ["RIFLE", 5, 5, 15, 3, 2, "RIFLE", "RIFLE_GRENADE"],
+                    "SEMI-AUTO_RIFLE": ["RIFLE", 5, 5, 12, 4, 2, "PISTOL", "RIFLE_GRENADE"],
+                    "MARKSMAN": ["RIFLE", 4, 4, 15, 3, 0, "HEAVY_RIFLE", ""],
+                    "SUB_MACHINE_GUNNER": ["SMG", 5, 5, 8, 4, 3, "SMG", "RAPID_FIRE"],
+                    "SHOCK_TROOPER": ["SMG", 6, 6, 9, 4, 3, "SMG", "RAPID_FIRE"],
+                    "COMBAT_OFFICER": ["SMG", 6, 6, 9, 5, 1, "PISTOL", "OFFICER"]}
 
-    label_keys = ["mesh_name", "speed", "toughness", "power", "ROF", "sound", "special"]
+    label_keys = ["mesh_name", "speed", "toughness", "power", "ROF", "grenades", "sound", "special"]
 
     soldier_dict = {}
 

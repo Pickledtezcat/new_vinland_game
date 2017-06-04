@@ -383,11 +383,12 @@ class Level(object):
 
         self.LOS = LOS.VisionPaint(self)
 
-    def get_tile(self, tile_key):
+    def get_tile(self, tile_key, fallback=None):
         if 0 < tile_key[0] < self.map_size and 0 < tile_key[1] < self.map_size:
             map_key = bgeutils.get_key(tile_key)
 
             return self.map[map_key]
+        return fallback
 
     def set_tile(self, tile_key, setting, value):
         if 0 < tile_key[0] < self.map_size and 0 < tile_key[1] < self.map_size:
@@ -398,8 +399,6 @@ class Level(object):
                 print("problem setting tile value")
 
     def get_map(self):
-
-        self.terrain = map_generation.BaseMapGen(self)
 
         map = {}
         for x in range(self.map_size):
@@ -414,11 +413,19 @@ class Level(object):
 
                 if ray[0]:
                     tile = {"position": [x_pos, y_pos], "occupied": None, "height": ray[1][2], "normal": list(ray[2]),
-                            "building": None}
+                            "building": None, "terrain": 1}
 
                     map[bgeutils.get_key((x, y))] = tile
 
         self.map = map
+        self.terrain = map_generation.BaseMapGen(self)
+
+    def paint_around(self, x, y):
+        paint_array = [[1, 0], [1, 1], [0, 1], [1, -1], [-1, 0], [-1, 1], [0, -1], [-1, -1]]
+
+        for p in paint_array:
+            neighbor_key = (x + p[0], y + p[1])
+            self.set_tile(neighbor_key, "terrain", 255)
 
     def get_buildings(self):
 
@@ -434,12 +441,14 @@ class Level(object):
                 if ray[0]:
                     building_id = ray[0]["building_id"]
                     self.set_tile((x, y), "building", building_id)
+                    self.paint_around(x, y)
 
         for building_id in self.buildings:
             building = self.buildings[building_id]
             for door_loc in building.doors:
                 self.set_tile(door_loc, "building", None)
 
+        self.terrain.paint_map()
         #TODO find another way of updating terrain
         self.terrain.canvas.refresh(True)
         self.terrain.normal.refresh(True)
@@ -466,7 +475,6 @@ class Level(object):
                 del texture_set["saved"]
         except:
             print()
-
 
     def add_agents(self):
 
@@ -534,6 +542,9 @@ class Level(object):
         self.agents_added = True
         self.buildings_added = True
         self.buildings_mapped = True
+
+        self.terrain = map_generation.BaseMapGen(self, loaded=True)
+        self.terrain.paint_map()
 
     def save_level(self):
         saving_agents = {}

@@ -19,6 +19,10 @@ def get_key(position):
     return "{}${}".format(int(round(position[0])), int(round(position[1])))
 
 
+def get_loc(key):
+    return [int(v) for v in key.split("$")]
+
+
 def smoothstep(x):
     return x * x * (3 - 2 * x)
 

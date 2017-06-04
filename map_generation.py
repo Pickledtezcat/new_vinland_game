@@ -5,7 +5,7 @@ import random
 
 
 class BaseMapGen(object):
-    def __init__(self, level):
+    def __init__(self, level, loaded=False):
         self.level = level
         self.canvas_size = self.level.map_size
         self.ground = bgeutils.get_ob("map_object", self.level.scene.objects)
@@ -13,7 +13,8 @@ class BaseMapGen(object):
         self.canvas = self.create_canvas(self.ground)
         self.normal = self.create_canvas(self.normal_object)
 
-        self.generate_noise()
+        if not loaded:
+            self.generate_map()
 
     def create_canvas(self, game_object):
         canvas_size = self.canvas_size
@@ -25,7 +26,7 @@ class BaseMapGen(object):
 
         return tex
 
-    def generate_noise(self):
+    def generate_map(self):
 
         def grayscale(lowest_value, highest_value, color_value):
             color = (color_value - lowest_value) / (highest_value - lowest_value)
@@ -39,7 +40,7 @@ class BaseMapGen(object):
         highest = -1000.0
         lowest = 1000.0
 
-        map = {}
+        new_map = {}
 
         for x in range(self.canvas_size):
             for y in range(self.canvas_size):
@@ -74,21 +75,24 @@ class BaseMapGen(object):
                     lowest = value
                 if value > highest:
                     highest = value
-                map[(x, y)] = value
 
-        for map_key in map:
-            value = map[map_key]
-            map[map_key] = grayscale(lowest, highest, value)
+                new_map[(x, y)] = value
+
+        for map_key in new_map:
+            value = grayscale(lowest, highest, new_map[map_key])
+            self.level.set_tile(map_key, "terrain", value)
+
+    def paint_map(self):
 
         z_vector = mathutils.Vector([0.0, 0.0, 1.0])
 
-        for map_key in map:
-            value = map[map_key]
-
+        for map_key in self.level.map:
+            tile = self.level.map[map_key]
+            map_key = bgeutils.get_loc(map_key)
             x, y = map_key
 
-            z1 = (map.get((x + 1, y), value) - map.get((x - 1, y), value))
-            z2 = (map.get((x, y + 1), value) - map.get((x, y - 1), value))
+            z1 = self.level.get_tile((x + 1, y), fallback=tile)["terrain"] - self.level.get_tile((x - 1, y), fallback=tile)["terrain"]
+            z2 = self.level.get_tile((x, y + 1), fallback=tile)["terrain"] - self.level.get_tile((x, y - 1), fallback=tile)["terrain"]
 
             a = mathutils.Vector((1, 0, z1))
             b = mathutils.Vector((0, 1, z2))
@@ -101,12 +105,12 @@ class BaseMapGen(object):
             pixel_brush = bgeutils.create_pixel([r, g, b, 255])
             self.normal.source.plot(pixel_brush, 1, 1, x, y, bge.texture.IMB_BLEND_MIX)
 
-        for map_key in map:
-            value = map[map_key]
+        for map_key in self.level.map:
+            value = self.level.map[map_key]["terrain"]
+            map_key = bgeutils.get_loc(map_key)
             x, y = map_key
 
-            v = value
-            pixel_brush = bgeutils.create_pixel([v, v, v, 255])
+            pixel_brush = bgeutils.create_pixel([value, value, value, 255])
             self.canvas.source.plot(pixel_brush, 1, 1, x, y, bge.texture.IMB_BLEND_LIGHTEN)
 
         self.normal.refresh(True)
