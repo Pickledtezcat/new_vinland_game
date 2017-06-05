@@ -10,6 +10,7 @@ import random
 import buildings
 import LOS
 import map_generation
+import bullets
 
 
 class MovementMarker(object):
@@ -309,7 +310,7 @@ class Level(object):
         self.mouse_control = MouseControl(self)
         self.paused = False
         self.map_size = 128
-        self.agent_id_index = 0
+        self.level_id_index = 0
         self.loaded = False
         self.visibility_timer = 0
         self.LOS = None
@@ -324,7 +325,7 @@ class Level(object):
         self.buildings = {}
         self.particles = []
         self.messages = []
-        self.bullets = []
+        self.artillery_bullets = {}
         # TODO add bullets, for artillery weapons
 
         self.factions = {0: "HRE",
@@ -345,6 +346,11 @@ class Level(object):
         if load_name:
             self.load_dict = bgeutils.load_level()
             self.load_level(self.load_dict)
+
+    def get_new_id(self):
+        new_id = self.level_id_index
+        self.level_id_index += 1
+        return new_id
 
     def check_level_loaded(self):
 
@@ -481,7 +487,7 @@ class Level(object):
         # for friend in range(4):
         #     agents.Vehicle(self, None, [35 + (10 * friend), 55], 0)
 
-        infantry = ["SUPPORT_36", "SCOUT", "HEAVY_ANTI-TANK_TEAM", "RIFLEMEN_39", "ASSAULT_SQUAD_43"]
+        infantry = ["GRENADIERS", "SAPPERS", "CHECKPOINT GUARDS"]
 
         for friend in range(5):
             agents.Infantry(self, random.choice(infantry), [35 + (10 * friend), 45], 0)
@@ -505,6 +511,14 @@ class Level(object):
         self.buildings_added = True
 
     def load_level(self, load_dict):
+
+        level_details = load_dict["level_details"]
+
+        self.camera_controller.camera_hook.worldPosition = level_details["camera_position"]
+        self.camera_controller.zoom_in = level_details["camera_zoom_in"]
+        self.camera_controller.zoom_timer = level_details["camera_zoom_timer"]
+        self.level_id_index = level_details["level_id_index"]
+
         self.map = load_dict["map"]
         loading_agents = load_dict["agents"]
 
@@ -547,6 +561,14 @@ class Level(object):
         self.terrain.paint_map()
 
     def save_level(self):
+
+        camera_position = list(self.camera_controller.camera_hook.worldPosition.copy())
+        camera_zoom_in = self.camera_controller.zoom_in
+        camera_zoom_timer = self.camera_controller.zoom_timer
+        level_id_index = self.level_id_index
+
+        level_details = {"camera_position": camera_position, "camera_zoom_in": camera_zoom_in, "camera_zoom_timer": camera_zoom_timer, "level_id_index": level_id_index}
+
         saving_agents = {}
         for agent_id in self.agents:
             agent = self.agents[agent_id]
@@ -565,6 +587,7 @@ class Level(object):
             saved_map[tile_key] = tile
 
         level_details = {"map": saved_map,
+                         "level_details": level_details,
                          "buildings": saving_buildings,
                          "agents": saving_agents}
 
@@ -600,6 +623,18 @@ class Level(object):
 
         self.agents = next_generation
 
+    def bullets_update(self):
+        next_generation = []
+
+        for bullet in self.artillery_bullets:
+            if not bullet.done:
+                bullet.update()
+                next_generation.append(bullet)
+            else:
+                bullet.terminate()
+
+        self.artillery_bullets = next_generation
+
     def user_interface_update(self):
         # TODO write a full interface with button control
         if "pause" in self.manager.game_input.keys:
@@ -633,6 +668,8 @@ class Level(object):
         target_position = None
         weapon = command["weapon"]
         owner = command["owner"]
+        # TODO give xp etc... to owner
+
         target = self.agents.get(command["target_id"])
         effect = command["effect"]
         origin = mathutils.Vector(command["origin"]).to_3d()
@@ -690,11 +727,68 @@ class Level(object):
                     particles.YellowBulletStreak(self, list(origin), list(target_position), delay=6)
                     particles.YellowBulletStreak(self, list(origin), list(target_position), delay=12)
 
+    def get_infantry_center(self, agent):
+        center = mathutils.Vector()
+        number = 0
+
+        for soldier in agent.soldiers:
+            if not soldier.dead:
+                center += soldier.box.worldPosition.copy()
+                number += 1
+
+        if number > 0:
+            return center / number
+
+    def shoot_artillery(self, command):
+
+        # command = {"label": "ARTILLERY", "weapon": self, "owner": self.infantryman, "target_id": target_id,
+        #            "accuracy": accuracy, "origin": origin, "bullet": self.bullet}
+
+        target_position = None
+        origin = command["origin"]
+        owner = command["owner"]
+        target = self.agents.get(command["target_id"])
+        accuracy = command["accuracy"]
+        effect = command["effect"]
+        bullet = command["bullet"]
+
+        scatter = 18.0 / accuracy
+        if not target:
+            print("artillery error: target doesn't exist!!")
+        else:
+            if target.agent_type == "INFANTRY":
+                target_position = self.get_infantry_center(target)
+
+            if not target_position:
+                target_position = target.box.worldPosition.copy()
+
+            scatter_vector = mathutils.Vector([random.uniform(- scatter, scatter) for axis in range(3)])
+            target_position += scatter_vector
+
+            target_vector = target_position - origin
+            target_distance = target_vector.length
+
+            if target_distance > 0.0:
+                high_point = target_distance * 0.3
+                start = origin
+                start_handle = origin.copy()
+                start_handle.z += high_point
+                end = target_position
+                end_handle = target_position.copy()
+                end_handle.z += high_point
+                curve = mathutils.geometry.interpolate_bezier(start, start_handle, end_handle, end, int(target_distance))
+                bullet_arc = [list(point) for point in curve]
+
+                bullets.Bullet(self, bullet_arc, owner=owner, effect=effect)
+
     def process_commands(self):
 
         for command in self.commands:
             if "SHOOT" in command["label"]:
                 self.shoot(command)
+
+            if "ARTILLERY" in command["label"]:
+                self.shoot_artillery(command)
 
         self.commands = []
 
@@ -803,6 +897,7 @@ class Level(object):
         self.game_audio.update()
         self.mouse_update()
         self.agent_update()
+        self.bullets_update()
         self.particle_update()
         self.user_interface_update()
         self.sound_update()

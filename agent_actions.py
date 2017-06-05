@@ -366,8 +366,6 @@ class InfantryBehavior(object):
         if self.avoiding:
             return "GET_TILE"
 
-        shooting = self.infantryman.weapon.shoot_weapon()
-
         if self.infantryman.agent.prone:
             if not self.prone:
                 return "GO_PRONE"
@@ -375,8 +373,15 @@ class InfantryBehavior(object):
             if self.prone:
                 return "GET_UP"
 
+        grenade = self.infantryman.shoot_grenade()
+        if grenade:
+            return grenade
+
+        shooting = self.infantryman.shoot_weapon()
         if shooting:
             return "SHOOTING"
+
+        # TODO add grenade throw
 
         destination = self.infantryman.get_destination()
         if destination != self.destination:

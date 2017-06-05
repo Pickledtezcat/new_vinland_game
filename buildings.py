@@ -11,8 +11,7 @@ class Building(object):
         self.level = level
 
         if not building_id:
-            self.building_id = "{}${}".format(self.building_type, self.level.agent_id_index)
-            self.level.agent_id_index += 1
+            self.building_id = "{}${}".format(self.building_type, self.level.get_new_id())
         else:
             self.building_id = building_id
 

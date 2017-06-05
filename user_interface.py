@@ -168,20 +168,10 @@ class StatusBar(object):
     def update_position(self):
 
         if self.agent.agent_type == "INFANTRY":
-            center = mathutils.Vector()
-            number = 0
-
-            for soldier in self.agent.soldiers:
-                if not soldier.dead:
-                    center += soldier.box.worldPosition.copy()
-                    number += 1
-
-            if number > 0:
-                position = center / number
-            else:
+            position = self.level.get_infantry_center(self.agent)
+            if not position:
                 self.box.localScale *= 0.0
                 position = self.agent.box.worldPosition.copy()
-
         else:
             position = self.agent.box.worldPosition.copy()
 

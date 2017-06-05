@@ -30,8 +30,7 @@ class Agent(object):
         self.level = level
 
         if not agent_id:
-            self.agent_id = "{}${}".format(self.agent_type, self.level.agent_id_index)
-            self.level.agent_id_index += 1
+            self.agent_id = "{}${}".format(self.agent_type, self.level.get_new_id())
         else:
             self.agent_id = agent_id
 
@@ -389,7 +388,7 @@ class Agent(object):
                 self.agent_targeter.set_target_id = None
 
             if command["label"] == "TARGET_ENEMY":
-                #self.dismount_building()
+                # self.dismount_building()
                 target_id = command["target_id"]
 
                 self.agent_targeter.set_target_id = target_id
@@ -642,6 +641,14 @@ class InfantryMan(object):
         self.sound = stats["sound"]
         self.visible = True
 
+        self.grenade = None
+        if self.special == "SATCHEL_CHARGE":
+            self.grenade = SoldierSatchelCharge(self, stats["grenades"])
+        if self.special == "RIFLE_GRENADE":
+            self.grenade = SoldierRifleGrenade(self, stats["grenades"])
+        else:
+            self.grenade = SoldierGrenade(self, stats["grenades"])
+
         self.weapon = SoldierWeapon(self)
 
         # TODO add other infantry stats here
@@ -690,7 +697,10 @@ class InfantryMan(object):
         self.movement.update()
 
         if not self.dead:
-            self.weapon.update()
+            if self.weapon:
+                self.weapon.update()
+            if self.grenade:
+                self.grenade.update()
 
     def set_occupied(self, target_tile):
         self.agent.level.map[bgeutils.get_key(target_tile)]["occupied"] = self.agent.agent_id
@@ -772,16 +782,25 @@ class InfantryMan(object):
     def set_speed(self):
         self.speed = (self.base_speed * self.agent.walk_mod) * 0.005
 
+    def shoot_weapon(self):
+        if self.weapon:
+            return self.weapon.shoot_weapon()
+
+    def shoot_grenade(self):
+        if self.grenade:
+            return self.grenade.shoot()
+
     def save(self):
 
         save_dict = {"movement_target": self.movement.target, "movement_timer": self.movement.timer,
                      "destination": self.behavior.destination, "history": self.behavior.history,
                      "in_building": self.in_building, "behavior_action": self.behavior.action,
                      "behavior_timer": self.behavior.action_timer, "visible": self.visible,
+                     "grenade_ammo": self.grenade.ammo, "grenade_timer": self.grenade.timer,
                      "toughness": self.toughness, "behavior_prone": self.behavior.prone, "index": self.index,
                      "prone": self.agent.prone, "direction": self.direction, "location": self.location,
                      "infantry_type": self.infantry_type, "occupied": self.occupied, "weapon_timer": self.weapon.timer,
-                     "weapon_ready": self.weapon.ready, "weapon_ammo": self.weapon.ammo, "dead": self.dead}
+                     "weapon_ammo": self.weapon.ammo, "dead": self.dead}
 
         self.clear_occupied()
         return save_dict
@@ -808,12 +827,91 @@ class InfantryMan(object):
         self.toughness = load_dict["toughness"]
 
         self.weapon.timer = load_dict["weapon_timer"]
-        self.weapon.ready = load_dict["weapon_ready"]
         self.weapon.ammo = load_dict["weapon_ammo"]
+        self.grenade.ammo = load_dict["grenade_ammo"]
+        self.grenade.timer = load_dict["grenade_timer"]
+
         self.dead = load_dict["dead"]
 
         self.behavior.update()
         self.animation.update()
+
+
+class SoldierGrenade(object):
+    # TODO save and load grenade states and artillery bullets
+
+    def __init__(self, infantryman, ammo):
+        self.weapon_type = "ARTILLERY"
+        self.infantryman = infantryman
+        self.sound = None
+        self.ammo = ammo
+        self.bullet = "GRENADE"
+        self.accuracy = self.infantryman.agent.accuracy
+        self.max_range = 8
+        self.recharge = 0.01
+        self.timer = 0.0
+        self.ready = False
+        self.in_range = False
+        self.action = "FIDGET"
+
+    def update(self):
+
+        if self.ammo > 0:
+            if not self.infantryman.agent.prone:
+                if not self.infantryman.in_building:
+
+                    self.timer = min(1.0, self.timer + self.recharge)
+                    if self.timer >= 1.0:
+                        self.ready = True
+
+    def get_target(self):
+        target_id = self.infantryman.agent.agent_targeter.enemy_target_id
+        target = self.infantryman.agent.level.agents.get(target_id)
+        return target_id, target
+
+    def check_in_range(self):
+        target_id, target = self.get_target()
+        if target:
+            distance = (target.box.worldPosition.copy() - self.infantryman.box.worldPosition.copy()).length
+            if distance <= self.max_range:
+                return True
+
+    def shoot(self):
+        target_id, target = self.get_target()
+        action = None
+        origin = self.infantryman.box.worldPosition.copy()
+        accuracy = self.accuracy
+
+        if target and self.ready and self.check_in_range():
+            command = {"label": "ARTILLERY", "owner": self.infantryman.agent, "target_id": target_id,
+                       "accuracy": accuracy, "origin": origin, "bullet": self.bullet, "effect": None}
+
+            self.infantryman.agent.level.commands.append(command)
+            self.ready = False
+            self.timer = 0.0
+            self.ammo -= 1
+
+            if self.sound:
+                bgeutils.sound_message("SOUND_EFFECT", ("I_{}".format(self.sound), self.infantryman.box, 0.5, 1.0))
+
+            action = self.action
+
+        return action
+
+
+class SoldierSatchelCharge(SoldierGrenade):
+    def __init__(self, infantryman, ammo):
+        super().__init__(infantryman, ammo)
+        self.bullet = "SATCHEL_CHARGE"
+
+
+class SoldierRifleGrenade(SoldierGrenade):
+    def __init__(self, infantryman, ammo):
+        super().__init__(infantryman, ammo)
+        self.bullet = "RIFLE_GRENADE"
+        self.max_range = 18
+        self.sound = "ANTI_TANK"
+        self.action = "SHOOTING"
 
 
 class SoldierWeapon(object):
@@ -829,8 +927,6 @@ class SoldierWeapon(object):
         self.ammo = 1.0
         self.effect_timer = random.randint(0, 3)
         self.ready = False
-        self.in_range = False
-        self.check_timer = 0
 
     def update(self):
 
@@ -850,15 +946,7 @@ class SoldierWeapon(object):
 
             self.timer = min(1.0, self.timer + recharge)
             if self.timer >= 1.0:
-                self.timer = 0.0
                 self.ready = True
-
-            if self.check_timer <= 0:
-                self.check_timer = 8
-                self.in_range = self.check_in_range()
-
-            else:
-                self.check_timer -= 1
 
         else:
             self.ready = False
@@ -903,7 +991,7 @@ class SoldierWeapon(object):
     def shoot_weapon(self):
         target_id, target = self.get_target()
 
-        if target and self.ready and self.in_range:
+        if target and self.ready and self.check_in_range():
 
             effect = None
 
