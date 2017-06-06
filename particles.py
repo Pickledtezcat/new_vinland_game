@@ -10,7 +10,6 @@ class Particle(object):
         self.ended = False
         self.box = self.add_box()
         self.timer = 0.0
-
         self.level.particles.append(self)
 
     def add_box(self):
@@ -200,8 +199,40 @@ class RedBulletStreak(BulletStreak):
         self.color = [1.0, 0.0, 0.0]
 
 
+class DummyExplosion(Particle):
+    def __init__(self, level, location):
+        super().__init__(level)
 
+        self.color = [1.0, 1.0, 1.0]
+        self.start_scale = mathutils.Vector([0.0, 0.0, 0.0])
+        self.end_scale = mathutils.Vector([1.0, 1.0, 1.0])
+        self.expansion = 0.05
+        self.fall_off = 0.96
+        tile = self.level.get_tile(location)
+        if tile:
+            position = mathutils.Vector([tile["position"][0], tile["position"][1], tile["height"]])
+        else:
+            position = location
 
+        self.box.worldPosition = position
+        sound_command = {"label": "SOUND_EFFECT", "content": ("I_GRENADE", self.box, 0.5, 1.0)}
+        self.level.commands.append(sound_command)
+
+    def add_box(self):
+        return self.level.own.scene.addObject("dummy_explosion", self.level.own, 0)
+
+    def update(self):
+
+        if self.timer >= 1.0:
+            self.ended = True
+        else:
+            self.expansion = max(0.0001, self.expansion * self.fall_off)
+
+            self.timer += self.expansion
+            color = bgeutils.smoothstep(1.0 - self.timer)
+            self.box.color = [color, color * color, 0.0, 1.0]
+
+            self.box.localScale = self.start_scale.lerp(self.end_scale, self.timer)
 
 
 

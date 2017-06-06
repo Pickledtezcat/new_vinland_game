@@ -747,12 +747,13 @@ class Level(object):
         target_position = None
         origin = command["origin"]
         owner = command["owner"]
+        # TODO give xp etc... to owner
+
         target = self.agents.get(command["target_id"])
         accuracy = command["accuracy"]
         effect = command["effect"]
         bullet = command["bullet"]
 
-        scatter = 18.0 / accuracy
         if not target:
             print("artillery error: target doesn't exist!!")
         else:
@@ -762,24 +763,84 @@ class Level(object):
             if not target_position:
                 target_position = target.box.worldPosition.copy()
 
-            scatter_vector = mathutils.Vector([random.uniform(- scatter, scatter) for axis in range(3)])
-            target_position += scatter_vector
-
             target_vector = target_position - origin
             target_distance = target_vector.length
+
+            # TODO ensure accuracy is matched to weapon accuracy as well as gunner skill
+
+            scatter = target_distance / accuracy
+
+            scatter_vector = mathutils.Vector([random.uniform(- scatter, scatter) for _ in range(3)])
+            target_position += scatter_vector
 
             if target_distance > 0.0:
                 high_point = target_distance * 0.3
                 start = origin
-                start_handle = origin.copy()
-                start_handle.z += high_point
                 end = target_position
+                mid_point = start.lerp(end, 0.5)
+
+                start_handle = mid_point.copy()
+                start_handle.z += high_point
                 end_handle = target_position.copy()
                 end_handle.z += high_point
-                curve = mathutils.geometry.interpolate_bezier(start, start_handle, end_handle, end, int(target_distance))
+
+                curve = mathutils.geometry.interpolate_bezier(start, start_handle, end_handle, end, int(target_distance * 0.5))
                 bullet_arc = [list(point) for point in curve]
 
-                bullets.Bullet(self, bullet_arc, owner=owner, effect=effect)
+                bullets.Bullet(self, bullet_arc, owner, effect=effect)
+
+    def explosion(self, command):
+
+        owner = command["owner"]
+        # TODO give xp etc... to owner passed as agent_id
+        position = command["position"]
+        location = [int(position[0]), int(position[1])]
+
+        effect = command["effect"]
+        damage = command["damage"]
+
+        explosion_chart = [0, 1, 4, 9, 16, 25, 36, 49, 64, 81, 100, 121, 144, 169, 196, 225, 256]
+        max_fall_off = 0
+
+        if effect:
+            if effect == "DUMMY_EXPLOSION":
+                particles.DummyExplosion(self, location)
+
+        for i in range(16):
+            fall_off = explosion_chart[i]
+            if damage > fall_off:
+                print(damage, fall_off)
+                max_fall_off = i
+
+        max_fall_off = min(16, int(max_fall_off * 1.5))
+        x, y = location
+
+        for ex in range(-max_fall_off, max_fall_off):
+            for ey in range(-max_fall_off, max_fall_off):
+                damage_reduction = explosion_chart[abs(ex)]
+
+                effective_damage = max(0, damage - damage_reduction)
+                explosion_key = [x+ex, y+ey]
+                tile = self.get_tile(explosion_key)
+                if tile:
+                    occupant = tile["occupied"]
+                    if occupant:
+                        agent = self.agents.get(occupant)
+                        if agent:
+                            if agent.agent_type == "INFANTRY":
+                                soldier_list = [soldier for soldier in agent.soldiers if soldier.location == explosion_key]
+                                if soldier_list:
+                                    soldier = soldier_list[0]
+                                    if soldier.behaviour.prone:
+                                        effective_damage = int(effective_damage * 0.5)
+
+                                    if soldier.in_building:
+                                        effective_damage = int(effective_damage * 0.5)
+
+                                    # TODO add shock beyond effective damage range
+                                    soldier.toughness -= (effective_damage * 10)
+
+                            # TODO handle vehicles using effective damage
 
     def process_commands(self):
 
@@ -790,23 +851,21 @@ class Level(object):
             if "ARTILLERY" in command["label"]:
                 self.shoot_artillery(command)
 
-        self.commands = []
+            if "EXPLOSION" in command["label"]:
+                self.explosion(command)
 
-    def load(self):
-        if self.check_level_loaded():
-            self.loaded = True
-
-    def sound_update(self):
-
-        for message in bge.logic.globalDict["sounds"]:
-            if message["header"] == "SOUND_EFFECT":
-                sound, owner, attenuation, volume_scale = message["content"]
+            if command["label"] == "SOUND_EFFECT":
+                sound, owner, attenuation, volume_scale = command["content"]
                 if not owner:
                     owner = self.listener
 
                 self.game_audio.sound_effect(sound, owner, attenuation=attenuation, volume_scale=volume_scale)
 
-        bge.logic.globalDict["sounds"] = []
+        self.commands = []
+
+    def load(self):
+        if self.check_level_loaded():
+            self.loaded = True
 
     def inside_camera(self, agent):
 
@@ -900,6 +959,5 @@ class Level(object):
         self.bullets_update()
         self.particle_update()
         self.user_interface_update()
-        self.sound_update()
         self.process_commands()
         self.visibility_update()

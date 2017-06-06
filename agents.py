@@ -848,7 +848,7 @@ class SoldierGrenade(object):
         self.bullet = "GRENADE"
         self.accuracy = self.infantryman.agent.accuracy
         self.max_range = 8
-        self.recharge = 0.01
+        self.recharge = 0.002
         self.timer = 0.0
         self.ready = False
         self.in_range = False
@@ -892,7 +892,9 @@ class SoldierGrenade(object):
             self.ammo -= 1
 
             if self.sound:
-                bgeutils.sound_message("SOUND_EFFECT", ("I_{}".format(self.sound), self.infantryman.box, 0.5, 1.0))
+                sound_command = {"label": "SOUND_EFFECT",
+                                 "content": ("I_{}".format(self.sound), self.infantryman.box, 0.5, 1.0)}
+                self.infantryman.agent.level.commands.append(sound_command)
 
             action = self.action
 
@@ -1023,8 +1025,12 @@ class SoldierWeapon(object):
                        "effect": effect, "origin": origin, "effective_range": effective_range,
                        "effective_power": effective_power}
 
-            bgeutils.sound_message("SOUND_EFFECT", ("I_{}".format(self.sound), self.infantryman.box, 0.3, 1.0))
             self.infantryman.agent.level.commands.append(command)
+
+            sound_command = {"label": "SOUND_EFFECT",
+                             "content": ("I_{}".format(self.sound), self.infantryman.box, 0.5, 1.0)}
+            self.infantryman.agent.level.commands.append(sound_command)
+
             self.ready = False
             self.timer = 0.0
             self.ammo -= 0.01

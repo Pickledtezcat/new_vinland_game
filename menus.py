@@ -91,7 +91,9 @@ class Button(object):
         if self.recharge == 0:
             if not self.clicked:
                 if self.click:
-                    bgeutils.sound_message("SOUND_EFFECT", ("SELECT_1", None, 0.3, 1.0))
+                    sound_command = {"label": "SOUND_EFFECT", "content": ("SELECT_1", None, 0.3, 1.0)}
+                    self.widget.menu.commands.append(sound_command)
+
                     self.click = False
                     self.clicked = True
             else:
@@ -160,7 +162,8 @@ class TextButton(Button):
                         event_string = "{}{}".format(event_string, bge.events.EventToCharacter(event_key, shift_held))
 
         if play_sound:
-            bgeutils.sound_message("SOUND_EFFECT", ("SELECT_2", None, 0.3, 1.0))
+            sound_command = {"label": "SOUND_EFFECT", "content": ("SELECT_2", None, 0.3, 1.0)}
+            self.widget.menu.commands.append(sound_command)
 
         self.text_contents = "{}{}".format(self.text_contents, event_string)
         self.text_contents = self.text_contents[:self.text_width]
@@ -172,7 +175,9 @@ class TextButton(Button):
         if not self.focus:
             self.text_cursor.visible = False
             if self.click:
-                bgeutils.sound_message("SOUND_EFFECT", ("SELECT_1", None, 0.3, 1.0))
+                sound_command = {"label": "SOUND_EFFECT", "content": ("SELECT_1", None, 0.3, 1.0)}
+                self.widget.menu.commands.append(sound_command)
+
                 self.switch(True)
                 self.click = False
                 self.focus = True
@@ -236,6 +241,7 @@ class Widget(object):
 
     def process_commands(self):
         for command in self.commands:
+
             if command.header == "EXIT":
                 bge.logic.endGame()
 
@@ -409,6 +415,7 @@ class Menu(object):
         self.listener = self.manager.main_camera
         self.game_audio = game_audio.Audio(self)
         self.user_interface = user_interface.MenuInterface(self)
+        self.commands = []
 
         widget_adders = bgeutils.get_ob_list("widget_adder", self.level_object.children)
         self.adders = sorted(widget_adders, key=lambda adder: adder.get("widget_adder"))
@@ -442,16 +449,16 @@ class Menu(object):
         return target_ray
 
     def update(self):
-        
-        for message in bge.logic.globalDict["sounds"]:                        
-            if message["header"] == "SOUND_EFFECT":
-                sound, owner, attenuation, volume_scale = message["content"]
+
+        for command in self.commands:
+            if command["label"] == "SOUND_EFFECT":
+                sound, owner, attenuation, volume_scale = command["content"]
                 if not owner:
                     owner = self.listener
 
                 self.game_audio.sound_effect(sound, owner, attenuation=attenuation, volume_scale=volume_scale)
 
-        bge.logic.globalDict["sounds"] = []
+        self.commands = []
 
         self.game_audio.update()
 

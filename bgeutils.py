@@ -11,10 +11,6 @@ class GeneralMessage(object):
         self.content = content
 
 
-def sound_message(header, content=None):
-    bge.logic.globalDict["sounds"].append({"header": header, "content": content})
-
-
 def get_key(position):
     return "{}${}".format(int(round(position[0])), int(round(position[1])))
 
@@ -120,7 +116,6 @@ def load_settings():
 
     if not bge.logic.globalDict.get("version"):
         bge.logic.globalDict["version"] = vinland_version
-        bge.logic.globalDict["sounds"] = []
         bge.logic.globalDict["profiles"] = {}
         bge.logic.globalDict["game_mode"] = "MENU_MODE"
         bge.logic.globalDict["mode_change"] = False

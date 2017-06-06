@@ -1,9 +1,10 @@
 import bge
 import bgeutils
 import mathutils
+import particles
 
 class Bullet(object):
-    def __init__(self, level, curve, bullet_id=None, timer=0.0, owner=None, effect=None):
+    def __init__(self, level, curve, owner, bullet_id=None, timer=0.0, effect=None):
 
         self.bullet_type = "BULLET"
         self.level = level
@@ -21,7 +22,7 @@ class Bullet(object):
         self.timer = timer
         self.index = 0
         self.owner = owner
-        self.speed = 0.3
+        self.speed = 0.15
         self.done = False
         self.level.artillery_bullets.append(self)
 
@@ -32,6 +33,8 @@ class Bullet(object):
         return self.level.scene.addObject("grenade_object", self.level.own, 0)
 
     def detonate(self):
+        command = {"label": "EXPLOSION", "effect": "DUMMY_EXPLOSION", "damage": 1, "position": self.box.worldPosition.copy(), "owner": self.owner}
+        self.level.commands.append(command)
         self.done = True
 
     def update(self):
