@@ -12,7 +12,6 @@ import LOS
 import map_generation
 import bullets
 
-
 class MovementMarker(object):
     def __init__(self, level, owner, position, offset):
         self.level = level
@@ -637,8 +636,15 @@ class Level(object):
 
     def user_interface_update(self):
         # TODO write a full interface with button control
+        # TODO use commands to control AI, including selection groups
         if "pause" in self.manager.game_input.keys:
             self.paused = not self.paused
+
+        player_agents = []
+        for agent_key in self.agents:
+            agent = self.agents[agent_key]
+            if agent.team == 0:
+                player_agents.append(agent)
 
         command = None
 
@@ -650,12 +656,25 @@ class Level(object):
             command = {"label": "STANCE_CHANGE", "stance": "DEFEND"}
         if "f" in self.manager.game_input.keys:
             command = {"label": "STANCE_CHANGE", "stance": "FLANK"}
+            for agent in player_agents:
+                if agent.selection_group == 2:
+                    agent.knocked_out = True
 
-        if command:
-            for agent_key in self.agents:
-                agent = self.agents[agent_key]
-                if agent.team == 0 and agent.selected:
-                    agent.commands.append(command)
+        number_command = None
+
+        additive = "shift" in self.manager.game_input.keys
+        setting = "control" in self.manager.game_input.keys
+
+        for n in range(10):
+            number_key = str(n)
+            if number_key in self.manager.game_input.keys:
+                number_command = {"label": "GROUP_SELECT", "additive": additive, "setting": setting, "number": n}
+
+        for agent in player_agents:
+            if command and agent.selected:
+                agent.commands.append(command)
+            if number_command:
+                agent.commands.append(number_command)
 
         self.manager.debugger.printer(self.paused, "paused")
         self.user_interface.update()
@@ -727,21 +746,11 @@ class Level(object):
                     particles.YellowBulletStreak(self, list(origin), list(target_position), delay=6)
                     particles.YellowBulletStreak(self, list(origin), list(target_position), delay=12)
 
-    def get_infantry_center(self, agent):
-        center = mathutils.Vector()
-        number = 0
-
-        for soldier in agent.soldiers:
-            if not soldier.dead:
-                center += soldier.box.worldPosition.copy()
-                number += 1
-
-        if number > 0:
-            return center / number
-
     def shoot_artillery(self, command):
 
-        # command = {"label": "ARTILLERY", "weapon": self, "owner": self.infantryman, "target_id": target_id,
+        # TODO save and load artillery bullets
+
+        # example_command = {"label": "ARTILLERY", "weapon": self, "owner": self.infantryman, "target_id": target_id,
         #            "accuracy": accuracy, "origin": origin, "bullet": self.bullet}
 
         target_position = None
@@ -758,7 +767,7 @@ class Level(object):
             print("artillery error: target doesn't exist!!")
         else:
             if target.agent_type == "INFANTRY":
-                target_position = self.get_infantry_center(target)
+                target_position = target.get_infantry_center()
 
             if not target_position:
                 target_position = target.box.worldPosition.copy()
@@ -784,7 +793,9 @@ class Level(object):
                 end_handle = target_position.copy()
                 end_handle.z += high_point
 
-                curve = mathutils.geometry.interpolate_bezier(start, start_handle, end_handle, end, int(target_distance * 0.5))
+                resolution = max(3, int(target_distance * 0.5))
+
+                curve = mathutils.geometry.interpolate_bezier(start, start_handle, end_handle, end, resolution)
                 bullet_arc = [list(point) for point in curve]
 
                 bullets.Bullet(self, bullet_arc, owner, effect=effect)
@@ -812,7 +823,7 @@ class Level(object):
                 print(damage, fall_off)
                 max_fall_off = i
 
-        max_fall_off = min(16, int(max_fall_off * 1.5))
+        max_fall_off = min(16, max_fall_off + 1)
         x, y = location
 
         for ex in range(-max_fall_off, max_fall_off):
@@ -831,7 +842,7 @@ class Level(object):
                                 soldier_list = [soldier for soldier in agent.soldiers if soldier.location == explosion_key]
                                 if soldier_list:
                                     soldier = soldier_list[0]
-                                    if soldier.behaviour.prone:
+                                    if soldier.behavior.prone:
                                         effective_damage = int(effective_damage * 0.5)
 
                                     if soldier.in_building:
@@ -900,6 +911,7 @@ class Level(object):
 
                 for agent_key in self.agents:
                     agent = self.agents[agent_key]
+                    knocked_out = agent.knocked_out
 
                     if not agent.dead:
                         is_enemy = agent.team != 0
@@ -908,8 +920,13 @@ class Level(object):
                         suspect_distance = max_distance * 2.0
 
                         if not is_enemy:
+                            if agent.agent_type == "INFANTRY":
+                                location = bgeutils.position_to_location(agent.get_infantry_center())
+                            else:
+                                location = agent.location
+
                             visibility_dict[agent_key] = {"enemy": is_enemy, "distance": visibility_distance,
-                                                          "location": agent.location}
+                                                          "location": location, "knocked_out": knocked_out}
                             if self.inside_camera(agent):
                                 agent.set_visible(True)
 
@@ -924,7 +941,7 @@ class Level(object):
                                             enemy.set_seen(True)
                                             enemy.set_visible(True)
                                             visibility_dict[enemy_key] = {"enemy": True, "distance": 0,
-                                                                          "location": enemy.location}
+                                                                          "location": enemy.location, "knocked_out": knocked_out}
 
                                         elif enemy_distance < suspect_distance:
                                             enemy.set_suspect(True)

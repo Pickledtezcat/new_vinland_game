@@ -19,6 +19,10 @@ def get_loc(key):
     return [int(v) for v in key.split("$")]
 
 
+def position_to_location(position):
+    return [int(round(v)) for v in position][:2]
+
+
 def smoothstep(x):
     return x * x * (3 - 2 * x)
 
@@ -145,19 +149,23 @@ def create_brush(brush_size, radius, RGB, outer=0, smooth=False):
     center = mathutils.Vector([brush_size * 0.5, brush_size * 0.5])
     rgb = RGB
     half_rgb = [int(color * 0.5) for color in rgb]
+    quarter_rgb = [int(color * 0.2) for color in half_rgb]
 
     for x in range(brush_size):
         for y in range(brush_size):
             i = y * (brush_size * 4) + x * 4
             location = mathutils.Vector([x, y])
             target_vector = location - center
-            length = target_vector.length
+            length = int(round(target_vector.length))
 
             if length == radius and smooth:
                 pixel = half_rgb
             elif length > radius:
-                if outer > 0 and length < outer:
-                    pixel = half_rgb
+                if outer > 0 and length <= outer:
+                    if length == outer:
+                        pixel = quarter_rgb
+                    else:
+                        pixel = half_rgb
                 else:
                     pixel = [0, 0, 0]
             else:

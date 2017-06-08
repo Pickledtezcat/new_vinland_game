@@ -107,13 +107,18 @@ class StatusBar(object):
         self.stance_icon = bgeutils.get_ob("stance_icon", self.box.children)
         self.health_bar = bgeutils.get_ob("health_bar", self.box.childrenRecursive)
         self.shock_bar = bgeutils.get_ob("shock_bar", self.box.childrenRecursive)
-        self.group_number = bgeutils.get_ob("group_number", self.box.children)
+        self.group_number_icon = bgeutils.get_ob("group_number", self.box.children)
         self.rank_icon = bgeutils.get_ob("rank_icon", self.box.children)
         self.status_icon = bgeutils.get_ob("status_icon", self.box.children)
 
+        self.group_number = None
+        self.stance = None
+        self.rank = None
+        self.status = None
+
         self.status_icon.visible = False
         self.stance_icon.visible = False
-        self.group_number.visible = False
+        self.group_number_icon.visible = False
         self.rank_icon.visible = False
 
         self.green = [0.0, 1.0, 0.0, 1.0]
@@ -127,7 +132,7 @@ class StatusBar(object):
 
         self.status_icon.color = self.hud
         self.stance_icon.color = self.hud
-        self.group_number.color = self.hud
+        self.group_number_icon.color = self.hud
         self.rank_icon.color = self.hud
 
     def terminate(self):
@@ -158,17 +163,32 @@ class StatusBar(object):
                     self.health_bar.color = self.green
 
     def secondary_icons(self, setting):
+
         self.stance_icon.visible = setting
 
         if setting:
-            self.stance_icon.replaceMesh("UI_stance_{}".format(self.agent.stance))
+            stance = self.agent.stance
+            if self.stance != stance:
+                self.stance = stance
+                self.stance_icon.replaceMesh("UI_stance_{}".format(self.agent.stance))
 
-        # TODO do other secondary icons
+            group_number = self.agent.selection_group
+
+            if group_number:
+                self.group_number_icon.visible = setting
+                if group_number != self.group_number:
+                    self.group_number = group_number
+                    self.group_number_icon.replaceMesh("group_number_{}".format(group_number))
+
+        else:
+            self.group_number_icon.visible = setting
+
+        # TODO do other secondary icons (status, rank)
 
     def update_position(self):
 
         if self.agent.agent_type == "INFANTRY":
-            position = self.level.get_infantry_center(self.agent)
+            position = self.agent.get_infantry_center()
             if not position:
                 self.box.localScale *= 0.0
                 position = self.agent.box.worldPosition.copy()

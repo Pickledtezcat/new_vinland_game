@@ -17,6 +17,11 @@ class VisionPaint(object):
             outer = max(19, 6 * i)
             self.brush_dict[i] = bgeutils.create_brush(self.brush_size, inner, [0, 0, 255], outer=outer, smooth=True)
 
+        self.non_brush_dict = {}
+        for i in range(3, 8):
+            outer = max(19, 6 * i)
+            self.non_brush_dict[i] = bgeutils.create_brush(self.brush_size, 0, [0, 0, 255], outer=outer, smooth=True)
+
         self.player_pixel = bgeutils.create_brush(1, 1, [0, 255, 0])
         self.enemy_pixel = bgeutils.create_brush(1, 1, [255, 0, 0])
 
@@ -55,6 +60,7 @@ class VisionPaint(object):
             agent = paint_dict[paint_key]
             enemy = agent["enemy"]
             distance = agent["distance"]
+            knocked_out = agent["knocked_out"]
             x, y = agent["location"]
 
             bx = x - int(self.brush_size * 0.5)
@@ -66,7 +72,12 @@ class VisionPaint(object):
                 agent_brush = self.player_pixel
 
             if distance > 0:
-                vision_brush = self.brush_dict[distance]
+                # TODO can set non visibility for player agents, for example knocked out tanks
+
+                if not knocked_out:
+                    vision_brush = self.brush_dict[distance]
+                else:
+                    vision_brush = self.non_brush_dict[distance]
                 self.canvas.source.plot(vision_brush, self.brush_size, self.brush_size, bx, by,
                                         bge.texture.IMB_BLEND_LIGHTEN)
             self.canvas.source.plot(agent_brush, 1, 1, x, y, bge.texture.IMB_BLEND_LIGHTEN)
