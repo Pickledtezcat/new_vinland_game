@@ -84,6 +84,8 @@ class Agent(object):
         if load_dict:
             self.reload(load_dict)
 
+    # TODO set up a get_position function, for targeting, and other functions to get infantry center or tank center
+
     def get_visual_range(self):
 
         visual_range = 3

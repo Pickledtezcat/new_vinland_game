@@ -486,7 +486,7 @@ class Level(object):
         # for friend in range(4):
         #     agents.Vehicle(self, None, [35 + (10 * friend), 55], 0)
 
-        infantry = ["GRENADIERS", "SAPPERS", "CHECKPOINT GUARDS"]
+        infantry = ["GRENADIERS", "HEAVY_SUPPORT_TEAM", "SUPPORT_41", "SUPPORT_39", "PARATROOPERS"]
 
         for friend in range(5):
             agents.Infantry(self, random.choice(infantry), [35 + (10 * friend), 45], 0)
@@ -920,10 +920,11 @@ class Level(object):
                         suspect_distance = max_distance * 2.0
 
                         if not is_enemy:
+                            location = agent.location
                             if agent.agent_type == "INFANTRY":
-                                location = bgeutils.position_to_location(agent.get_infantry_center())
-                            else:
-                                location = agent.location
+                                position = agent.get_infantry_center()
+                                if position:
+                                    location = bgeutils.position_to_location(position)
 
                             visibility_dict[agent_key] = {"enemy": is_enemy, "distance": visibility_distance,
                                                           "location": location, "knocked_out": knocked_out}
