@@ -78,6 +78,7 @@ class AgentMovement(object):
         else:
             if not self.done:
                 self.done = True
+                self.agent.get_center()
                 self.agent.clear_occupied()
                 self.agent.set_occupied(self.agent.location)
 
@@ -201,34 +202,15 @@ class InfantryAnimation(object):
         self.last_action = None
         self.infantryman.sprite.visible = True
 
-    def get_vector(self, target_vector):
-
-        if target_vector.length <= 0.0:
-            target_vector = mathutils.Vector([0.0, 1.0])
-
-        search_array = [[1, 0], [1, 1], [0, 1], [1, -1], [-1, 0], [-1, 1], [0, -1], [-1, -1]]
-
-        best_facing = None
-        best_angle = 4.0
-
-        for facing in search_array:
-            facing_vector = mathutils.Vector(facing)
-            angle = facing_vector.angle(target_vector.to_2d())
-            if angle < best_angle:
-                best_facing = facing
-                best_angle = angle
-
-        return best_facing
-
     def get_target_direction(self, action):
 
-        shooting_actions = ["FACE_TARGET", "SHOOTING"]
+        shooting_actions = ["FACE_TARGET"]
 
         if action in shooting_actions:
             target = self.infantryman.agent.level.agents.get(self.infantryman.agent.agent_targeter.enemy_target_id)
             if target:
                 target_vector = target.box.worldPosition.copy() - self.infantryman.box.worldPosition.copy()
-                return self.get_vector(target_vector)
+                return bgeutils.get_closest_vector(target_vector)
 
         return self.infantryman.direction
 
@@ -400,6 +382,7 @@ class InfantryBehavior(object):
                 self.history = [self.infantryman.location]
                 return "FACE_GUN"
             if self.infantryman.agent.agent_targeter.enemy_target_id:
+
                 self.history = [self.infantryman.location]
                 return "FACE_TARGET"
             self.history = [self.infantryman.location]
@@ -642,59 +625,64 @@ class AgentTargeter(object):
 
         """use set_target_id to manually set a target, otherwise automatically gets nearest"""
 
-        if self.set_target_id:
-            set_target = self.agent.level.agents[self.set_target_id]
-            check_set_target = self.is_valid_target(set_target)
-            if check_set_target:
-                self.enemy_target_id = self.set_target_id
-            else:
-                self.set_target_id = None
+        if self.agent.dead:
+            self.enemy_target_id = None
+            self.set_target_id = None
 
         else:
-            if self.check_timer < 0:
-                self.check_timer = 12
-                closest_enemy_id = self.get_closest_enemy()
-
-                if closest_enemy_id:
-                    self.enemy_target_id = closest_enemy_id
+            if self.set_target_id:
+                set_target = self.agent.level.agents[self.set_target_id]
+                check_set_target = self.is_valid_target(set_target)
+                if check_set_target:
+                    self.enemy_target_id = self.set_target_id
+                else:
+                    self.set_target_id = None
 
             else:
-                self.check_timer -= 1
+                if self.check_timer < 0:
+                    self.check_timer = 12
+                    closest_enemy_id = self.get_closest_enemy()
 
-        local_y = self.agent.movement_hook.getAxisVect([0.0, 1.0, 0.0]).to_2d()
-        target_vector = None
+                    if closest_enemy_id:
+                        self.enemy_target_id = closest_enemy_id
 
-        if self.enemy_target_id:
-            enemy_agent = self.agent.level.agents[self.enemy_target_id]
-            target = self.is_valid_target(enemy_agent)
+                else:
+                    self.check_timer -= 1
 
-            if target:
-                target_vector, target_distance = target
+            local_y = self.agent.movement_hook.getAxisVect([0.0, 1.0, 0.0]).to_2d()
+            target_vector = None
+
+            if self.enemy_target_id:
+                enemy_agent = self.agent.level.agents[self.enemy_target_id]
+                target = self.is_valid_target(enemy_agent)
+
+                if target:
+                    target_vector, target_distance = target
+                else:
+                    self.enemy_target_id = None
+
+            if target_vector:
+                target_angle = local_y.angle_signed(target_vector, 0.0) * -1.0
             else:
-                self.enemy_target_id = None
+                target_angle = 0.0
 
-        if target_vector:
-            target_angle = local_y.angle_signed(target_vector, 0.0) * -1.0
-        else:
-            target_angle = 0.0
+            turret_speed = self.agent.turret_speed
+            turret_difference = abs(self.turret_angle - target_angle)
 
-        turret_speed = self.agent.turret_speed
-        turret_difference = abs(self.turret_angle - target_angle)
+            self.turret_on_target = False
+            self.hull_on_target = False
 
-        self.turret_on_target = False
-        self.hull_on_target = False
+            if abs(target_angle) < 0.5:
+                self.hull_on_target = True
 
-        if abs(target_angle) < 0.5:
-            self.hull_on_target = True
+            if turret_difference < 0.5:
+                self.turret_on_target = True
 
-        if turret_difference < 0.5:
-            self.turret_on_target = True
+            if turret_difference > 0.02:
+                scale = turret_difference / 3.142
+                turret_speed /= scale
 
-        if turret_difference > 0.02:
-            scale = turret_difference / 3.142
-            turret_speed /= scale
-
-            self.turret_angle = bgeutils.interpolate_float(self.turret_angle, target_angle, turret_speed)
+                self.turret_angle = bgeutils.interpolate_float(self.turret_angle, target_angle, turret_speed)
 
 
 class AgentAnimator(object):

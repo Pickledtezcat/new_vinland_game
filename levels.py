@@ -689,22 +689,23 @@ class Level(object):
         owner = command["owner"]
         # TODO give xp etc... to owner
 
-        target = self.agents.get(command["target_id"])
+        target = command["target"]
         effect = command["effect"]
         origin = mathutils.Vector(command["origin"]).to_3d()
         effective_range = command["effective_range"]
         effective_power = command["effective_power"]
+        shock = effective_power * 0.5
+        best_target = command["closest_soldier"]
+        target_distance = command["target_distance"]
 
         if command["label"] == "SMALL_ARMS_SHOOT":
-            best_target = None
-            target_position = None
 
             if target:
                 if target.agent_type == "INFANTRY":
-
-                    best_target, target_distance = target.get_closest_soldier(origin)
                     if best_target:
                         if best_target.in_building:
+                            shock *= 0.5
+
                             if random.randint(0, 3) >= 3:
                                 target_position = None
 
@@ -715,6 +716,7 @@ class Level(object):
                             target_position = best_target.box.worldPosition.copy()
 
                         if best_target.behavior.prone:
+                            shock *= 0.5
                             effective_range -= 5
 
                         to_hit = max(1, effective_range - target_distance)
@@ -723,16 +725,21 @@ class Level(object):
                             target_position = None
 
                     if target_position:
-                        if effective_power > best_target.toughness:
-                            damage = max(1, int(effective_power * 0.5))
-                            best_target.toughness -= damage
+                        damage = int(effective_power)
+                        if effective_power < best_target.toughness:
+                            damage *= 0.5
+
+                        best_target.toughness -= max(1, int(damage))
 
                     else:
+                        shock *= 0.5
                         if best_target:
                             base_location = best_target.box.worldPosition.copy()
                             random_vector = mathutils.Vector(
                                 [random.uniform(-3.0, 3.0), random.uniform(-3.0, 3.0), 0.0])
                             target_position = base_location + random_vector
+
+                    target.shock += shock
 
             if target_position and effect:
                 if effect == "RED_STREAK":
@@ -766,11 +773,7 @@ class Level(object):
         if not target:
             print("artillery error: target doesn't exist!!")
         else:
-            if target.agent_type == "INFANTRY":
-                target_position = target.get_infantry_center()
-
-            if not target_position:
-                target_position = target.box.worldPosition.copy()
+            target_position = target.center.copy()
 
             target_vector = target_position - origin
             target_distance = target_vector.length
@@ -810,48 +813,57 @@ class Level(object):
         effect = command["effect"]
         damage = command["damage"]
 
-        explosion_chart = [0, 1, 4, 9, 16, 25, 36, 49, 64, 81, 100, 121, 144, 169, 196, 225, 256]
+        explosion_chart = [0, 1, 2, 4, 8, 16, 32, 64, 128, 256]
         max_fall_off = 0
 
         if effect:
             if effect == "DUMMY_EXPLOSION":
                 particles.DummyExplosion(self, location)
 
-        for i in range(16):
+        for i in range(9):
             fall_off = explosion_chart[i]
             if damage > fall_off:
-                print(damage, fall_off)
                 max_fall_off = i
 
-        max_fall_off = min(16, max_fall_off + 1)
+        max_fall_off = min(9, max_fall_off + 2)
         x, y = location
 
         for ex in range(-max_fall_off, max_fall_off):
             for ey in range(-max_fall_off, max_fall_off):
                 damage_reduction = explosion_chart[abs(ex)]
+                shock_reduction = explosion_chart[max(0, abs(ex) - 1)]
 
                 effective_damage = max(0, damage - damage_reduction)
-                explosion_key = [x+ex, y+ey]
-                tile = self.get_tile(explosion_key)
-                if tile:
-                    occupant = tile["occupied"]
-                    if occupant:
-                        agent = self.agents.get(occupant)
-                        if agent:
-                            if agent.agent_type == "INFANTRY":
-                                soldier_list = [soldier for soldier in agent.soldiers if soldier.location == explosion_key]
-                                if soldier_list:
-                                    soldier = soldier_list[0]
-                                    if soldier.behavior.prone:
-                                        effective_damage = int(effective_damage * 0.5)
+                shock = max(0, damage - shock_reduction)
 
-                                    if soldier.in_building:
-                                        effective_damage = int(effective_damage * 0.5)
+                if shock > 0:
+                    explosion_key = [x+ex, y+ey]
+                    tile = self.get_tile(explosion_key)
+                    if tile:
+                        occupant = tile["occupied"]
+                        if occupant:
+                            agent = self.agents.get(occupant)
 
-                                    # TODO add shock beyond effective damage range
-                                    soldier.toughness -= (effective_damage * 10)
+                            if agent:
+                                if agent.agent_type == "INFANTRY":
+                                    effective_damage *= 10
+                                    shock *= 10
 
-                            # TODO handle vehicles using effective damage
+                                    soldier_list = [soldier for soldier in agent.soldiers if soldier.location == explosion_key]
+                                    if soldier_list:
+                                        soldier = soldier_list[0]
+                                        if soldier.behavior.prone:
+                                            shock *= 0.5
+                                            effective_damage = int(effective_damage * 0.5)
+
+                                        if soldier.in_building:
+                                            shock *= 0.5
+                                            effective_damage = int(effective_damage * 0.5)
+
+                                        soldier.toughness -= effective_damage
+                                        agent.shock += shock
+
+                                # TODO handle vehicles using effective damage
 
     def process_commands(self):
 
@@ -880,14 +892,13 @@ class Level(object):
 
     def inside_camera(self, agent):
 
+        if self.camera_controller.main_camera.sphereInsideFrustum(agent.box.worldPosition.copy(), 4):
+            return True
+
         if agent.agent_type == "INFANTRY":
             for soldier in agent.soldiers:
                 if self.camera_controller.main_camera.pointInsideFrustum(soldier.box.worldPosition.copy()):
                     return True
-
-        else:
-            if self.camera_controller.main_camera.sphereInsideFrustum(agent.box.worldPosition.copy(), 4):
-                return True
 
     def visibility_update(self):
 
@@ -913,6 +924,9 @@ class Level(object):
                     agent = self.agents[agent_key]
                     knocked_out = agent.knocked_out
 
+                    if self.inside_camera(agent):
+                        agent.set_visible(True)
+
                     if not agent.dead:
                         is_enemy = agent.team != 0
                         visibility_distance = agent.get_visual_range()
@@ -920,16 +934,11 @@ class Level(object):
                         suspect_distance = max_distance * 2.0
 
                         if not is_enemy:
-                            location = agent.location
-                            if agent.agent_type == "INFANTRY":
-                                position = agent.get_infantry_center()
-                                if position:
-                                    location = bgeutils.position_to_location(position)
+                            position = agent.center.copy()
+                            location = bgeutils.position_to_location(position)
 
                             visibility_dict[agent_key] = {"enemy": is_enemy, "distance": visibility_distance,
                                                           "location": location, "knocked_out": knocked_out}
-                            if self.inside_camera(agent):
-                                agent.set_visible(True)
 
                             for enemy_key in self.agents:
                                 enemy = self.agents[enemy_key]
@@ -940,19 +949,11 @@ class Level(object):
                                         if enemy_distance <= max_distance:
                                             seen_agents.append(enemy_key)
                                             enemy.set_seen(True)
-                                            enemy.set_visible(True)
                                             visibility_dict[enemy_key] = {"enemy": True, "distance": 0,
                                                                           "location": enemy.location, "knocked_out": knocked_out}
 
                                         elif enemy_distance < suspect_distance:
                                             enemy.set_suspect(True)
-
-                                else:
-                                    if enemy.dead:
-                                        friend_distance = agent.box.getDistanceTo(enemy.box)
-                                        if friend_distance <= max_distance:
-                                            if self.inside_camera(enemy):
-                                                enemy.set_visible(True)
 
                         else:
                             for player_key in self.agents:

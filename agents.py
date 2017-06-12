@@ -18,9 +18,12 @@ class Agent(object):
     turning_speed = 0.01
     damping = 0.1
     turret_speed = 0.01
+    rank = 2
     accuracy = 6
     vision_distance = 0
     initial_health = 0
+    shock = 0.0
+    resistance = 0.0
 
     stance = "AGGRESSIVE"
     agent_type = "VEHICLE"
@@ -77,6 +80,8 @@ class Agent(object):
         self.load_stats()
 
         self.state = None
+        self.center = None
+        self.get_center()
 
         self.set_starting_state()
         self.level.agents[self.agent_id] = self
@@ -84,7 +89,8 @@ class Agent(object):
         if load_dict:
             self.reload(load_dict)
 
-    # TODO set up a get_position function, for targeting, and other functions to get infantry center or tank center
+    def get_center(self):
+        self.center = self.box.worldPosition.copy()
 
     def get_visual_range(self):
 
@@ -121,7 +127,7 @@ class Agent(object):
     def save(self):
 
         save_dict = {"agent_type": self.agent_type, "team": self.team, "location": self.location, "dead": self.dead,
-                     "knocked_out": self.knocked_out,
+                     "knocked_out": self.knocked_out, "rank": self.rank, "shock": self.shock,
                      "direction": self.direction, "enter_building": self.enter_building,
                      "selected": self.selected, "state_name": self.state.name, "load_name": self.load_name,
                      "state_count": self.state.count, "movement_target": self.movement.target,
@@ -145,6 +151,8 @@ class Agent(object):
         self.load_name = agent_dict["load_name"]
         self.dead = agent_dict["dead"]
         self.knocked_out = agent_dict["knocked_out"]
+        self.rank = agent_dict["rank"]
+        self.shock = agent_dict["shock"]
 
         self.movement.load_movement(agent_dict["movement_target"], agent_dict["movement_target_direction"],
                                     agent_dict["movement_timer"])
@@ -254,6 +262,19 @@ class Agent(object):
         self.turret_speed = 0.01
 
     def update_stats(self):
+
+        self.accuracy = float(self.rank)
+        self.resistance = float(self.rank)
+
+        resistance = self.resistance * 0.05
+
+        self.shock = max(0.0, self.shock - resistance)
+
+        # if self.shock > 100:
+        #     self.knocked_out = True
+        # else:
+        #     self.knocked_out = False
+
         if self.movement.target:
             if self.movement.target == self.navigation.destination:
                 self.throttle_target = 0.3
@@ -359,10 +380,11 @@ class Agent(object):
                                 self.selected = False
 
                     else:
-                        if cam.pointInsideFrustum(self.box.worldPosition):
+                        if cam.pointInsideFrustum(self.box.worldPosition.copy()):
                             points = [cam.getScreenPosition(self.box)]
                             for soldier in self.soldiers:
-                                points.append(cam.getScreenPosition(soldier.box))
+                                if not soldier.dead:
+                                    points.append(cam.getScreenPosition(soldier.box))
 
                             for screen_location in points:
 
@@ -467,6 +489,12 @@ class Agent(object):
                 self.process_commands()
                 return
 
+            self.stance = "DEFEND"
+            self.set_formation()
+            self.selected = False
+            return
+
+        self.dismount_building()
         self.selected = False
         return
 
@@ -486,7 +514,9 @@ class Agent(object):
         pass
 
     def set_formation(self):
-        pass
+
+        self.accuracy = self.rank
+        self.resistance = self.rank
 
 
 class Vehicle(Agent):
@@ -517,6 +547,15 @@ class Infantry(Agent):
         infantry_speed = [soldier.speed for soldier in self.soldiers]
         self.speed = min(infantry_speed)
 
+    def get_center(self):
+
+        center = self.get_infantry_center()
+
+        if center:
+            self.center = center
+        else:
+            self.center = self.box.worldPosition.copy()
+
     def add_squad(self, load_dict):
 
         self.set_formation()
@@ -543,6 +582,25 @@ class Infantry(Agent):
 
     def update_stats(self):
 
+        self.accuracy = float(self.rank)
+        self.resistance = float(self.rank)
+
+        resistance = self.resistance * 0.05
+        self.shock = max(0.0, self.shock - resistance)
+
+        combat_stances = ["DEFEND", "AGGRESSIVE"]
+
+        if self.shock > 50 and self.stance not in combat_stances:
+            self.stance = "DEFEND"
+            self.set_formation()
+
+        # TODO handle shocked units becoming knocked out
+
+        # if self.shock > 100:
+        #     self.knocked_out = True
+        # else:
+        #     self.knocked_out = False
+
         self.set_soldiers_visible()
         self.set_speed()
 
@@ -558,18 +616,25 @@ class Infantry(Agent):
     def check_dead(self):
 
         if not self.dead:
-            if not self.knocked_out:
-                dead = True
-                for soldier in self.soldiers:
-                    if not soldier.dead:
-                        dead = False
 
-                if dead:
-                    self.dead = True
-                else:
+            dead = True
+            for soldier in self.soldiers:
+                if not soldier.dead:
+                    dead = False
+
+            if dead:
+                self.dead = True
+            else:
+                if not self.knocked_out:
                     self.process_commands()
                     return
 
+                self.stance = "DEFEND"
+                self.set_formation()
+                self.selected = False
+                return
+
+        self.dismount_building()
         self.selected = False
         return
 
@@ -832,7 +897,15 @@ class InfantryMan(object):
         return [round(axis) for axis in destination]
 
     def set_speed(self):
-        self.speed = (self.base_speed * self.agent.walk_mod) * 0.005
+
+        if self.agent.shock > 40:
+            walk_mod = self.agent.walk_mod * 0.5
+        elif self.agent.shock > 20:
+            walk_mod = self.agent.walk_mod * 0.85
+        else:
+            walk_mod = self.agent.walk_mod
+
+        self.speed = (self.base_speed * walk_mod) * 0.005
 
     def shoot_weapon(self):
         if self.weapon:
@@ -890,7 +963,6 @@ class InfantryMan(object):
 
 
 class SoldierGrenade(object):
-
     def __init__(self, infantryman, ammo):
         self.weapon_type = "ARTILLERY"
         self.infantryman = infantryman
@@ -902,7 +974,6 @@ class SoldierGrenade(object):
         self.recharge = 0.002
         self.timer = 0.0
         self.ready = False
-        self.in_range = False
         self.action = "FIDGET"
 
     def update(self):
@@ -910,10 +981,12 @@ class SoldierGrenade(object):
         if self.ammo > 0:
             if not self.infantryman.agent.prone:
                 if not self.infantryman.in_building:
+                    if not self.infantryman.agent.knocked_out:
+                        if self.infantryman.agent.shock < 30:
 
-                    self.timer = min(1.0, self.timer + self.recharge)
-                    if self.timer >= 1.0:
-                        self.ready = True
+                            self.timer = min(1.0, self.timer + self.recharge)
+                            if self.timer >= 1.0:
+                                self.ready = True
 
     def get_target(self):
         target_id = self.infantryman.agent.agent_targeter.enemy_target_id
@@ -983,36 +1056,42 @@ class SoldierWeapon(object):
 
     def update(self):
 
-        if self.ammo > 0.0:
+        if self.infantryman.agent.enter_building and not self.infantryman.in_building:
+            self.ready = False
+
+        elif self.infantryman.agent.knocked_out:
+            self.ready = False
+
+        elif self.ammo > 0.0:
+
+            accuracy = self.infantryman.agent.accuracy
+            recharge = self.recharge
             prone = self.infantryman.agent.prone
 
-            if prone:
-                self.accuracy = self.infantryman.agent.accuracy * 2.0
-                recharge = self.recharge * 0.5
-            else:
-                self.accuracy = self.infantryman.agent.accuracy
-                recharge = self.recharge
+            if prone or self.infantryman.in_building:
+                accuracy *= 2.0
+                recharge *= 0.5
 
-            if self.infantryman.in_building:
-                self.accuracy = self.infantryman.agent.accuracy * 2.0
-                recharge = self.recharge * 0.5
+            if self.infantryman.agent.shock > 40:
+                accuracy *= 0.5
+                recharge *= 0.5
+
+            elif self.infantryman.agent.shock > 20:
+                accuracy *= 0.75
+                recharge *= 0.75
+
+            self.accuracy = accuracy
 
             self.timer = min(1.0, self.timer + recharge)
             if self.timer >= 1.0:
                 self.ready = True
-
         else:
             self.ready = False
 
-        if self.infantryman.agent.enter_building and not self.infantryman.in_building:
-            self.ready = False
-
-    def check_in_range(self):
-        target_id, target = self.get_target()
+    def check_range(self, target):
         if target:
             distance = (target.box.worldPosition.copy() - self.infantryman.box.worldPosition.copy()).length
-            if distance <= 18:
-                return True
+            return distance
 
     def get_target(self):
         target_id = self.infantryman.agent.agent_targeter.enemy_target_id
@@ -1044,48 +1123,63 @@ class SoldierWeapon(object):
     def shoot_weapon(self):
         target_id, target = self.get_target()
 
-        if target and self.ready and self.check_in_range():
+        if target and self.ready:
 
-            effect = None
+            closest_soldier, target_distance = target.get_closest_soldier(self.infantryman.box.worldPosition.copy())
+            if not closest_soldier:
+                target_distance = self.check_range(target)
 
-            if self.infantryman.in_building:
-                window_position = self.get_window()
-                if window_position:
-                    origin = window_position
+            if target_distance < 18.0:
+                # TODO check for armor penetration
+
+                effect = None
+
+                if self.infantryman.in_building:
+                    window_position = self.get_window()
+                    if window_position:
+                        origin = window_position
+                    else:
+                        return False
                 else:
-                    return False
-            else:
-                origin = self.infantryman.location
+                    origin = self.infantryman.location
 
-            if self.effect_timer > 2 or self.infantryman.in_building:
-                self.effect_timer = 1
-                if self.special == "RAPID_FIRE":
-                    effect = "RAPID_YELLOW_STREAK"
+                if self.effect_timer > 2 or self.infantryman.in_building:
+                    self.effect_timer = 1
+                    if self.special == "RAPID_FIRE":
+                        effect = "RAPID_YELLOW_STREAK"
+                    else:
+                        effect = "YELLOW_STREAK"
                 else:
-                    effect = "YELLOW_STREAK"
-            else:
-                self.effect_timer += 1
+                    self.effect_timer += 1
 
-            if self.special == "ANTI_TANK":
-                effect = "RED_STREAK"
+                if self.special == "ANTI_TANK":
+                    effect = "RED_STREAK"
 
-            effective_range = self.accuracy + self.power
-            effective_power = self.power * random.uniform(0.0, 1.0)
+                effective_range = self.accuracy + self.power
+                effective_power = self.power * random.uniform(0.0, 1.0)
 
-            command = {"label": "SMALL_ARMS_SHOOT", "weapon": self, "owner": self.infantryman, "target_id": target_id,
-                       "effect": effect, "origin": origin, "effective_range": effective_range,
-                       "effective_power": effective_power}
+                command = {"label": "SMALL_ARMS_SHOOT", "weapon": self, "owner": self.infantryman, "target": target,
+                           "effect": effect, "origin": origin, "effective_range": effective_range,
+                           "effective_power": effective_power, "closest_soldier": closest_soldier,
+                           "target_distance": target_distance}
 
-            self.infantryman.agent.level.commands.append(command)
+                self.infantryman.agent.level.commands.append(command)
 
-            sound_command = {"label": "SOUND_EFFECT",
-                             "content": ("I_{}".format(self.sound), self.infantryman.box, 0.5, 1.0)}
-            self.infantryman.agent.level.commands.append(sound_command)
+                sound_command = {"label": "SOUND_EFFECT",
+                                 "content": ("I_{}".format(self.sound), self.infantryman.box, 0.5, 1.0)}
+                self.infantryman.agent.level.commands.append(sound_command)
 
-            self.ready = False
-            self.timer = 0.0
-            self.ammo -= 0.01
+                self.ready = False
+                self.timer = 0.0
+                self.ammo -= 0.01
 
-            return True
+                if closest_soldier:
+                    target_vector = closest_soldier.box.worldPosition.copy() - self.infantryman.box.worldPosition.copy()
+                else:
+                    target_vector = target.box.worldPosition.copy() - self.infantryman.box.worldPosition.copy()
+
+                self.infantryman.direction = bgeutils.get_closest_vector(target_vector)
+
+                return True
 
         return False

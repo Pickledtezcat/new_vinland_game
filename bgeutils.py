@@ -188,3 +188,27 @@ def create_pixel(rbga):
     pixel[3] = a
 
     return pixel
+
+
+def map_value(lowest_value, highest_value, current_value):
+    return (current_value - lowest_value) / (highest_value - lowest_value)
+
+
+def get_closest_vector(target_vector):
+
+    if target_vector.length <= 0.0:
+        target_vector = mathutils.Vector([0.0, 1.0])
+
+    search_array = [[1, 0], [1, 1], [0, 1], [1, -1], [-1, 0], [-1, 1], [0, -1], [-1, -1]]
+
+    best_facing = None
+    best_angle = 4.0
+
+    for facing in search_array:
+        facing_vector = mathutils.Vector(facing)
+        angle = facing_vector.angle(target_vector.to_2d())
+        if angle < best_angle:
+            best_facing = facing
+            best_angle = angle
+
+    return best_facing

@@ -49,7 +49,7 @@ def soldiers():
                     "MEDIC": ["ENGINEER", 5, 4, 9, 4, 0, "PISTOL", ""],
                     "SAPPER": ["ENGINEER", 5, 4, 9, 4, 1, "PISTOL", "SATCHEL_CHARGE"],
                     "MACHINE_GUNNER": ["MG", 3, 6, 16, 4, 0, "MG", "RAPID_FIRE"],
-                    "LIGHT_MACHINE_GUNNER": ["MG", 4, 6, 12, 5, 0, "SMG", "RAPID_FIRE"],
+                    "LIGHT_MACHINE_GUNNER": ["MG", 4, 6, 12, 5, 0, "LIGHT_MG", "RAPID_FIRE"],
                     "ANTI-TANK_RIFLE": ["ANTI_TANK", 5, 6, 18, 3, 0, "HEAVY_RIFLE", "ANTI_TANK"],
                     "HEAVY_ANTI-TANK_RIFLE": ["ANTI_TANK", 3, 6, 25, 3, 0, "ANTI_TANK", "ANTI_TANK"],
                     "LIGHT_ANTI-TANK_RIFLE": ["RIFLE", 4, 6, 12, 3, 0, "HEAVY_RIFLE", "ANTI_TANK"],

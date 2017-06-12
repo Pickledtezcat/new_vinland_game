@@ -162,6 +162,9 @@ class StatusBar(object):
                 else:
                     self.health_bar.color = self.green
 
+        shock_ratio = bgeutils.map_value(0.0, 50.0, self.agent.shock)
+        self.shock_bar.localScale.x = min(1.0, shock_ratio)
+
     def secondary_icons(self, setting):
 
         self.stance_icon.visible = setting
@@ -180,8 +183,18 @@ class StatusBar(object):
                     self.group_number = group_number
                     self.group_number_icon.replaceMesh("group_number_{}".format(group_number))
 
+            rank_number = self.agent.rank
+            if rank_number:
+                self.rank_icon.visible = setting
+                if self.rank != rank_number:
+                    self.rank = rank_number
+                    self.rank_icon.replaceMesh("rank_icon_{}".format(rank_number))
+
         else:
+            self.rank_icon.visible = setting
             self.group_number_icon.visible = setting
+
+
 
         # TODO do other secondary icons (status, rank)
 
@@ -190,12 +203,13 @@ class StatusBar(object):
         if self.agent.agent_type == "INFANTRY":
             position = self.agent.get_infantry_center()
             if not position:
-                self.box.localScale *= 0.0
+                self.box.localScale = [0.0, 0.0, 0.0]
                 position = self.agent.box.worldPosition.copy()
         else:
             position = self.agent.box.worldPosition.copy()
 
         position.z += 2.0
+
         location = self.ui.camera.getScreenPosition(position)
         ray = self.ui.mouse_ray(location)
         if ray[0]:
@@ -204,17 +218,23 @@ class StatusBar(object):
             self.box.worldOrientation = screen_normal.to_track_quat("Z", "Y")
 
     def update(self):
-        self.update_health()
-        self.update_position()
 
         if self.agent.team == 0:
+            self.update_health()
+            self.update_position()
             if self.agent.selected:
                 self.secondary_icons(True)
             else:
                 self.secondary_icons(False)
 
         else:
-            self.secondary_icons(False)
+            if not self.agent.seen:
+                self.box.localScale = [0.0, 0.0, 0.0]
+            else:
+                self.update_health()
+                self.update_position()
+                self.box.localScale = [1.0, 1.0, 1.0]
+                self.secondary_icons(False)
 
 
 class MenuInterface(object):
