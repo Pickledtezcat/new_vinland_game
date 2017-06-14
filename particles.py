@@ -143,17 +143,18 @@ class RedBulletFlash(BulletFlash):
 
 class BulletStreak(Particle):
 
-    def __init__(self, level, position, target, delay=0):
+    def __init__(self, level, position, target, sound, delay=0):
         super().__init__(level)
 
         self.color = [1.0, 1.0, 1.0]
+        self.sound = sound
 
         position[2] += 0.5
         target[2] += 0.5
 
         self.position = position
         self.target = target
-        self.delay = delay
+        self.delay = delay + 18
         self.place_particle()
 
     def add_box(self):
@@ -169,6 +170,13 @@ class BulletStreak(Particle):
         self.box.worldOrientation = target_vector.to_track_quat("Y", "Z").to_matrix().to_3x3()
         self.box.localScale.y = target_vector.length
 
+    def play_sound(self):
+        if self.sound:
+            sound_command = {"label": "SOUND_EFFECT",
+                             "content": (self.sound, self.box, 0.5, 1.0)}
+            self.level.commands.append(sound_command)
+            self.sound = None
+
     def update(self):
         r, g, b = self.color
 
@@ -176,6 +184,7 @@ class BulletStreak(Particle):
             self.delay -= 1
             color = 0.0
         else:
+            self.play_sound()
             self.timer += 0.4
             color = 1.0 - self.timer
 
@@ -185,16 +194,23 @@ class BulletStreak(Particle):
             self.ended = True
 
 
+class FaintBulletStreak(BulletStreak):
+    def __init__(self, level, position, target, sound, delay=0):
+        super().__init__(level, position, target, sound, delay)
+
+        self.color = [0.1, 0.0, 0.0]
+
+
 class YellowBulletStreak(BulletStreak):
-    def __init__(self, level, position, target, delay=0):
-        super().__init__(level, position, target, delay)
+    def __init__(self, level, position, target, sound, delay=0):
+        super().__init__(level, position, target, sound, delay)
 
         self.color = [0.5, 0.5, 0.0]
 
 
 class RedBulletStreak(BulletStreak):
-    def __init__(self, level, position, target, delay=0):
-        super().__init__(level, position, target, delay)
+    def __init__(self, level, position, target, sound, delay=0):
+        super().__init__(level, position, target, sound, delay)
 
         self.color = [1.0, 0.0, 0.0]
 

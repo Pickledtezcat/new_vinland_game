@@ -3,15 +3,18 @@ import bgeutils
 import mathutils
 import game_audio
 import user_interface
+import vehicle_parts
 
 button_info = {"medium_button": {"size": (1.0, 0.5)},
                "screw_button": {"size": (2.0, 1.0)},
-               "radio_button": {"size": (0.5, 0.5)},
+               "radio_button_yes": {"size": (1.7, 0.7)},
+               "radio_button_no": {"size": (1.7, 0.7)},
                "option_button": {"size": (2.5, 0.5)},
                "large_button": {"size": (2.0, 1.0)},
                "text_box": {"size": (4.0, 1.0)},
                "undefined": {"size": (1.0, 0.5)},
                "display_text_box": {"size": (4.0, 1.0)}}
+
 
 # Buttons
 
@@ -267,7 +270,7 @@ class StartWidget(Widget):
 
         Button(self, "large_button", 0.0, zero + spacing, "Set\nProfile",
                bgeutils.GeneralMessage("NEW_LEVEL", "ProfileManagerMenu"))
-        Button(self, "large_button", 0.0, zero, "Vehicle\nbuilder",
+        Button(self, "large_button", 0.0, zero, "Manage\nVehicles",
                bgeutils.GeneralMessage("NEW_LEVEL", "VehicleManagerMenu"))
         Button(self, "large_button", 0.0, zero - spacing, "Start\nGame", bgeutils.GeneralMessage("NEW_LEVEL", "Level"))
         Button(self, "large_button", 0.0, zero - (spacing * 2.0), "Exit", bgeutils.GeneralMessage("EXIT"))
@@ -386,7 +389,6 @@ class ProfileDetails(Widget):
         self.game_turn = "Game Turn: {}".format(profile["game_turn"])
 
     def add_buttons(self):
-
         y = 2.0
 
         labels = ["active_profile", "money", "faction", "game_turn"]
@@ -401,10 +403,53 @@ class VehicleName(Widget):
     klef = False
 
 
+class VehicleOptionsWidget(Widget):
+    def __init__(self, menu, adder):
+        super().__init__(menu, adder)
+
+    def add_buttons(self):
+
+        max_y = 2.0
+        min_y = -2.0
+
+        x = -2.7
+        y = max_y
+        x_spacing, y_spacing = button_info["radio_button_yes"]["size"]
+
+        options = vehicle_parts.get_design_rules()
+        for option_key in options:
+            option = options[option_key]
+            name = option["name"]
+
+            Button(self, "radio_button_yes", x, y, name, bgeutils.GeneralMessage("NOTHING", "NOTHING"))
+
+            if y > min_y:
+                y -= y_spacing
+            else:
+                y = max_y
+                x += 2
+
+        x = 0
+        y = -3.5
+
+        Button(self, "large_button", x, y, "Go\nBack", bgeutils.GeneralMessage("NEW_LEVEL", "StartMenu"))
+
+
+class VehicleManagerWidget(Widget):
+    def __init__(self, menu, adder):
+        super().__init__(menu, adder)
+
+    def add_buttons(self):
+        y = 2.0
+
+        labels = [["VehicleOptionMenu", "Design\nVehicle"], ["StartMenu", "Main\nMenu"]]
+        for label in labels:
+            Button(self, "large_button", 0.0, y, label[1], bgeutils.GeneralMessage("NEW_LEVEL", label[0]))
+            y -= 1.0
+
 # menus
 
 class Menu(object):
-
     def __init__(self, manager):
         print("MENU_MODE")
         self.manager = manager
@@ -509,4 +554,10 @@ class ProfileManagerMenu(Menu):
 
 class VehicleManagerMenu(Menu):
     def activate(self):
-        ProfileDetails(self, self.adders[1])
+        VehicleManagerWidget(self, self.adders[1])
+
+
+class VehicleOptionMenu(Menu):
+    def activate(self):
+        VehicleOptionsWidget(self, self.adders[1])
+

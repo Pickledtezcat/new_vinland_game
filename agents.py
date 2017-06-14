@@ -1161,13 +1161,9 @@ class SoldierWeapon(object):
                 command = {"label": "SMALL_ARMS_SHOOT", "weapon": self, "owner": self.infantryman, "target": target,
                            "effect": effect, "origin": origin, "effective_range": effective_range,
                            "effective_power": effective_power, "closest_soldier": closest_soldier,
-                           "target_distance": target_distance}
+                           "target_distance": target_distance, "sound": "I_{}".format(self.sound)}
 
                 self.infantryman.agent.level.commands.append(command)
-
-                sound_command = {"label": "SOUND_EFFECT",
-                                 "content": ("I_{}".format(self.sound), self.infantryman.box, 0.5, 1.0)}
-                self.infantryman.agent.level.commands.append(sound_command)
 
                 self.ready = False
                 self.timer = 0.0

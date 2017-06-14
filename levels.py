@@ -697,6 +697,7 @@ class Level(object):
         shock = effective_power * 0.5
         best_target = command["closest_soldier"]
         target_distance = command["target_distance"]
+        sound = command["sound"]
 
         if command["label"] == "SMALL_ARMS_SHOOT":
 
@@ -741,17 +742,23 @@ class Level(object):
 
                     target.shock += shock
 
-            if target_position and effect:
-                if effect == "RED_STREAK":
-                    particles.RedBulletStreak(self, list(origin), list(target_position))
+            if target_position:
 
-                if effect == "YELLOW_STREAK":
-                    particles.YellowBulletStreak(self, list(origin), list(target_position))
+                # TODO add ground bullet hit effect
 
-                if effect == "RAPID_YELLOW_STREAK":
-                    particles.YellowBulletStreak(self, list(origin), list(target_position))
-                    particles.YellowBulletStreak(self, list(origin), list(target_position), delay=6)
-                    particles.YellowBulletStreak(self, list(origin), list(target_position), delay=12)
+                if not effect:
+                    particles.FaintBulletStreak(self, list(origin), list(target_position), sound)
+
+                elif effect == "RED_STREAK":
+                    particles.RedBulletStreak(self, list(origin), list(target_position), sound)
+
+                elif effect == "YELLOW_STREAK":
+                    particles.YellowBulletStreak(self, list(origin), list(target_position), sound)
+
+                elif effect == "RAPID_YELLOW_STREAK":
+                    particles.YellowBulletStreak(self, list(origin), list(target_position), sound)
+                    particles.YellowBulletStreak(self, list(origin), list(target_position), sound, delay=8)
+                    particles.YellowBulletStreak(self, list(origin), list(target_position), sound, delay=16)
 
     def shoot_artillery(self, command):
 

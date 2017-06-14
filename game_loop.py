@@ -1,7 +1,7 @@
 import bge
 import game_input
 import bgeutils
-from menus import StartMenu, ProfileManagerMenu, VehicleManagerMenu
+from menus import StartMenu, ProfileManagerMenu, VehicleManagerMenu, VehicleOptionMenu
 from levels import Level
 
 
