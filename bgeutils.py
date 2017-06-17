@@ -60,14 +60,18 @@ def split_in_lines(contents, line_length, center=False):
     new_lines = []
 
     split_lines = contents.splitlines()
-    for line in split_lines:
-        words = line.split()
+
+    if len(split_lines) == 1:
+        words = split_lines[0].split()
 
         if len(words) == 1:
             short_length = max(2, line_length - 2)
 
             if len(words[0]) > short_length:
                 return "{}-\n{}".format(words[0][:short_length], words[0][short_length:])
+
+    for line in split_lines:
+        words = line.split()
 
         new_line = []
         lines = []
@@ -89,10 +93,20 @@ def split_in_lines(contents, line_length, center=False):
         if center:
             lines = ["{:^{length}}".format(line, length=line_length) for line in lines]
 
-        new_contents = "\n".join(lines)
-        new_lines.append(new_contents)
+        if lines:
+            if len(lines) > 1:
+                new_contents = "\n".join(lines)
+            else:
+                new_contents = lines[0]
 
-    return "\n".join(new_lines)
+            new_lines.append(new_contents)
+
+    if not new_lines:
+        return ""
+    elif len(new_lines) > 1:
+        return "\n".join(new_lines)
+    else:
+        return new_lines[0]
 
 
 def save_level(level):
@@ -134,6 +148,37 @@ def save_settings():
     out_path = bge.logic.expandPath("//saves/saves.txt")
     with open(out_path, "w") as outfile:
         json.dump(bge.logic.globalDict, outfile)
+
+
+def add_new_vehicle(vehicle):
+
+    def get_vehicle_id(vehicle_id_number):
+        return "vehicle_{}".format(vehicle_id_number)
+
+    vehicle_id = None
+
+    id_number = 0
+    added = False
+    while not added:
+        vehicle_id = get_vehicle_id(id_number)
+        if vehicle_id not in bge.logic.globalDict["profiles"][bge.logic.globalDict["active_profile"]]["vehicles"]:
+            bge.logic.globalDict["profiles"][bge.logic.globalDict["active_profile"]]["vehicles"][vehicle_id] = vehicle
+            added = True
+        id_number += 1
+
+    save_settings()
+
+    return vehicle_id
+
+
+def get_editing_vehicle():
+    active_profile = bge.logic.globalDict["profiles"][bge.logic.globalDict["active_profile"]]
+    return active_profile["vehicles"][active_profile["editing"]]
+
+
+def write_editing_vehicle(vehicle):
+    active_profile = bge.logic.globalDict["profiles"][bge.logic.globalDict["active_profile"]]
+    active_profile["vehicles"][active_profile["editing"]] = vehicle
 
 
 def add_new_profile(profile_name):

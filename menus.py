@@ -11,6 +11,7 @@ button_info = {"medium_button": {"size": (1.0, 0.5)},
                "radio_button_no": {"size": (1.7, 0.7)},
                "option_button": {"size": (2.5, 0.5)},
                "large_button": {"size": (2.0, 1.0)},
+               "square_button": {"size": (0.5, 1.0)},
                "text_box": {"size": (4.0, 1.0)},
                "undefined": {"size": (1.0, 0.5)},
                "display_text_box": {"size": (4.0, 1.0)}}
@@ -399,8 +400,48 @@ class ProfileDetails(Widget):
         Button(self, "large_button", 0.0, y, "Go\nBack", bgeutils.GeneralMessage("NEW_LEVEL", "StartMenu"))
 
 
-class VehicleName(Widget):
-    klef = False
+class VehicleOptionsSettingWidget(Widget):
+    header_text = "Set vehicle options"
+
+    def __init__(self, menu, adder):
+        super().__init__(menu, adder)
+
+        self.vehicle_name = self.get_vehicle_name()
+
+    def get_vehicle_name(self):
+        current_vehicle = bgeutils.get_editing_vehicle()
+        return current_vehicle['name']
+
+    def add_buttons(self):
+        button_size = button_info["large_button"]["size"]
+        zero = 0.2
+        spacing = button_size[1] + 0.1
+
+        Button(self, "large_button", 0.0, zero - (spacing * 2.0), "Go\nback", bgeutils.GeneralMessage("NEW_LEVEL", "VehicleManagerMenu"))
+        current_vehicle = bgeutils.get_editing_vehicle()
+
+        DisplayTextButton(self, "display_text_box", 0.0, zero + spacing, "vehicle_name", None)
+
+        vehicle_name = TextButton(self, "text_box", 0.0, zero, current_vehicle["name"], None)
+        Button(self, "large_button", 0.0, zero - spacing, "Rename\nVehicle",
+               bgeutils.GeneralMessage("RENAME_VEHICLE", vehicle_name))
+
+    def process_commands(self):
+        self.vehicle_name = self.get_vehicle_name()
+
+        for command in self.commands:
+            if command.header == "NEW_LEVEL":
+                self.menu.new_level = command.content
+
+            if command.header == "RENAME_VEHICLE":
+                vehicle_name_button = command.content
+                if vehicle_name_button.text_contents:
+
+                    editing_vehicle = bgeutils.get_editing_vehicle()
+                    editing_vehicle['name'] = vehicle_name_button.text_contents
+                    bgeutils.write_editing_vehicle(editing_vehicle)
+
+        self.commands = []
 
 
 class VehicleOptionsWidget(Widget):
@@ -416,12 +457,20 @@ class VehicleOptionsWidget(Widget):
         y = max_y
         x_spacing, y_spacing = button_info["radio_button_yes"]["size"]
 
-        options = vehicle_parts.get_design_rules()
+        profile = bge.logic.globalDict["profiles"][bge.logic.globalDict["active_profile"]]
+        vehicles = profile["vehicles"]
+        current_vehicle = vehicles[profile["editing"]]
+
+        options = current_vehicle["options"]
         for option_key in options:
             option = options[option_key]
+            setting = "no"
+            if option["setting"]:
+                setting = "yes"
+
             name = option["name"]
 
-            Button(self, "radio_button_yes", x, y, name, bgeutils.GeneralMessage("NOTHING", "NOTHING"))
+            Button(self, "radio_button_{}".format(setting), x, y, name, bgeutils.GeneralMessage("TOGGLE_OPTION", option_key))
 
             if y > min_y:
                 y -= y_spacing
@@ -429,10 +478,150 @@ class VehicleOptionsWidget(Widget):
                 y = max_y
                 x += 2
 
-        x = 0
-        y = -3.5
+    def set_toggle_option(self, toggle_key):
 
-        Button(self, "large_button", x, y, "Go\nBack", bgeutils.GeneralMessage("NEW_LEVEL", "StartMenu"))
+        profile = bge.logic.globalDict["profiles"][bge.logic.globalDict["active_profile"]]
+        vehicles = profile["vehicles"]
+        current_vehicle = vehicles[profile["editing"]]
+        options = current_vehicle["options"]
+
+        toggle_option = options[toggle_key]
+        setting = toggle_option["setting"]
+        toggle_type = toggle_option["option_type"]
+
+        if not setting:
+            if toggle_type:
+                for option_key in options:
+                    shared_option = options[option_key]
+                    if shared_option["option_type"] == toggle_type:
+                        shared_option["setting"] = False
+
+        toggle_option["setting"] = not setting
+
+    def process_commands(self):
+        for command in self.commands:
+            if command.header == "TOGGLE_OPTION":
+                toggle_key = command.content
+                self.set_toggle_option(toggle_key)
+                self.menu.new_level = "VehicleOptionMenu"
+
+        self.commands = []
+
+
+class VehicleSizeWidget(Widget):
+    def __init__(self, menu, adder):
+        super().__init__(menu, adder)
+
+        self.chassis_dict = vehicle_parts.chassis_dict
+        self.chassis_size = self.get_chassis_size()
+        self.turret_dict = vehicle_parts.turret_dict
+        self.turret_size = self.get_turret_size()
+
+    def get_chassis_size(self):
+        current_vehicle = bgeutils.get_editing_vehicle()
+        chassis_size = current_vehicle['chassis']
+        return self.chassis_dict[chassis_size]["name"].upper().replace("_", " ")
+
+    def get_turret_size(self):
+        current_vehicle = bgeutils.get_editing_vehicle()
+        turret_size = current_vehicle['turret']
+        return self.turret_dict[turret_size]["name"].upper().replace("_", " ")
+
+    def add_buttons(self):
+
+        button_size = button_info["square_button"]["size"]
+        zero = 1.8
+        spacing = button_size[1] + 0.2
+
+        left = -1.0
+        right = 1.0
+        center = 0.0
+
+        DisplayTextButton(self, "display_text_box", center, zero, "chassis_size", None)
+        Button(self, "square_button", left, zero - spacing, "<<", bgeutils.GeneralMessage("CHASSIS_SIZE", -1))
+        Button(self, "square_button", right, zero - spacing, ">>", bgeutils.GeneralMessage("CHASSIS_SIZE", 1))
+
+        DisplayTextButton(self, "display_text_box", center, zero - (spacing * 2.0), "turret_size", None)
+        Button(self, "square_button", left, zero - (spacing * 3.0), "<<", bgeutils.GeneralMessage("TURRET_SIZE", -1))
+        Button(self, "square_button", right, zero - (spacing * 3.0), ">>", bgeutils.GeneralMessage("TURRET_SIZE", 1))
+
+    def process_commands(self):
+        self.chassis_size = self.get_chassis_size()
+        self.turret_size = self.get_turret_size()
+
+        current_vehicle = bgeutils.get_editing_vehicle()
+
+        for command in self.commands:
+            if command.header == "EXIT":
+                bge.logic.endGame()
+
+            if command.header == "CHASSIS_SIZE":
+                change = command.content
+                current_vehicle["chassis"] = min(4, max(1, current_vehicle["chassis"] + change))
+
+            if command.header == "TURRET_SIZE":
+                change = command.content
+                current_vehicle["turret"] = min(5, max(0, current_vehicle["turret"] + change))
+
+        bgeutils.write_editing_vehicle(current_vehicle)
+
+        self.commands = []
+
+
+class VehicleManagerSettingsWidget(Widget):
+    header_text = "Add / Remove vehicles\n(Right click to remove)"
+
+    def add_buttons(self):
+        button_size = button_info["large_button"]["size"]
+        zero = 0.2
+        spacing = button_size[1] + 0.1
+
+        Button(self, "large_button", 0.0, zero + spacing, "Add\nnew\nvehicle", bgeutils.GeneralMessage("ADD_VEHICLE", None))
+        Button(self, "large_button", 0.0, zero, "Go\nback", bgeutils.GeneralMessage("NEW_LEVEL", "StartMenu"))
+
+    def build_base_vehicle(self):
+
+        vehicle = {}
+
+        options = vehicle_parts.get_design_rules()
+        for option_key in options:
+            option = options[option_key]
+
+            if option["name"] == "tracked drive":
+                option["setting"] = True
+            else:
+                option["setting"] = False
+
+            options[option_key] = option
+
+        vehicle["options"] = options
+        vehicle["turret"] = 0
+        vehicle["chassis"] = 1
+        vehicle["contents"] = {}
+        vehicle["name"] = "new vehicle"
+
+        return vehicle
+
+    def process_commands(self):
+        for command in self.commands:
+            if command.header == "EXIT":
+                bge.logic.endGame()
+
+            if command.header == "NEW_LEVEL":
+                self.menu.new_level = command.content
+
+            if command.header == "RENAME_VEHICLE":
+                vehicle_name = command.content
+                editing_vehicle = bgeutils.get_editing_vehicle()
+                editing_vehicle['name'] = vehicle_name
+                bgeutils.write_editing_vehicle(editing_vehicle)
+
+            if command.header == "ADD_VEHICLE":
+                vehicle = self.build_base_vehicle()
+                bgeutils.add_new_vehicle(vehicle)
+                self.menu.new_level = "VehicleManagerMenu"
+
+        self.commands = []
 
 
 class VehicleManagerWidget(Widget):
@@ -440,14 +629,46 @@ class VehicleManagerWidget(Widget):
         super().__init__(menu, adder)
 
     def add_buttons(self):
-        y = 2.0
+        max_y = 1.8
+        min_y = -1.8
 
-        labels = [["VehicleOptionMenu", "Design\nVehicle"], ["StartMenu", "Main\nMenu"]]
-        for label in labels:
-            Button(self, "large_button", 0.0, y, label[1], bgeutils.GeneralMessage("NEW_LEVEL", label[0]))
-            y -= 1.0
+        x = -2.0
+        y = max_y
+        x_spacing, y_spacing = button_info["screw_button"]["size"]
+
+        vehicle_keys = [v_key for v_key in bge.logic.globalDict["profiles"][bge.logic.globalDict["active_profile"]]["vehicles"]]
+        for vehicle_key in vehicle_keys:
+            vehicle = bge.logic.globalDict["profiles"][bge.logic.globalDict["active_profile"]]["vehicles"][vehicle_key]
+            vehicle_name = vehicle["name"]
+
+            Button(self, "screw_button", x, y, vehicle_name, bgeutils.GeneralMessage("EDIT_VEHICLE", vehicle_key), alt_message=bgeutils.GeneralMessage("REMOVE_VEHICLE", vehicle_key))
+
+            if y > min_y:
+                y -= y_spacing
+            else:
+                y = max_y
+                x += 2
+
+    def process_commands(self):
+        for command in self.commands:
+            if command.header == "NEW_LEVEL":
+                self.menu.new_level = command.content
+
+            if command.header == "REMOVE_VEHICLE":
+                remove_vehicle_id = command.content
+                if remove_vehicle_id in bge.logic.globalDict["profiles"][bge.logic.globalDict["active_profile"]]["vehicles"]:
+                    del bge.logic.globalDict["profiles"][bge.logic.globalDict["active_profile"]]["vehicles"][remove_vehicle_id]
+                self.menu.new_level = "VehicleManagerMenu"
+
+            if command.header == "EDIT_VEHICLE":
+                edit_vehicle_id = command.content
+                bge.logic.globalDict["profiles"][bge.logic.globalDict["active_profile"]]["editing"] = edit_vehicle_id
+                self.menu.new_level = "VehicleOptionMenu"
+
+        self.commands = []
 
 # menus
+
 
 class Menu(object):
     def __init__(self, manager):
@@ -542,6 +763,10 @@ class Menu(object):
 
 
 class StartMenu(Menu):
+    def __init__(self, manager):
+        super().__init__(manager)
+        bge.logic.globalDict["profiles"][bge.logic.globalDict["active_profile"]]["editing"] = None
+
     def activate(self):
         StartWidget(self, self.adders[0])
 
@@ -553,11 +778,18 @@ class ProfileManagerMenu(Menu):
 
 
 class VehicleManagerMenu(Menu):
+    def __init__(self, manager):
+        super().__init__(manager)
+        bge.logic.globalDict["profiles"][bge.logic.globalDict["active_profile"]]["editing"] = None
+
     def activate(self):
-        VehicleManagerWidget(self, self.adders[1])
+        VehicleManagerWidget(self, self.adders[5])
+        VehicleManagerSettingsWidget(self, self.adders[2])
 
 
 class VehicleOptionMenu(Menu):
     def activate(self):
-        VehicleOptionsWidget(self, self.adders[1])
+        VehicleOptionsWidget(self, self.adders[3])
+        VehicleOptionsSettingWidget(self, self.adders[1])
+        VehicleSizeWidget(self, self.adders[2])
 
