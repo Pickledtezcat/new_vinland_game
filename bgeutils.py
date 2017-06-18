@@ -1,6 +1,7 @@
 import bge
 import mathutils
 import json
+import vehicle_parts
 
 vinland_version = "0.1"
 
@@ -61,15 +62,6 @@ def split_in_lines(contents, line_length, center=False):
 
     split_lines = contents.splitlines()
 
-    if len(split_lines) == 1:
-        words = split_lines[0].split()
-
-        if len(words) == 1:
-            short_length = max(2, line_length - 2)
-
-            if len(words[0]) > short_length:
-                return "{}-\n{}".format(words[0][:short_length], words[0][short_length:])
-
     for line in split_lines:
         words = line.split()
 
@@ -89,6 +81,8 @@ def split_in_lines(contents, line_length, center=False):
 
         if new_line:
             lines.append(" ".join(new_line))
+
+        lines = [line for line in lines if line != ""]
 
         if center:
             lines = ["{:^{length}}".format(line, length=line_length) for line in lines]
@@ -181,9 +175,23 @@ def write_editing_vehicle(vehicle):
     active_profile["vehicles"][active_profile["editing"]] = vehicle
 
 
+def generate_inventory():
+    inventory = []
+    parts = vehicle_parts.get_vehicle_parts()
+
+    for part_key in parts:
+        for i in range(3):
+            inventory.append([part_key, parts[part_key]["level"], parts[part_key]["part_type"]])
+
+    return inventory
+
+
 def add_new_profile(profile_name):
+    debug_inventory = generate_inventory()
+
     default_profile = {"version": vinland_version, "volume": 1.0, "sensitivity": 0.95, "vehicles": {}, "editing": None,
-                       "inventory": {}, "game_turn": 0, "faction": "vinland", "money": 5000, "saved_game": None}
+                       "part_filter": "weapon", "inventory": debug_inventory, "game_turn": 0, "faction": "vinland", "money": 5000,
+                       "saved_game": None, "part_page": 0}
     bge.logic.globalDict["profiles"][profile_name] = default_profile
     bge.logic.globalDict["active_profile"] = profile_name
 

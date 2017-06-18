@@ -5,7 +5,7 @@ import game_audio
 import user_interface
 import vehicle_parts
 
-button_info = {"medium_button": {"size": (1.0, 0.5)},
+button_info = {"medium_button": {"size": (1.4, 0.7)},
                "screw_button": {"size": (2.0, 1.0)},
                "radio_button_yes": {"size": (1.7, 0.7)},
                "radio_button_no": {"size": (1.7, 0.7)},
@@ -14,8 +14,18 @@ button_info = {"medium_button": {"size": (1.0, 0.5)},
                "square_button": {"size": (0.5, 1.0)},
                "text_box": {"size": (4.0, 1.0)},
                "undefined": {"size": (1.0, 0.5)},
+               "small_display_text_box": {"size": (3.0, 0.8)},
                "display_text_box": {"size": (4.0, 1.0)}}
 
+color_dict = {"engine": [0.0, 1.0, 0.2, 1.0],
+              "drive": [0.0, 0.1, 1.0, 1.0],
+              "utility": [0.1, 0.8, 0.8, 1.0],
+              "armor": [0.9, 1.0, 0.0, 1.0],
+              "weapon": [1.0, 0.1, 0.0, 1.0],
+              "crew": [0.6, 0.0, 1.0, 1.0],
+              "empty": [0.8, 0.8, 0.8, 1.0],
+              "design": [0.5, 0.5, 0.5, 1.0],
+              "cancel": [0.5, 0.0, 0.0, 1.0]}
 
 # Buttons
 
@@ -47,7 +57,7 @@ class TextCursor(object):
 class Button(object):
     is_text_box = False
 
-    def __init__(self, widget, button_type, x_position, y_position, display_text, message, alt_message=None):
+    def __init__(self, widget, button_type, x_position, y_position, display_text, message, alt_message=None, color=None):
         self.widget = widget
         self.focus = False
         self.button_type = button_type
@@ -55,6 +65,8 @@ class Button(object):
         self.off_mesh = "{}_off".format(self.button_type)
         self.button_object = self.widget.box.scene.addObject(self.off_mesh, self.widget.box, 0)
         self.button_object.worldPosition += mathutils.Vector([x_position, y_position, 0.10])
+        if color:
+            self.button_object.color = color
         self.button_object['owner'] = self
         self.text_object = bgeutils.get_ob("button_text", self.button_object.children)
         self.switch(False)
@@ -77,12 +89,19 @@ class Button(object):
         self.widget.buttons.append(self)
 
     def switch(self, on):
+        on_color = [1.0, 1.0, 1.0, 1.0]
+        off_color = [0.0, 0.0, 0.01, 1.0]
+
+        if self.button_type == "medium_button":
+            on_color = [0.0, 0.0, 0.01, 1.0]
+            off_color = [1.0, 1.0, 1.0, 1.0]
+
         if on:
             self.button_object.replaceMesh(self.on_mesh)
-            self.text_object.color = [1.0, 1.0, 1.0, 1.0]
+            self.text_object.color = on_color
         else:
             self.button_object.replaceMesh(self.off_mesh)
-            self.text_object.color = [0.0, 0.0, 0.01, 1.0]
+            self.text_object.color = off_color
 
     def set_display_text(self):
 
@@ -274,7 +293,7 @@ class StartWidget(Widget):
         Button(self, "large_button", 0.0, zero, "Manage\nVehicles",
                bgeutils.GeneralMessage("NEW_LEVEL", "VehicleManagerMenu"))
         Button(self, "large_button", 0.0, zero - spacing, "Start\nGame", bgeutils.GeneralMessage("NEW_LEVEL", "Level"))
-        Button(self, "large_button", 0.0, zero - (spacing * 2.0), "Exit", bgeutils.GeneralMessage("EXIT"))
+        Button(self, "large_button", 0.0, zero - (spacing * 2.0), "Exit", bgeutils.GeneralMessage("EXIT"), color=color_dict["cancel"])
 
 
 class AddProfileWidget(Widget):
@@ -293,7 +312,7 @@ class AddProfileWidget(Widget):
 
         profile_name = TextButton(self, "text_box", 0.0, zero + spacing, "<<Enter name>>", None)
         Button(self, "large_button", 0.0, zero, "Add\nProfile", bgeutils.GeneralMessage("SAVE_PROFILE", profile_name))
-        Button(self, "large_button", 0.0, zero - spacing, "Go\nBack", bgeutils.GeneralMessage("NEW_LEVEL", "StartMenu"))
+        Button(self, "large_button", 0.0, zero - spacing, "Go\nBack", bgeutils.GeneralMessage("NEW_LEVEL", "StartMenu"), color=color_dict["cancel"])
 
     def process_commands(self):
         for command in self.commands:
@@ -397,7 +416,7 @@ class ProfileDetails(Widget):
             DisplayTextButton(self, "display_text_box", 0.0, y, label, None)
             y -= 1.0
 
-        Button(self, "large_button", 0.0, y, "Go\nBack", bgeutils.GeneralMessage("NEW_LEVEL", "StartMenu"))
+        Button(self, "large_button", 0.0, y, "Go\nBack", bgeutils.GeneralMessage("NEW_LEVEL", "StartMenu"), color=color_dict["cancel"])
 
 
 class VehicleOptionsSettingWidget(Widget):
@@ -417,7 +436,7 @@ class VehicleOptionsSettingWidget(Widget):
         zero = 0.2
         spacing = button_size[1] + 0.1
 
-        Button(self, "large_button", 0.0, zero - (spacing * 2.0), "Go\nback", bgeutils.GeneralMessage("NEW_LEVEL", "VehicleManagerMenu"))
+        Button(self, "large_button", 0.0, zero - (spacing * 2.0), "Go\nback", bgeutils.GeneralMessage("NEW_LEVEL", "VehicleManagerMenu"), color=color_dict["cancel"])
         current_vehicle = bgeutils.get_editing_vehicle()
 
         DisplayTextButton(self, "display_text_box", 0.0, zero + spacing, "vehicle_name", None)
@@ -558,10 +577,13 @@ class VehicleSizeWidget(Widget):
             if command.header == "CHASSIS_SIZE":
                 change = command.content
                 current_vehicle["chassis"] = min(4, max(1, current_vehicle["chassis"] + change))
+                max_turret_size = current_vehicle["chassis"] + 1
+                current_vehicle["turret"] = min(current_vehicle["turret"], max_turret_size)
 
             if command.header == "TURRET_SIZE":
                 change = command.content
-                current_vehicle["turret"] = min(5, max(0, current_vehicle["turret"] + change))
+                max_turret_size = current_vehicle["chassis"] + 1
+                current_vehicle["turret"] = min(max_turret_size, max(0, current_vehicle["turret"] + change))
 
         bgeutils.write_editing_vehicle(current_vehicle)
 
@@ -577,7 +599,7 @@ class VehicleManagerSettingsWidget(Widget):
         spacing = button_size[1] + 0.1
 
         Button(self, "large_button", 0.0, zero + spacing, "Add\nnew\nvehicle", bgeutils.GeneralMessage("ADD_VEHICLE", None))
-        Button(self, "large_button", 0.0, zero, "Go\nback", bgeutils.GeneralMessage("NEW_LEVEL", "StartMenu"))
+        Button(self, "large_button", 0.0, zero, "Go\nback", bgeutils.GeneralMessage("NEW_LEVEL", "StartMenu"), color=color_dict["cancel"])
 
     def build_base_vehicle(self):
 
@@ -667,6 +689,165 @@ class VehicleManagerWidget(Widget):
 
         self.commands = []
 
+
+class VehicleGoToContentsWidget(Widget):
+    header_text = "Modify vehicle contents"
+
+    def __init__(self, menu, adder):
+        super().__init__(menu, adder)
+
+    def add_buttons(self):
+        Button(self, "large_button", 0.0, 1.0, "Modify\nContents", bgeutils.GeneralMessage("NEW_LEVEL", "VehicleContentsMenu"))
+
+    def process_commands(self):
+        for command in self.commands:
+            if command.header == "NEW_LEVEL":
+                self.menu.new_level = command.content
+                bge.logic.globalDict["profiles"][bge.logic.globalDict["active_profile"]][
+                    "part_filter"] = "weapon"
+                bge.logic.globalDict["profiles"][bge.logic.globalDict["active_profile"]]["part_page"] = 0
+
+        self.commands = []
+
+
+class VehicleContentsSettingsWidget(Widget):
+    header_text = "Select contents filter"
+
+    def __init__(self, menu, adder):
+        super().__init__(menu, adder)
+
+    def add_buttons(self):
+        zero = 1.8
+
+        x_spacing, y_spacing = button_info["radio_button_yes"]["size"]
+
+        y = 0
+
+        types = ["weapon", "armor", "engine", "crew", "drive", "utility"]
+
+        for part_type in types:
+            part_filter = bge.logic.globalDict["profiles"][bge.logic.globalDict["active_profile"]]["part_filter"]
+
+            if part_type != part_filter:
+                setting = "no"
+            else:
+                setting = "yes"
+
+            Button(self, "radio_button_{}".format(setting), 0.0, zero - (y * (y_spacing + 0.1)), part_type,
+                   bgeutils.GeneralMessage("SWITCH_PART_TYPE", part_type), color=color_dict[part_type])
+
+            y += 1
+
+        Button(self, "large_button", - 1.8, zero - 0.2, "Go\nback", bgeutils.GeneralMessage("NEW_LEVEL", "VehicleOptionMenu"), color=color_dict["cancel"])
+
+    def process_commands(self):
+        for command in self.commands:
+            if command.header == "NEW_LEVEL":
+                self.menu.new_level = command.content
+
+            if command.header == "SWITCH_PART_TYPE":
+                bge.logic.globalDict["profiles"][bge.logic.globalDict["active_profile"]]["part_filter"] = command.content
+                bge.logic.globalDict["profiles"][bge.logic.globalDict["active_profile"]]["part_page"] = 0
+                self.menu.new_level = "VehicleContentsMenu"
+
+        self.commands = []
+
+
+class InventoryWidget(Widget):
+    def __init__(self, menu, adder):
+        self.parts_dict = vehicle_parts.get_vehicle_parts()
+        self.page = self.get_page()
+        super().__init__(menu, adder)
+
+    def get_page(self):
+        page = bge.logic.globalDict["profiles"][bge.logic.globalDict["active_profile"]]["part_page"]
+        return "PAGE {}".format(page)
+
+    def add_buttons(self):
+
+        max_y = 2.2
+        min_y = -0.6
+
+        x = -2.2
+        y = max_y
+        x_spacing, y_spacing = button_info["medium_button"]["size"]
+
+        part_filter = bge.logic.globalDict["profiles"][bge.logic.globalDict["active_profile"]]["part_filter"]
+        inventory = bge.logic.globalDict["profiles"][bge.logic.globalDict["active_profile"]]["inventory"]
+        page = bge.logic.globalDict["profiles"][bge.logic.globalDict["active_profile"]]["part_page"]
+        filtered_parts = [p for p in inventory if p[2] == part_filter.upper()]
+
+        inventory = sorted(filtered_parts, key=lambda entry: entry[1])
+        max_page = max(1, int(len(inventory) / 12) - 1)
+
+        last_page = False
+
+        if len(inventory) > 0:
+
+            for i in range(24):
+                inventory_index = i + (page * 12)
+
+                if inventory_index < len(inventory):
+                    part_group = inventory[inventory_index]
+                    part_key = part_group[0]
+                    part = self.parts_dict[part_key]
+
+                    part_name = part["name"]
+
+                    Button(self, "medium_button", x, y, part_name,
+                           bgeutils.GeneralMessage("PICK_PART", part_key), color=color_dict[part_filter])
+
+                    if y > min_y:
+                        y -= y_spacing
+                    else:
+                        y = max_y
+                        x += x_spacing + 0.1
+
+                else:
+                    last_page = True
+
+        else:
+            last_page = True
+
+        if not last_page:
+            Button(self, "square_button", 2.0, -2.0, ">",
+                   bgeutils.GeneralMessage("SET_PAGE", page + 1))
+            Button(self, "square_button", 2.5, -2.0, ">>",
+                   bgeutils.GeneralMessage("SET_PAGE", max_page))
+
+        DisplayTextButton(self, "small_display_text_box", 0, -2, "page", None)
+
+        if page > 0:
+            Button(self, "square_button", -2.0, -2.0, "<",
+                   bgeutils.GeneralMessage("SET_PAGE", page - 1))
+            Button(self, "square_button", -2.5, -2.0, "<<",
+                   bgeutils.GeneralMessage("SET_PAGE", 0))
+
+    def process_commands(self):
+        self.page = self.get_page()
+
+        for command in self.commands:
+            if command.header == "SET_PAGE":
+                bge.logic.globalDict["profiles"][bge.logic.globalDict["active_profile"]][
+                    "part_page"] = command.content
+                self.menu.new_level = "VehicleContentsMenu"
+
+            if command.header == "PICK_PART":
+                new_inventory = []
+                part_key = command.content
+                removed = False
+                inventory = bge.logic.globalDict["profiles"][bge.logic.globalDict["active_profile"]]["inventory"]
+                for part_group in inventory:
+                    if part_group[0] == part_key and not removed:
+                        removed = True
+                    else:
+                        new_inventory.append(part_group)
+
+                bge.logic.globalDict["profiles"][bge.logic.globalDict["active_profile"]]["inventory"] = new_inventory
+                self.menu.new_level = "VehicleContentsMenu"
+
+        self.commands = []
+
 # menus
 
 
@@ -687,6 +868,8 @@ class Menu(object):
         self.adders = sorted(widget_adders, key=lambda adder: adder.get("widget_adder"))
         self.widgets = []
         self.new_level = None
+
+        self.holding_part = None
 
     def load(self):
         if self.loading >= 0:
@@ -715,6 +898,8 @@ class Menu(object):
         return target_ray
 
     def update(self):
+
+        self.manager.debugger.printer(type(self).__name__, "menu mode: ")
 
         for command in self.commands:
             if command["label"] == "SOUND_EFFECT":
@@ -766,6 +951,7 @@ class StartMenu(Menu):
     def __init__(self, manager):
         super().__init__(manager)
         bge.logic.globalDict["profiles"][bge.logic.globalDict["active_profile"]]["editing"] = None
+        bge.logic.globalDict["profiles"][bge.logic.globalDict["active_profile"]]["part_page"] = 0
 
     def activate(self):
         StartWidget(self, self.adders[0])
@@ -781,6 +967,7 @@ class VehicleManagerMenu(Menu):
     def __init__(self, manager):
         super().__init__(manager)
         bge.logic.globalDict["profiles"][bge.logic.globalDict["active_profile"]]["editing"] = None
+        bge.logic.globalDict["profiles"][bge.logic.globalDict["active_profile"]]["part_page"] = 0
 
     def activate(self):
         VehicleManagerWidget(self, self.adders[5])
@@ -792,4 +979,12 @@ class VehicleOptionMenu(Menu):
         VehicleOptionsWidget(self, self.adders[3])
         VehicleOptionsSettingWidget(self, self.adders[1])
         VehicleSizeWidget(self, self.adders[2])
+        VehicleGoToContentsWidget(self, self.adders[5])
+
+
+class VehicleContentsMenu(Menu):
+
+    def activate(self):
+        VehicleContentsSettingsWidget(self, self.adders[1])
+        InventoryWidget(self, self.adders[4])
 
