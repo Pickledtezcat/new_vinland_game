@@ -238,11 +238,36 @@ class StatusBar(object):
 
 
 class MenuInterface(object):
-    def __init__(self, level):
-        self.level = level
-        self.manager = self.level.manager
+    def __init__(self, menu):
+        self.menu = menu
+        self.manager = self.menu.manager
         self.cursor = self.manager.own.scene.addObject("movement_cursor", self.manager.own, 0)
         self.cursor.setParent(self.manager.main_camera)
+        self.tool_tip = bgeutils.get_ob("tool_tip", self.cursor.children)
+        self.tool_tip.resolution = 8
+        self.tool_tip_background = bgeutils.get_ob("tool_tip_background", self.cursor.children)
+        self.tool_tip_contents = "blarg!"
+        self.set_tool_tip()
+
+    def set_tool_tip(self):
+
+        if self.menu.tool_tip_text != self.tool_tip_contents:
+            self.tool_tip_contents = self.menu.tool_tip_text
+            self.tool_tip["Text"] = self.menu.tool_tip_text
+            lines = self.menu.tool_tip_text.splitlines()
+            width = 0
+            for line in lines:
+                line_width = len(line)
+                if line_width > width:
+                    width = line_width
+
+            height = len(lines)
+
+            x_scale = 0.0052
+            y_scale = 0.0087
+
+            self.tool_tip_background.localScale.x = x_scale * width
+            self.tool_tip_background.localScale.y = y_scale * height
 
     def terminate(self):
         self.cursor.endObject()
@@ -258,6 +283,8 @@ class MenuInterface(object):
         return mouse_hit
 
     def update(self):
+        self.set_tool_tip()
+
         mouse_hit = self.mouse_ray(self.manager.game_input.virtual_mouse)
 
         if mouse_hit[0]:
@@ -265,7 +292,7 @@ class MenuInterface(object):
 
             # TODO add context sensitive cursor for menus
 
-            # if self.level.context == "TARGET":
+            # if self.menu.context == "TARGET":
             #     self.cursor.replaceMesh("target_cursor")
             # else:
             #     self.cursor.replaceMesh("movement_cursor")

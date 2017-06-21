@@ -4,6 +4,7 @@ import mathutils
 import game_audio
 import user_interface
 import vehicle_parts
+import random
 
 button_info = {"medium_button": {"size": (1.4, 0.7)},
                "screw_button": {"size": (2.0, 1.0)},
@@ -57,7 +58,7 @@ class TextCursor(object):
 class Button(object):
     is_text_box = False
 
-    def __init__(self, widget, button_type, x_position, y_position, display_text, message, alt_message=None, color=None):
+    def __init__(self, widget, button_type, x_position, y_position, display_text, message, alt_message=None, color=None, help_text=""):
         self.widget = widget
         self.focus = False
         self.button_type = button_type
@@ -85,6 +86,7 @@ class Button(object):
         self.text_contents = ""
         self.recharge = 0
         self.text_cursor = None
+        self.button_object["help_text"] = bgeutils.split_in_lines(str(help_text), 12)
 
         self.widget.buttons.append(self)
 
@@ -756,12 +758,13 @@ class VehicleContentsSettingsWidget(Widget):
 class InventoryWidget(Widget):
     def __init__(self, menu, adder):
         self.parts_dict = vehicle_parts.get_vehicle_parts()
+        self.max_page = 0
         self.page = self.get_page()
         super().__init__(menu, adder)
 
     def get_page(self):
         page = bge.logic.globalDict["profiles"][bge.logic.globalDict["active_profile"]]["part_page"]
-        return "PAGE {}".format(page)
+        return "PAGE {}/{}".format(page + 1, self.max_page + 1)
 
     def add_buttons(self):
 
@@ -778,9 +781,7 @@ class InventoryWidget(Widget):
         filtered_parts = [p for p in inventory if p[2] == part_filter.upper()]
 
         inventory = sorted(filtered_parts, key=lambda entry: entry[1])
-        max_page = max(1, int(len(inventory) / 12) - 1)
-
-        last_page = False
+        self.max_page = max(1, int(len(inventory) / 12) - 1)
 
         if len(inventory) > 0:
 
@@ -791,11 +792,12 @@ class InventoryWidget(Widget):
                     part_group = inventory[inventory_index]
                     part_key = part_group[0]
                     part = self.parts_dict[part_key]
+                    description = part["description"]
 
                     part_name = part["name"]
 
                     Button(self, "medium_button", x, y, part_name,
-                           bgeutils.GeneralMessage("PICK_PART", part_key), color=color_dict[part_filter])
+                           bgeutils.GeneralMessage("PICK_PART", part_key), color=color_dict[part_filter], help_text=description)
 
                     if y > min_y:
                         y -= y_spacing
@@ -803,17 +805,11 @@ class InventoryWidget(Widget):
                         y = max_y
                         x += x_spacing + 0.1
 
-                else:
-                    last_page = True
-
-        else:
-            last_page = True
-
-        if not last_page:
+        if page != self.max_page:
             Button(self, "square_button", 2.0, -2.0, ">",
                    bgeutils.GeneralMessage("SET_PAGE", page + 1))
             Button(self, "square_button", 2.5, -2.0, ">>",
-                   bgeutils.GeneralMessage("SET_PAGE", max_page))
+                   bgeutils.GeneralMessage("SET_PAGE", self.max_page))
 
         DisplayTextButton(self, "small_display_text_box", 0, -2, "page", None)
 
@@ -861,6 +857,7 @@ class Menu(object):
         self.scene = self.level_object.scene
         self.listener = self.manager.main_camera
         self.game_audio = game_audio.Audio(self)
+        self.tool_tip_text = ""
         self.user_interface = user_interface.MenuInterface(self)
         self.commands = []
 
@@ -918,8 +915,14 @@ class Menu(object):
 
         clicked = left_click or right_click
 
+        hit_ray = self.mouse_hit_ray("button")
+        help_text = ""
+        if hit_ray[0]:
+            help_text = hit_ray[0].get("help_text")
+
+        self.tool_tip_text = help_text
+
         if clicked:
-            hit_ray = self.mouse_hit_ray("button")
             exclude = None
 
             if hit_ray[0]:
@@ -986,5 +989,5 @@ class VehicleContentsMenu(Menu):
 
     def activate(self):
         VehicleContentsSettingsWidget(self, self.adders[1])
-        InventoryWidget(self, self.adders[4])
+        InventoryWidget(self, self.adders[3])
 
