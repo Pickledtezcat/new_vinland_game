@@ -4,6 +4,7 @@ import mathutils
 import game_audio
 import user_interface
 import vehicle_parts
+import builder_tools
 import random
 
 button_info = {"medium_button": {"size": (1.4, 0.7)},
@@ -81,14 +82,19 @@ class Button(object):
         self.alt_message = alt_message
 
         self.click = False
+        self.click_location = None
         self.alt_click = False
         self.clicked = False
         self.text_contents = ""
         self.recharge = 0
         self.text_cursor = None
-        self.button_object["help_text"] = bgeutils.split_in_lines(str(help_text), 12)
+        self.help_text = help_text
 
         self.widget.buttons.append(self)
+
+    def get_help_text(self):
+
+        return bgeutils.split_in_lines(str(self.help_text), 12)
 
     def switch(self, on):
         on_color = [1.0, 1.0, 1.0, 1.0]
@@ -120,6 +126,7 @@ class Button(object):
                     self.widget.menu.commands.append(sound_command)
 
                     self.click = False
+                    self.click_location = None
                     self.clicked = True
             else:
                 self.clicked = False
@@ -148,8 +155,8 @@ class Button(object):
 class TextButton(Button):
     is_text_box = True
 
-    def __init__(self, widget, button_type, x_position, y_position, display_text, message, alt_message=None):
-        super().__init__(widget, button_type, x_position, y_position, display_text, message, alt_message)
+    def __init__(self, widget, button_type, x_position, y_position, display_text, message, alt_message=None, color=None, help_text=""):
+        super().__init__(widget, button_type, x_position, y_position, display_text, message, alt_message, color, help_text)
 
         self.text_cursor = TextCursor(self.button_object)
         self.text_cursor.visible = True
@@ -216,8 +223,8 @@ class TextButton(Button):
 
 
 class DisplayTextButton(Button):
-    def __init__(self, widget, button_type, x_position, y_position, display_text, message, alt_message=None):
-        super().__init__(widget, button_type, x_position, y_position, display_text, message, alt_message)
+    def __init__(self, widget, button_type, x_position, y_position, display_text, message, alt_message=None, color=None, help_text=""):
+        super().__init__(widget, button_type, x_position, y_position, display_text, message, alt_message, color, help_text)
         self.switch(True)
 
     def set_display_text(self):
@@ -443,7 +450,7 @@ class VehicleOptionsSettingWidget(Widget):
 
         DisplayTextButton(self, "display_text_box", 0.0, zero + spacing, "vehicle_name", None)
 
-        vehicle_name = TextButton(self, "text_box", 0.0, zero, current_vehicle["name"], None)
+        vehicle_name = TextButton(self, "text_box", 0.0, zero, current_vehicle["name"], None, help_text="Enter new name here.")
         Button(self, "large_button", 0.0, zero - spacing, "Rename\nVehicle",
                bgeutils.GeneralMessage("RENAME_VEHICLE", vehicle_name))
 
@@ -491,7 +498,7 @@ class VehicleOptionsWidget(Widget):
 
             name = option["name"]
 
-            Button(self, "radio_button_{}".format(setting), x, y, name, bgeutils.GeneralMessage("TOGGLE_OPTION", option_key))
+            Button(self, "radio_button_{}".format(setting), x, y, name, bgeutils.GeneralMessage("TOGGLE_OPTION", option_key), help_text=option["description"])
 
             if y > min_y:
                 y -= y_spacing
@@ -600,31 +607,8 @@ class VehicleManagerSettingsWidget(Widget):
         zero = 0.2
         spacing = button_size[1] + 0.1
 
-        Button(self, "large_button", 0.0, zero + spacing, "Add\nnew\nvehicle", bgeutils.GeneralMessage("ADD_VEHICLE", None))
+        Button(self, "large_button", 0.0, zero + spacing, "Add\nnew\nvehicle", bgeutils.GeneralMessage("ADD_VEHICLE", None), help_text="Add a new vehicle type.")
         Button(self, "large_button", 0.0, zero, "Go\nback", bgeutils.GeneralMessage("NEW_LEVEL", "StartMenu"), color=color_dict["cancel"])
-
-    def build_base_vehicle(self):
-
-        vehicle = {}
-
-        options = vehicle_parts.get_design_rules()
-        for option_key in options:
-            option = options[option_key]
-
-            if option["name"] == "tracked drive":
-                option["setting"] = True
-            else:
-                option["setting"] = False
-
-            options[option_key] = option
-
-        vehicle["options"] = options
-        vehicle["turret"] = 0
-        vehicle["chassis"] = 1
-        vehicle["contents"] = {}
-        vehicle["name"] = "new vehicle"
-
-        return vehicle
 
     def process_commands(self):
         for command in self.commands:
@@ -641,7 +625,8 @@ class VehicleManagerSettingsWidget(Widget):
                 bgeutils.write_editing_vehicle(editing_vehicle)
 
             if command.header == "ADD_VEHICLE":
-                vehicle = self.build_base_vehicle()
+                vehicle = builder_tools.build_base_vehicle()
+
                 bgeutils.add_new_vehicle(vehicle)
                 self.menu.new_level = "VehicleManagerMenu"
 
@@ -665,7 +650,7 @@ class VehicleManagerWidget(Widget):
             vehicle = bge.logic.globalDict["profiles"][bge.logic.globalDict["active_profile"]]["vehicles"][vehicle_key]
             vehicle_name = vehicle["name"]
 
-            Button(self, "screw_button", x, y, vehicle_name, bgeutils.GeneralMessage("EDIT_VEHICLE", vehicle_key), alt_message=bgeutils.GeneralMessage("REMOVE_VEHICLE", vehicle_key))
+            Button(self, "screw_button", x, y, vehicle_name, bgeutils.GeneralMessage("EDIT_VEHICLE", vehicle_key), alt_message=bgeutils.GeneralMessage("REMOVE_VEHICLE", vehicle_key), help_text="Left click to edit, right click to delete.")
 
             if y > min_y:
                 y -= y_spacing
@@ -844,6 +829,28 @@ class InventoryWidget(Widget):
 
         self.commands = []
 
+
+class VehicleContentsWidget(Widget):
+
+    def __init__(self, menu, adder):
+        self.parts_dict = vehicle_parts.get_vehicle_parts()
+        editing = bgeutils.get_editing_vehicle()
+        if not editing["contents"]:
+            builder_tools.create_vehicle_layout(editing)
+            bgeutils.write_editing_vehicle(editing)
+
+        super().__init__(menu, adder)
+        self.box.replaceMesh("tall_widget")
+
+    def add_buttons(self):
+        # TODO add a contents layout button
+
+        pass
+
+
+
+
+
 # menus
 
 
@@ -910,40 +917,43 @@ class Menu(object):
 
         self.game_audio.update()
 
-        left_click = "left_button" in self.manager.game_input.buttons
-        right_click = "right_button" in self.manager.game_input.buttons
-
-        clicked = left_click or right_click
-
         hit_ray = self.mouse_hit_ray("button")
         help_text = ""
+
         if hit_ray[0]:
-            help_text = hit_ray[0].get("help_text")
 
-        self.tool_tip_text = help_text
-
-        if clicked:
-            exclude = None
-
-            if hit_ray[0]:
-                hit_ray[0]['owner'].click = True
-                if right_click:
-                    hit_ray[0]['owner'].alt_click = True
-                exclude = hit_ray[0]['owner']
+            shift_held = "shift" in self.manager.game_input.keys
 
             for widget in self.widgets:
-                widget.defocus_buttons(exclude)
+                if shift_held:
+                    widget.shift_held = True
+                else:
+                    widget.shift_held = False
 
-        shift_held = "shift" in self.manager.game_input.keys
+                widget.update()
 
-        for widget in self.widgets:
-            if shift_held:
-                widget.shift_held = True
-            else:
-                widget.shift_held = False
+            left_click = "left_button" in self.manager.game_input.buttons
+            right_click = "right_button" in self.manager.game_input.buttons
 
-            widget.update()
+            clicked = left_click or right_click
 
+            owner = hit_ray[0]["owner"]
+            help_text = owner.get_help_text()
+
+            if clicked:
+                exclude = None
+
+                if hit_ray[0]:
+                    owner.click_location = hit_ray[1]
+                    owner.click = True
+                    if right_click:
+                        owner.alt_click = True
+                    exclude = owner
+
+                for widget in self.widgets:
+                    widget.defocus_buttons(exclude)
+
+        self.tool_tip_text = help_text
         self.user_interface.update()
 
         if self.new_level:
@@ -953,8 +963,6 @@ class Menu(object):
 class StartMenu(Menu):
     def __init__(self, manager):
         super().__init__(manager)
-        bge.logic.globalDict["profiles"][bge.logic.globalDict["active_profile"]]["editing"] = None
-        bge.logic.globalDict["profiles"][bge.logic.globalDict["active_profile"]]["part_page"] = 0
 
     def activate(self):
         StartWidget(self, self.adders[0])
@@ -969,6 +977,9 @@ class ProfileManagerMenu(Menu):
 class VehicleManagerMenu(Menu):
     def __init__(self, manager):
         super().__init__(manager)
+
+        # TODO make sure this happens every time you leave the vehicle contents / options editor
+
         bge.logic.globalDict["profiles"][bge.logic.globalDict["active_profile"]]["editing"] = None
         bge.logic.globalDict["profiles"][bge.logic.globalDict["active_profile"]]["part_page"] = 0
 
@@ -990,4 +1001,5 @@ class VehicleContentsMenu(Menu):
     def activate(self):
         VehicleContentsSettingsWidget(self, self.adders[1])
         InventoryWidget(self, self.adders[3])
+        VehicleContentsWidget(self, self.adders[0])
 

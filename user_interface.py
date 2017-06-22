@@ -244,7 +244,7 @@ class MenuInterface(object):
         self.cursor = self.manager.own.scene.addObject("movement_cursor", self.manager.own, 0)
         self.cursor.setParent(self.manager.main_camera)
         self.tool_tip = bgeutils.get_ob("tool_tip", self.cursor.children)
-        self.tool_tip.resolution = 8
+        self.tool_tip.resolution = 12
         self.tool_tip_background = bgeutils.get_ob("tool_tip_background", self.cursor.children)
         self.tool_tip_contents = "blarg!"
         self.set_tool_tip()
