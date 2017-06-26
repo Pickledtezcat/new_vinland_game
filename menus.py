@@ -7,6 +7,8 @@ import vehicle_parts
 import builder_tools
 import random
 
+parts_dict = vehicle_parts.get_vehicle_parts()
+
 button_info = {"medium_button": {"size": (1.4, 0.7)},
                "screw_button": {"size": (2.0, 1.0)},
                "radio_button_yes": {"size": (1.7, 0.7)},
@@ -16,6 +18,7 @@ button_info = {"medium_button": {"size": (1.4, 0.7)},
                "square_button": {"size": (0.5, 1.0)},
                "text_box": {"size": (4.0, 1.0)},
                "undefined": {"size": (1.0, 0.5)},
+               "contents_button":{"size": (6.5, 11.0)},
                "small_display_text_box": {"size": (3.0, 0.8)},
                "display_text_box": {"size": (4.0, 1.0)}}
 
@@ -92,7 +95,7 @@ class Button(object):
 
         self.widget.buttons.append(self)
 
-    def get_help_text(self):
+    def get_help_text(self, mouse_position):
 
         return bgeutils.split_in_lines(str(self.help_text), 12)
 
@@ -234,6 +237,58 @@ class DisplayTextButton(Button):
     def update(self):
         self.set_display_text()
 
+
+class ContentsButton(Button):
+    def __init__(self, widget, button_type, x_position, y_position, display_text, message, alt_message=None, color=None, help_text=""):
+        super().__init__(widget, button_type, x_position, y_position, display_text, message, alt_message, color,
+                         help_text)
+
+        self.tiles = []
+        builder_tools.draw_base(self)
+
+    def get_help_text(self, mouse_position):
+        location_key = builder_tools.get_location_key(self, mouse_position)
+
+        editing = bgeutils.get_editing_vehicle()
+        contents = editing["contents"]
+        tile = contents.get(location_key)
+
+        if tile:
+            location = tile["location"]
+            if location == "BLOCKED":
+                return "Location blocked by turret."
+
+            part_key = tile["part"]
+
+            if part_key:
+                part = parts_dict.get(part_key)
+                if part:
+                    description = part["description"]
+
+                return "{}\n{}".format(location.tile(), description)
+
+            return tile["location"].title()
+        else:
+            return ""
+
+    def update(self):
+
+        if not self.clicked:
+            if self.click:
+                self.clicked = True
+                message = bgeutils.GeneralMessage("ADD_CONTENTS", builder_tools.get_location_key(self, self.click_location))
+                self.widget.commands.append(message)
+
+            if self.alt_click:
+                self.clicked = True
+                message = bgeutils.GeneralMessage("REMOVE_CONTENTS",
+                                                  builder_tools.get_location_key(self, self.click_location))
+                self.widget.commands.append(message)
+
+    def end_button(self):
+        self.button_object.endObject()
+        for tile in self.tiles:
+            tile.endObject()
 
 # widgets
 
@@ -525,6 +580,9 @@ class VehicleOptionsWidget(Widget):
                         shared_option["setting"] = False
 
         toggle_option["setting"] = not setting
+        current_vehicle["contents"] = {}
+
+        bgeutils.write_editing_vehicle(current_vehicle)
 
     def process_commands(self):
         for command in self.commands:
@@ -594,6 +652,7 @@ class VehicleSizeWidget(Widget):
                 max_turret_size = current_vehicle["chassis"] + 1
                 current_vehicle["turret"] = min(max_turret_size, max(0, current_vehicle["turret"] + change))
 
+        current_vehicle["contents"] = {}
         bgeutils.write_editing_vehicle(current_vehicle)
 
         self.commands = []
@@ -742,7 +801,6 @@ class VehicleContentsSettingsWidget(Widget):
 
 class InventoryWidget(Widget):
     def __init__(self, menu, adder):
-        self.parts_dict = vehicle_parts.get_vehicle_parts()
         self.max_page = 0
         self.page = self.get_page()
         super().__init__(menu, adder)
@@ -776,7 +834,7 @@ class InventoryWidget(Widget):
                 if inventory_index < len(inventory):
                     part_group = inventory[inventory_index]
                     part_key = part_group[0]
-                    part = self.parts_dict[part_key]
+                    part = parts_dict[part_key]
                     description = part["description"]
 
                     part_name = part["name"]
@@ -833,19 +891,18 @@ class InventoryWidget(Widget):
 class VehicleContentsWidget(Widget):
 
     def __init__(self, menu, adder):
-        self.parts_dict = vehicle_parts.get_vehicle_parts()
         editing = bgeutils.get_editing_vehicle()
         if not editing["contents"]:
             builder_tools.create_vehicle_layout(editing)
             bgeutils.write_editing_vehicle(editing)
 
         super().__init__(menu, adder)
-        self.box.replaceMesh("tall_widget")
+        self.box.visible = False
 
     def add_buttons(self):
         # TODO add a contents layout button
 
-        pass
+        ContentsButton(self, "contents_button", 0, 0, "", None, None)
 
 
 
@@ -938,7 +995,7 @@ class Menu(object):
             clicked = left_click or right_click
 
             owner = hit_ray[0]["owner"]
-            help_text = owner.get_help_text()
+            help_text = owner.get_help_text(hit_ray[1])
 
             if clicked:
                 exclude = None
