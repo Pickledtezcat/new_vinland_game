@@ -260,6 +260,16 @@ def get_design_rules():
 
     return new_rule_dictionary
 
+color_dict = {"engine": [0.0, 1.0, 0.2, 1.0],
+              "drive": [0.0, 0.1, 1.0, 1.0],
+              "utility": [0.1, 0.8, 0.8, 1.0],
+              "armor": [0.9, 1.0, 0.0, 1.0],
+              "weapon": [1.0, 0.1, 0.0, 1.0],
+              "crew": [0.6, 0.0, 1.0, 1.0],
+              "empty": [0.8, 0.8, 0.8, 1.0],
+              "design": [0.5, 0.5, 0.5, 1.0],
+              "cancel": [0.5, 0.0, 0.0, 1.0]}
+
 chassis_dict = {1: {"x": 2, "y": 5, "name": "mini_chassis", "front": 1, "armor_scale": 1.0},
                 2: {"x": 4, "y": 6, "name": "small_chassis", "front": 2, "armor_scale": 1.1},
                 3: {"x": 6, "y": 8, "name": "medium_chassis", "front": 3, "armor_scale": 1.2},

@@ -144,53 +144,29 @@ def save_settings():
         json.dump(bge.logic.globalDict, outfile)
 
 
-def add_new_vehicle(vehicle):
-
-    def get_vehicle_id(vehicle_id_number):
-        return "vehicle_{}".format(vehicle_id_number)
-
-    vehicle_id = None
-
-    id_number = 0
-    added = False
-    while not added:
-        vehicle_id = get_vehicle_id(id_number)
-        if vehicle_id not in bge.logic.globalDict["profiles"][bge.logic.globalDict["active_profile"]]["vehicles"]:
-            bge.logic.globalDict["profiles"][bge.logic.globalDict["active_profile"]]["vehicles"][vehicle_id] = vehicle
-            added = True
-        id_number += 1
-
-    save_settings()
-
-    return vehicle_id
-
-
-def get_editing_vehicle():
-    active_profile = bge.logic.globalDict["profiles"][bge.logic.globalDict["active_profile"]]
-    return active_profile["vehicles"][active_profile["editing"]]
-
-
-def write_editing_vehicle(vehicle):
-    active_profile = bge.logic.globalDict["profiles"][bge.logic.globalDict["active_profile"]]
-    active_profile["vehicles"][active_profile["editing"]] = vehicle
+# TODO write a real inventory generator
 
 
 def generate_inventory():
     inventory = []
-    parts = vehicle_parts.get_vehicle_parts()
+    parts_dict = vehicle_parts.get_vehicle_parts()
 
-    for part_key in parts:
+    for part_key in parts_dict:
         for i in range(3):
-            inventory.append([part_key, parts[part_key]["level"], parts[part_key]["part_type"]])
+            inventory.append([part_key, parts_dict[part_key]["level"], parts_dict[part_key]["part_type"]])
 
     return inventory
+
+
+def rotate_holding():
+    bge.logic.globalDict["profiles"][bge.logic.globalDict["active_profile"]]["rotated"] = not bge.logic.globalDict["profiles"][bge.logic.globalDict["active_profile"]]["rotated"]
 
 
 def add_new_profile(profile_name):
     debug_inventory = generate_inventory()
 
     default_profile = {"version": vinland_version, "volume": 1.0, "sensitivity": 0.95, "vehicles": {}, "editing": None,
-                       "part_filter": "weapon", "inventory": debug_inventory, "game_turn": 0, "faction": "vinland", "money": 5000,
+                       "part_filter": "weapon", "inventory": debug_inventory, "holding": None, "rotated": False, "game_turn": 0, "faction": "vinland", "money": 5000,
                        "saved_game": None, "part_page": 0}
     bge.logic.globalDict["profiles"][profile_name] = default_profile
     bge.logic.globalDict["active_profile"] = profile_name

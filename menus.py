@@ -22,15 +22,7 @@ button_info = {"medium_button": {"size": (1.4, 0.7)},
                "small_display_text_box": {"size": (3.0, 0.8)},
                "display_text_box": {"size": (4.0, 1.0)}}
 
-color_dict = {"engine": [0.0, 1.0, 0.2, 1.0],
-              "drive": [0.0, 0.1, 1.0, 1.0],
-              "utility": [0.1, 0.8, 0.8, 1.0],
-              "armor": [0.9, 1.0, 0.0, 1.0],
-              "weapon": [1.0, 0.1, 0.0, 1.0],
-              "crew": [0.6, 0.0, 1.0, 1.0],
-              "empty": [0.8, 0.8, 0.8, 1.0],
-              "design": [0.5, 0.5, 0.5, 1.0],
-              "cancel": [0.5, 0.0, 0.0, 1.0]}
+color_dict = vehicle_parts.color_dict
 
 # Buttons
 
@@ -96,8 +88,7 @@ class Button(object):
         self.widget.buttons.append(self)
 
     def get_help_text(self, mouse_position):
-
-        return bgeutils.split_in_lines(str(self.help_text), 12)
+        return self.help_text
 
     def switch(self, on):
         on_color = [1.0, 1.0, 1.0, 1.0]
@@ -244,12 +235,25 @@ class ContentsButton(Button):
                          help_text)
 
         self.tiles = []
+
+        # TODO set text to show adding errors
+        self.text_object["Text"] = "Right click to rotate."
         builder_tools.draw_base(self)
+        builder_tools.draw_parts(self)
+
+    def reset_button(self):
+        for tile in self.tiles:
+            tile.endObject()
+        self.tiles = []
+
+        builder_tools.draw_base(self)
+        builder_tools.draw_parts(self)
 
     def get_help_text(self, mouse_position):
         location_key = builder_tools.get_location_key(self, mouse_position)
+        self.widget.menu.manager.debugger.printer(location_key, label="key")
 
-        editing = bgeutils.get_editing_vehicle()
+        editing = builder_tools.get_editing_vehicle()
         contents = editing["contents"]
         tile = contents.get(location_key)
 
@@ -264,31 +268,46 @@ class ContentsButton(Button):
                 part = parts_dict.get(part_key)
                 if part:
                     description = part["description"]
-
-                return "{}\n{}".format(location.tile(), description)
+                    return "{}\n{}".format(location.title(), description)
 
             return tile["location"].title()
         else:
+            holding = bge.logic.globalDict["profiles"][bge.logic.globalDict["active_profile"]]["holding"]
+            if holding:
+                return "Right click to rotate."
+
             return ""
 
     def update(self):
+        self.set_display_text()
 
-        if not self.clicked:
+        if self.recharge == 0:
             if self.click:
-                self.clicked = True
-                message = bgeutils.GeneralMessage("ADD_CONTENTS", builder_tools.get_location_key(self, self.click_location))
-                self.widget.commands.append(message)
+                location = builder_tools.get_location_key(self, self.click_location)
 
-            if self.alt_click:
-                self.clicked = True
-                message = bgeutils.GeneralMessage("REMOVE_CONTENTS",
-                                                  builder_tools.get_location_key(self, self.click_location))
-                self.widget.commands.append(message)
+                if self.alt_click:
+                    message = bgeutils.GeneralMessage("REMOVE_CONTENTS", location)
+                    self.widget.commands.append(message)
+                else:
+                    message = bgeutils.GeneralMessage("ADD_CONTENTS", location)
+                    self.widget.commands.append(message)
+
+                self.click = False
+                self.alt_click = False
+                self.recharge = 12
+                self.click_location = None
+
+        else:
+            self.click = False
+            self.alt_click = False
+            self.click_location = None
+            self.recharge -= 1
 
     def end_button(self):
         self.button_object.endObject()
         for tile in self.tiles:
             tile.endObject()
+        self.tiles = []
 
 # widgets
 
@@ -492,7 +511,7 @@ class VehicleOptionsSettingWidget(Widget):
         self.vehicle_name = self.get_vehicle_name()
 
     def get_vehicle_name(self):
-        current_vehicle = bgeutils.get_editing_vehicle()
+        current_vehicle = builder_tools.get_editing_vehicle()
         return current_vehicle['name']
 
     def add_buttons(self):
@@ -501,7 +520,7 @@ class VehicleOptionsSettingWidget(Widget):
         spacing = button_size[1] + 0.1
 
         Button(self, "large_button", 0.0, zero - (spacing * 2.0), "Go\nback", bgeutils.GeneralMessage("NEW_LEVEL", "VehicleManagerMenu"), color=color_dict["cancel"])
-        current_vehicle = bgeutils.get_editing_vehicle()
+        current_vehicle = builder_tools.get_editing_vehicle()
 
         DisplayTextButton(self, "display_text_box", 0.0, zero + spacing, "vehicle_name", None)
 
@@ -520,9 +539,9 @@ class VehicleOptionsSettingWidget(Widget):
                 vehicle_name_button = command.content
                 if vehicle_name_button.text_contents:
 
-                    editing_vehicle = bgeutils.get_editing_vehicle()
+                    editing_vehicle = builder_tools.get_editing_vehicle()
                     editing_vehicle['name'] = vehicle_name_button.text_contents
-                    bgeutils.write_editing_vehicle(editing_vehicle)
+                    builder_tools.write_editing_vehicle(editing_vehicle)
 
         self.commands = []
 
@@ -582,7 +601,7 @@ class VehicleOptionsWidget(Widget):
         toggle_option["setting"] = not setting
         current_vehicle["contents"] = {}
 
-        bgeutils.write_editing_vehicle(current_vehicle)
+        builder_tools.write_editing_vehicle(current_vehicle)
 
     def process_commands(self):
         for command in self.commands:
@@ -604,12 +623,12 @@ class VehicleSizeWidget(Widget):
         self.turret_size = self.get_turret_size()
 
     def get_chassis_size(self):
-        current_vehicle = bgeutils.get_editing_vehicle()
+        current_vehicle = builder_tools.get_editing_vehicle()
         chassis_size = current_vehicle['chassis']
         return self.chassis_dict[chassis_size]["name"].upper().replace("_", " ")
 
     def get_turret_size(self):
-        current_vehicle = bgeutils.get_editing_vehicle()
+        current_vehicle = builder_tools.get_editing_vehicle()
         turret_size = current_vehicle['turret']
         return self.turret_dict[turret_size]["name"].upper().replace("_", " ")
 
@@ -635,25 +654,24 @@ class VehicleSizeWidget(Widget):
         self.chassis_size = self.get_chassis_size()
         self.turret_size = self.get_turret_size()
 
-        current_vehicle = bgeutils.get_editing_vehicle()
-
         for command in self.commands:
             if command.header == "EXIT":
                 bge.logic.endGame()
 
             if command.header == "CHASSIS_SIZE":
+                current_vehicle = builder_tools.get_editing_vehicle()
                 change = command.content
                 current_vehicle["chassis"] = min(4, max(1, current_vehicle["chassis"] + change))
                 max_turret_size = current_vehicle["chassis"] + 1
                 current_vehicle["turret"] = min(current_vehicle["turret"], max_turret_size)
+                current_vehicle["contents"] = {}
 
             if command.header == "TURRET_SIZE":
+                current_vehicle = builder_tools.get_editing_vehicle()
                 change = command.content
                 max_turret_size = current_vehicle["chassis"] + 1
                 current_vehicle["turret"] = min(max_turret_size, max(0, current_vehicle["turret"] + change))
-
-        current_vehicle["contents"] = {}
-        bgeutils.write_editing_vehicle(current_vehicle)
+                current_vehicle["contents"] = {}
 
         self.commands = []
 
@@ -679,14 +697,14 @@ class VehicleManagerSettingsWidget(Widget):
 
             if command.header == "RENAME_VEHICLE":
                 vehicle_name = command.content
-                editing_vehicle = bgeutils.get_editing_vehicle()
+                editing_vehicle = builder_tools.get_editing_vehicle()
                 editing_vehicle['name'] = vehicle_name
-                bgeutils.write_editing_vehicle(editing_vehicle)
+                builder_tools.write_editing_vehicle(editing_vehicle)
 
             if command.header == "ADD_VEHICLE":
                 vehicle = builder_tools.build_base_vehicle()
 
-                bgeutils.add_new_vehicle(vehicle)
+                builder_tools.add_new_vehicle(vehicle)
                 self.menu.new_level = "VehicleManagerMenu"
 
         self.commands = []
@@ -789,6 +807,7 @@ class VehicleContentsSettingsWidget(Widget):
     def process_commands(self):
         for command in self.commands:
             if command.header == "NEW_LEVEL":
+                builder_tools.replace_holding_part()
                 self.menu.new_level = command.content
 
             if command.header == "SWITCH_PART_TYPE":
@@ -882,6 +901,7 @@ class InventoryWidget(Widget):
                     else:
                         new_inventory.append(part_group)
 
+                bge.logic.globalDict["profiles"][bge.logic.globalDict["active_profile"]]["holding"] = part_key
                 bge.logic.globalDict["profiles"][bge.logic.globalDict["active_profile"]]["inventory"] = new_inventory
                 self.menu.new_level = "VehicleContentsMenu"
 
@@ -891,10 +911,10 @@ class InventoryWidget(Widget):
 class VehicleContentsWidget(Widget):
 
     def __init__(self, menu, adder):
-        editing = bgeutils.get_editing_vehicle()
+        self.button = None
+        editing = builder_tools.get_editing_vehicle()
         if not editing["contents"]:
-            builder_tools.create_vehicle_layout(editing)
-            bgeutils.write_editing_vehicle(editing)
+            builder_tools.create_vehicle_layout()
 
         super().__init__(menu, adder)
         self.box.visible = False
@@ -902,9 +922,35 @@ class VehicleContentsWidget(Widget):
     def add_buttons(self):
         # TODO add a contents layout button
 
-        ContentsButton(self, "contents_button", 0, 0, "", None, None)
+        self.button = ContentsButton(self, "contents_button", 0, 0, "", None, None)
 
+    def process_commands(self):
 
+        for command in self.commands:
+            if command.header == "ADD_CONTENTS":
+                placement = builder_tools.check_adding_part(command.content)
+                self.button.display_text = placement
+                if placement == "Part Placed.":
+
+                    sound_command = {"label": "SOUND_EFFECT", "content": ("SELECT_1", None, 0.3, 1.0)}
+                    self.menu.commands.append(sound_command)
+                    builder_tools.place_part(command.content)
+
+                    self.button.reset_button()
+
+                else:
+                    sound_command = {"label": "SOUND_EFFECT", "content": ("SELECT_2", None, 0.3, 1.0)}
+                    self.menu.commands.append(sound_command)
+
+            if command.header == "REMOVE_CONTENTS":
+                editing = builder_tools.get_editing_vehicle()
+
+                if editing["contents"].get(command.content):
+                    pass
+                else:
+                    bgeutils.rotate_holding()
+
+        self.commands = []
 
 
 
@@ -995,20 +1041,18 @@ class Menu(object):
             clicked = left_click or right_click
 
             owner = hit_ray[0]["owner"]
-            help_text = owner.get_help_text(hit_ray[1])
+            hit_position = hit_ray[1].copy()
+
+            help_text = owner.get_help_text(hit_position.copy())
 
             if clicked:
-                exclude = None
-
-                if hit_ray[0]:
-                    owner.click_location = hit_ray[1]
-                    owner.click = True
-                    if right_click:
-                        owner.alt_click = True
-                    exclude = owner
+                owner.click_location = hit_position.copy()
+                owner.click = True
+                if right_click:
+                    owner.alt_click = True
 
                 for widget in self.widgets:
-                    widget.defocus_buttons(exclude)
+                    widget.defocus_buttons(owner)
 
         self.tool_tip_text = help_text
         self.user_interface.update()

@@ -1,7 +1,12 @@
 import bge
 import mathutils
 import bgeutils
+import builder_tools
+import vehicle_parts
 
+
+parts_dict = vehicle_parts.get_vehicle_parts()
+color_dict = vehicle_parts.color_dict
 
 class UserInterface(object):
     def __init__(self, level):
@@ -237,6 +242,67 @@ class StatusBar(object):
                 self.secondary_icons(False)
 
 
+class HoldingInventory(object):
+    def __init__(self, interface):
+        self.interface = interface
+        self.cursor = self.interface.cursor
+        self.holding = None
+        self.rotated = False
+        self.tiles = []
+
+    def clear_tiles(self):
+        for tile in self.tiles:
+            tile.endObject()
+        self.tiles = []
+
+    def update(self):
+
+        holding = bge.logic.globalDict["profiles"][bge.logic.globalDict["active_profile"]]["holding"]
+        rotated = bge.logic.globalDict["profiles"][bge.logic.globalDict["active_profile"]]["rotated"]
+
+        if holding != self.holding or rotated != self.rotated:
+            self.clear_tiles()
+
+            if holding:
+                self.rotated = rotated
+                self.holding = holding
+
+                part = parts_dict[self.holding]
+                part_x = part["x_size"]
+                part_y = part["y_size"]
+
+                if self.rotated:
+                    part_x, part_y = part_y, part_x
+
+                part_type = part["part_type"]
+                part_color = color_dict[part_type.lower()]
+                scale = 0.05
+
+                for x in range(-1, part_x + 1):
+                    for y in range(-1, part_y + 1):
+
+                        search_array = [(1, 0, 1), (1, 1, 2), (0, 1, 4), (0, 0, 8)]
+                        tile_number = 0
+
+                        for n in search_array:
+                            nx = x + n[0]
+                            ny = y + n[1]
+
+                            if 0 < nx < part_x + 1:
+                                if 0 < ny < part_y + 1:
+                                    tile_number += n[2]
+
+                            if tile_number > 0:
+                                tile_name = "m_parts.{}".format(str(tile_number).zfill(3))
+                                tile = self.cursor.scene.addObject(tile_name, self.cursor, 0)
+                                offset = mathutils.Vector([(x - 0.5) * scale, (y - 0.5) * scale, -0.02])
+                                tile.worldPosition += offset
+                                tile.setParent(self.cursor)
+                                tile.color = part_color
+                                tile.localScale *= scale
+                                self.tiles.append(tile)
+
+
 class MenuInterface(object):
     def __init__(self, menu):
         self.menu = menu
@@ -248,13 +314,16 @@ class MenuInterface(object):
         self.tool_tip_background = bgeutils.get_ob("tool_tip_background", self.cursor.children)
         self.tool_tip_contents = "blarg!"
         self.set_tool_tip()
+        self.holding = HoldingInventory(self)
 
     def set_tool_tip(self):
 
         if self.menu.tool_tip_text != self.tool_tip_contents:
             self.tool_tip_contents = self.menu.tool_tip_text
-            self.tool_tip["Text"] = self.menu.tool_tip_text
-            lines = self.menu.tool_tip_text.splitlines()
+            tool_tip_text = bgeutils.split_in_lines(self.menu.tool_tip_text, 12)
+
+            self.tool_tip["Text"] = tool_tip_text
+            lines = tool_tip_text.splitlines()
             width = 0
             for line in lines:
                 line_width = len(line)
@@ -271,6 +340,7 @@ class MenuInterface(object):
 
     def terminate(self):
         self.cursor.endObject()
+        self.holding.clear_tiles()
 
     def mouse_ray(self, position):
         x, y = position
@@ -284,6 +354,7 @@ class MenuInterface(object):
 
     def update(self):
         self.set_tool_tip()
+        self.holding.update()
 
         mouse_hit = self.mouse_ray(self.manager.game_input.virtual_mouse)
 
