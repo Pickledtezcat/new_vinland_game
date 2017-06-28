@@ -320,7 +320,7 @@ class MenuInterface(object):
 
         if self.menu.tool_tip_text != self.tool_tip_contents:
             self.tool_tip_contents = self.menu.tool_tip_text
-            tool_tip_text = bgeutils.split_in_lines(self.menu.tool_tip_text, 12)
+            tool_tip_text = bgeutils.split_in_lines(self.menu.tool_tip_text, 18)
 
             self.tool_tip["Text"] = tool_tip_text
             lines = tool_tip_text.splitlines()

@@ -76,8 +76,11 @@ def split_in_lines(contents, line_length, center=False):
                 new_line.append(word)
             else:
                 lines.append(" ".join(new_line))
-                new_line = [word]
                 letters = len(word)
+                if letters > line_length:
+                    word = "{}...".format(word[:line_length - 2])
+
+                new_line = [word]
 
         if new_line:
             lines.append(" ".join(new_line))

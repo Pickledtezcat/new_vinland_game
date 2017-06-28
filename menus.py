@@ -267,14 +267,15 @@ class ContentsButton(Button):
             if part_key:
                 part = parts_dict.get(part_key)
                 if part:
+                    name = part["name"].upper()
                     description = part["description"]
-                    return "{}\n{}".format(location.title(), description)
+                    return "{}\n{}\n-----------\n{}".format(location.title(), name, description)
 
             return tile["location"].title()
         else:
             holding = bge.logic.globalDict["profiles"][bge.logic.globalDict["active_profile"]]["holding"]
             if holding:
-                return "Right click to rotate."
+                return "Right click to rotate. Left Click to drop held item back to inventory."
 
             return ""
 
@@ -854,12 +855,14 @@ class InventoryWidget(Widget):
                     part_group = inventory[inventory_index]
                     part_key = part_group[0]
                     part = parts_dict[part_key]
+                    name = part["name"].upper()
                     description = part["description"]
+                    help_text = "{}\n{}".format(name, description)
 
                     part_name = part["name"]
 
                     Button(self, "medium_button", x, y, part_name,
-                           bgeutils.GeneralMessage("PICK_PART", part_key), color=color_dict[part_filter], help_text=description)
+                           bgeutils.GeneralMessage("PICK_PART", part_key), color=color_dict[part_filter], help_text=help_text)
 
                     if y > min_y:
                         y -= y_spacing
@@ -883,6 +886,7 @@ class InventoryWidget(Widget):
 
     def process_commands(self):
         self.page = self.get_page()
+        reboot = False
 
         for command in self.commands:
             if command.header == "SET_PAGE":
@@ -891,6 +895,10 @@ class InventoryWidget(Widget):
                 self.menu.new_level = "VehicleContentsMenu"
 
             if command.header == "PICK_PART":
+                if bge.logic.globalDict["profiles"][bge.logic.globalDict["active_profile"]]["holding"]:
+                    builder_tools.replace_holding_part()
+                    reboot = True
+
                 new_inventory = []
                 part_key = command.content
                 removed = False
@@ -906,7 +914,8 @@ class InventoryWidget(Widget):
                 self.menu.new_level = "VehicleContentsMenu"
 
         self.commands = []
-
+        if reboot:
+            self.menu.reboot_widget(InventoryWidget)
 
 class VehicleContentsWidget(Widget):
 
@@ -934,24 +943,31 @@ class VehicleContentsWidget(Widget):
 
                     sound_command = {"label": "SOUND_EFFECT", "content": ("SELECT_1", None, 0.3, 1.0)}
                     self.menu.commands.append(sound_command)
-                    builder_tools.place_part(command.content)
+                    placed = builder_tools.place_part(command.content)
+                    # TODO add particle effect for removing items using placed
 
                     self.button.reset_button()
 
                 else:
+                    builder_tools.replace_holding_part()
+                    self.menu.reboot_widget(InventoryWidget)
                     sound_command = {"label": "SOUND_EFFECT", "content": ("SELECT_2", None, 0.3, 1.0)}
                     self.menu.commands.append(sound_command)
 
             if command.header == "REMOVE_CONTENTS":
-                editing = builder_tools.get_editing_vehicle()
 
-                if editing["contents"].get(command.content):
-                    pass
+                removed = builder_tools.remove_part(command.content)
+                if removed:
+                    sound_command = {"label": "SOUND_EFFECT", "content": ("SELECT_2", None, 0.3, 1.0)}
+                    self.menu.commands.append(sound_command)
+                    self.button.display_text = removed[0]
+                    # TODO add particle effect for removing items using removed[1]
+                    self.button.reset_button()
+                    self.menu.reboot_widget(InventoryWidget)
                 else:
                     bgeutils.rotate_holding()
 
         self.commands = []
-
 
 
 # menus
@@ -993,6 +1009,22 @@ class Menu(object):
             widget.end_widget()
         self.level_object.endObject()
         self.user_interface.terminate()
+
+    def reboot_widget(self, widget_name):
+
+        new_widgets = []
+        adder = None
+
+        for widget in self.widgets:
+            if not isinstance(widget, widget_name):
+                new_widgets.append(widget)
+            else:
+                adder = widget.adder
+                widget.end_widget()
+
+        if adder:
+            self.widgets = new_widgets
+            widget_name(self, adder)
 
     def mouse_hit_ray(self, string):
 

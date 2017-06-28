@@ -45,8 +45,7 @@ def replace_holding_part():
 
     if holding_key:
         active_profile["rotated"] = False
-        inventory_group = [holding_key, parts_dict[holding_key]["level"], parts_dict[holding_key]["part_type"]]
-
+        inventory_group = get_inventory_object(holding_key)
         active_profile["inventory"].append(inventory_group)
         active_profile["holding"] = None
 
@@ -162,10 +161,9 @@ def get_location_key(button, position):
 def check_adding_part(location_key):
     editing = get_editing_vehicle()
     parent_tile = editing["contents"].get(location_key)
-    print(parent_tile)
 
     if not parent_tile:
-        return "Click on chassis to add parts."
+        return "Left click on chassis to add parts."
     else:
         parent_location = parent_tile["location"]
 
@@ -218,6 +216,7 @@ def check_adding_part(location_key):
 
 def place_part(location_key):
     editing = get_editing_vehicle()
+    placed_locations = []
 
     active_profile = bge.logic.globalDict["profiles"][bge.logic.globalDict["active_profile"]]
     holding_key = active_profile["holding"]
@@ -234,6 +233,8 @@ def place_part(location_key):
     for nx in range(holding_x):
         for ny in range(holding_y):
             n_key = bgeutils.get_key((x + nx, y + ny))
+            placed_locations.append(n_key)
+
             editing["contents"][n_key]["part"] = holding_key
             editing["contents"][n_key]["parent_tile"] = location_key
             editing["contents"][n_key]["rotated"] = rotated
@@ -242,6 +243,44 @@ def place_part(location_key):
 
     bge.logic.globalDict["profiles"][bge.logic.globalDict["active_profile"]]["holding"] = None
     bge.logic.globalDict["profiles"][bge.logic.globalDict["active_profile"]]["rotated"] = False
+
+    return placed_locations
+
+
+def remove_part(location_key):
+    editing = get_editing_vehicle()
+    contents = editing["contents"]
+
+    target_tile = contents.get(location_key)
+    if target_tile:
+        if target_tile["part"]:
+            removed_locations = []
+
+            parent_tile = target_tile["parent_tile"]
+            part_key = target_tile["part"]
+
+            for content_key in contents:
+                remove_tile = contents[content_key]
+                if remove_tile["parent_tile"] == parent_tile:
+                    removed_locations.append(content_key)
+
+                    remove_tile["part"] = None
+                    remove_tile["parent_tile"] = None
+                    remove_tile["rotated"] = None
+
+            bge.logic.globalDict["profiles"][bge.logic.globalDict["active_profile"]]["inventory"].append(get_inventory_object(part_key))
+
+            part = parts_dict[part_key]
+            message = "{} removed and returned to inventory.".format(part["name"])
+
+            return [message, removed_locations]
+
+    return False
+
+
+def get_inventory_object(part_key):
+    part = parts_dict[part_key]
+    return [part_key, part["level"], part["part_type"]]
 
 
 def draw_parts(button):
