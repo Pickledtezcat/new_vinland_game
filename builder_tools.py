@@ -54,17 +54,21 @@ def build_base_vehicle():
     vehicle = {}
 
     options = vehicle_parts.get_design_rules()
+    vehicle_options = []
+
     for option_key in options:
         option = options[option_key]
 
         if option["name"] == "tracked drive":
-            option["setting"] = True
+            setting = True
         else:
-            option["setting"] = False
+            setting = False
 
-        options[option_key] = option
+        vehicle_options.append([option_key, setting])
 
-    vehicle["options"] = options
+    vehicle_options = sorted(vehicle_options)
+
+    vehicle["options"] = vehicle_options
     vehicle["turret"] = 0
     vehicle["chassis"] = 1
     vehicle["contents"] = {}

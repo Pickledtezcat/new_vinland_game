@@ -6,6 +6,7 @@ import user_interface
 import vehicle_parts
 import builder_tools
 import random
+import vehicle_stats
 
 parts_dict = vehicle_parts.get_vehicle_parts()
 
@@ -564,11 +565,14 @@ class VehicleOptionsWidget(Widget):
         vehicles = profile["vehicles"]
         current_vehicle = vehicles[profile["editing"]]
 
-        options = current_vehicle["options"]
-        for option_key in options:
+        vehicle_options = current_vehicle["options"]
+        options = vehicle_parts.get_design_rules()
+        for option_set in vehicle_options:
+            option_key = option_set[0]
             option = options[option_key]
+
             setting = "no"
-            if option["setting"]:
+            if option_set[1]:
                 setting = "yes"
 
             name = option["name"]
@@ -586,21 +590,29 @@ class VehicleOptionsWidget(Widget):
         profile = bge.logic.globalDict["profiles"][bge.logic.globalDict["active_profile"]]
         vehicles = profile["vehicles"]
         current_vehicle = vehicles[profile["editing"]]
-        options = current_vehicle["options"]
+        vehicle_options = current_vehicle["options"]
+        options = vehicle_parts.get_design_rules()
 
-        toggle_option = options[toggle_key]
-        setting = toggle_option["setting"]
-        toggle_type = toggle_option["option_type"]
+        for o in range(len(vehicle_options)):
+            option_set = vehicle_options[o]
+            option_key = option_set[0]
+            if toggle_key == option_key:
+                toggle_option = options[option_key]
+                setting = option_set[1]
+                toggle_type = toggle_option["option_type"]
 
-        if not setting:
-            if toggle_type:
-                for option_key in options:
-                    shared_option = options[option_key]
-                    if shared_option["option_type"] == toggle_type:
-                        shared_option["setting"] = False
+                if not setting:
+                    if toggle_type:
+                        for i in range(len(vehicle_options)):
+                            other_option_set = vehicle_options[i]
+                            other_option_key = other_option_set[0]
+                            other_option = options[other_option_key]
 
-        toggle_option["setting"] = not setting
-        current_vehicle["contents"] = {}
+                            if other_option["option_type"] == toggle_type:
+                                current_vehicle["options"][i][1] = False
+
+                current_vehicle["options"][o][1] = not setting
+                current_vehicle["contents"] = {}
 
         builder_tools.write_editing_vehicle(current_vehicle)
 
@@ -844,12 +856,12 @@ class InventoryWidget(Widget):
         filtered_parts = [p for p in inventory if p[2] == part_filter.upper()]
 
         inventory = sorted(filtered_parts, key=lambda entry: entry[1])
-        self.max_page = max(1, int(len(inventory) / 12) - 1)
+        self.max_page = max(1, int(len(inventory) / 24) - 1)
 
         if len(inventory) > 0:
 
             for i in range(24):
-                inventory_index = i + (page * 12)
+                inventory_index = i + (page * 24)
 
                 if inventory_index < len(inventory):
                     part_group = inventory[inventory_index]
@@ -947,6 +959,8 @@ class VehicleContentsWidget(Widget):
                     # TODO add particle effect for removing items using placed
 
                     self.button.reset_button()
+                    editing = builder_tools.get_editing_vehicle()
+                    vehicle_stats.VehicleStats(editing)
 
                 else:
                     builder_tools.replace_holding_part()
