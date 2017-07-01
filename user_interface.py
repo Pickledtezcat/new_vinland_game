@@ -292,15 +292,15 @@ class HoldingInventory(object):
                                 if 0 < ny < part_y + 1:
                                     tile_number += n[2]
 
-                            if tile_number > 0:
-                                tile_name = "m_parts.{}".format(str(tile_number).zfill(3))
-                                tile = self.cursor.scene.addObject(tile_name, self.cursor, 0)
-                                offset = mathutils.Vector([(x - 0.5) * scale, (y - 0.5) * scale, -0.02])
-                                tile.worldPosition += offset
-                                tile.setParent(self.cursor)
-                                tile.color = part_color
-                                tile.localScale *= scale
-                                self.tiles.append(tile)
+                        if tile_number > 0:
+                            tile_name = "m_parts.{}".format(str(tile_number).zfill(3))
+                            tile = self.cursor.scene.addObject(tile_name, self.cursor, 0)
+                            offset = mathutils.Vector([(x - 0.5) * scale, (y - 0.5) * scale, -0.02])
+                            tile.worldPosition += offset
+                            tile.setParent(self.cursor)
+                            tile.color = part_color
+                            tile.localScale *= scale
+                            self.tiles.append(tile)
 
 
 class MenuInterface(object):

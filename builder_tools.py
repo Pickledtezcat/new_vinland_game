@@ -344,17 +344,17 @@ def draw_parts(button):
                         if y < ny < y + part_y + 1:
                             tile_number += n[2]
 
-                    if tile_number > 0:
-                        tile_name = "m_parts.{}".format(str(tile_number).zfill(3))
-                        tile = button.button_object.scene.addObject(tile_name, button.button_object, 0)
-                        offset = mathutils.Vector([(tx + 0.5) - (max_x * 0.5), ty - (max_y * 0.5), 0.2])
-                        position = origin + offset
-                        position *= scale
-                        tile.worldPosition = position
-                        tile.worldPosition -= sub_offset_vector
-                        tile.color = part_color
-                        tile.localScale *= scale
-                        button.tiles.append(tile)
+                if tile_number > 0:
+                    tile_name = "m_parts.{}".format(str(tile_number).zfill(3))
+                    tile = button.button_object.scene.addObject(tile_name, button.button_object, 0)
+                    offset = mathutils.Vector([(tx + 0.5) - (max_x * 0.5), ty - (max_y * 0.5), 0.2])
+                    position = origin + offset
+                    position *= scale
+                    tile.worldPosition = position
+                    tile.worldPosition -= sub_offset_vector
+                    tile.color = part_color
+                    tile.localScale *= scale
+                    button.tiles.append(tile)
 
 
 def draw_base(button):
@@ -405,11 +405,88 @@ def draw_base(button):
                         if n_tile["location"] == tile_type:
                             tile_number += n[2]
 
-                    if tile_number > 0:
-                        tile_name = "{}.{}".format(tile_ob, str(tile_number).zfill(3))
-                        tile_object = parent.scene.addObject(tile_name, parent, 0)
-                        tile_object.worldPosition = position.copy()
-                        tile_object.color = tile_color
-                        tile_object.worldPosition += sub_offset_vector
-                        tile_object.localScale *= scale
-                        button.tiles.append(tile_object)
+                if tile_number > 0:
+                    tile_name = "{}.{}".format(tile_ob, str(tile_number).zfill(3))
+                    tile_object = parent.scene.addObject(tile_name, parent, 0)
+                    tile_object.worldPosition = position.copy()
+                    tile_object.color = tile_color
+                    tile_object.worldPosition += sub_offset_vector
+                    tile_object.localScale *= scale
+                    button.tiles.append(tile_object)
+
+
+def display_stats(stats):
+
+    stat_categories = ["drive_type",
+                       "suspension_type",
+                       "suspension_rating",
+                       "engine_handling",
+                       "engine_rating",
+                       "stability",
+                       "vision_distance",
+                       "durability",
+                       "weight",
+                       "crew",
+                       "range",
+                       "stores",
+                       "ammo",
+                       "reliability",
+                       "cost"]
+
+    stat_contents = [[key_name, stats.__dict__[key_name]] for key_name in stat_categories]
+    list_stats = []
+
+    for i in range(len(stat_contents)):
+        category = stat_contents[i]
+        label = "{}:".format(category[0].replace("_", " "))
+        content = str(category[1])
+
+        content_string = "{:<25}{:>15}".format(label, content)
+        list_stats.append(content_string)
+
+    if stats.turret_size > 0:
+        locations = ["FRONT", "FLANKS", "TURRET"]
+        crits = dict(FRONT=[], FLANKS=[], TURRET=[])
+    else:
+        locations = ["FRONT", "FLANKS", ""]
+        crits = dict(FRONT=[], FLANKS=[])
+
+    labels = "{:<10}{:^15}{:>15}".format("FRONT", "FLANKS", "TURRET")
+    list_stats.append(labels)
+    list_stats.append("ARMOR:")
+    armor = "{:<10}{:^15}{:>15}".format(*[stats.armor.get(key, "-") for key in locations])
+    list_stats.append(armor)
+    list_stats.append("MANPOWER:")
+    manpower = "{:<10}{:^15}{:>15}".format(*[stats.manpower.get(key, "-") for key in locations])
+    list_stats.append(manpower)
+    list_stats.append("CRITS:")
+
+    for crit_key in crits:
+        crit_list = stats.crits[crit_key]
+        for crit in crit_list:
+            short_crit = crit[:2]
+            if short_crit not in crits[crit_key] and short_crit != "CH":
+                crits[crit_key].append(short_crit)
+
+    crits_string = "{:<10}{:^15}{:>15}".format(*["({})".format(",".join(crits.get(key, "-"))) for key in locations])
+    list_stats.append(crits_string)
+
+    speed_labels = "{:<10}{:^15}{:>15}".format("", "ON-ROAD", "OFF-ROAD")
+    list_stats.append(speed_labels)
+    speed_readout = "{:<10}{:^15}{:>15}".format("SPEED:", "{}kph".format(stats.speed[0]), "{}kph".format(stats.speed[1]))
+    handling_readout = "{:<10}{:^15}{:>15}".format("HANDLING:", stats.handling[0], stats.handling[1])
+    list_stats.append(speed_readout)
+    list_stats.append(handling_readout)
+
+    label = "\n".join(list_stats)
+    help_lines = ["Vehicle_statistics:", "Suspension_rating_should_exceed_tonnage.",
+                  "Each_engine_or_armor_section_above_1_adds", "only_50_percent_to_rating.",
+                  "CP=_Crew_points,_affects_reload_speed",
+                  "HP=_Durability", "AP=_Armor_points",
+                  "CRITICAL_LOCATIONS=",
+                  "D=_drive,_W=_weapon,_C=_crew,_E=_engine",
+                  "Crew_type_sections_weigh_50_percent.",
+                  "Armor_sections_weigh_more_or_less_depending",
+                  "on_the_chassis_and_turret_size."]
+
+    return label, help_lines

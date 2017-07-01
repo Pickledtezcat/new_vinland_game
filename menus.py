@@ -95,7 +95,7 @@ class Button(object):
         on_color = [1.0, 1.0, 1.0, 1.0]
         off_color = [0.0, 0.0, 0.01, 1.0]
 
-        if self.button_type == "medium_button":
+        if self.button_type == "medium_button" or "radio" in self.button_type:
             on_color = [0.0, 0.0, 0.01, 1.0]
             off_color = [1.0, 1.0, 1.0, 1.0]
 
@@ -316,6 +316,7 @@ class ContentsButton(Button):
 
 class Widget(object):
     header_text = ""
+    header_formatted = True
     text_width = 45
 
     def __init__(self, menu, adder):
@@ -323,7 +324,10 @@ class Widget(object):
         self.adder = adder
         self.box = self.add_box()
         self.header_text_object = bgeutils.get_ob("button_text", self.box.children)
-        self.header_text_object['Text'] = bgeutils.split_in_lines(self.header_text, self.text_width, center=True)
+        if self.header_formatted:
+            self.header_text_object['Text'] = bgeutils.split_in_lines(self.header_text, self.text_width, center=True)
+        else:
+            self.header_text_object['Text'] = self.header_text
         self.commands = []
         self.buttons = []
         self.add_buttons()
@@ -929,6 +933,7 @@ class InventoryWidget(Widget):
         if reboot:
             self.menu.reboot_widget(InventoryWidget)
 
+
 class VehicleContentsWidget(Widget):
 
     def __init__(self, menu, adder):
@@ -959,8 +964,7 @@ class VehicleContentsWidget(Widget):
                     # TODO add particle effect for removing items using placed
 
                     self.button.reset_button()
-                    editing = builder_tools.get_editing_vehicle()
-                    vehicle_stats.VehicleStats(editing)
+                    self.menu.reboot_widget(StatDisplayWidget)
 
                 else:
                     builder_tools.replace_holding_part()
@@ -978,11 +982,23 @@ class VehicleContentsWidget(Widget):
                     # TODO add particle effect for removing items using removed[1]
                     self.button.reset_button()
                     self.menu.reboot_widget(InventoryWidget)
+                    self.menu.reboot_widget(StatDisplayWidget)
                 else:
                     bgeutils.rotate_holding()
 
         self.commands = []
 
+
+class StatDisplayWidget(Widget):
+
+    def __init__(self, menu, adder):
+        editing = builder_tools.get_editing_vehicle()
+        self.stats = vehicle_stats.VehicleStats(editing)
+        stats, help_text = builder_tools.display_stats(self.stats)
+        self.header_formatted = False
+        self.header_text = stats
+
+        super().__init__(menu, adder)
 
 # menus
 
@@ -1149,4 +1165,5 @@ class VehicleContentsMenu(Menu):
         VehicleContentsSettingsWidget(self, self.adders[1])
         InventoryWidget(self, self.adders[3])
         VehicleContentsWidget(self, self.adders[0])
+        StatDisplayWidget(self, self.adders[4])
 

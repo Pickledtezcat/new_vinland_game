@@ -193,14 +193,13 @@ class VehicleStats(object):
                 else:
                     armor_scale = self.chassis_dict["armor_scale"]
 
-                weight = weight * armor_scale
                 self.weight += weight
                 self.durability += weight
 
                 if self.armor[location] > 0:
-                    self.armor[location] += (rating * 5)
+                    self.armor[location] += (rating * 5.0) * armor_scale
                 else:
-                    self.armor[location] += (rating * 10)
+                    self.armor[location] += (rating * 10.0) * armor_scale
 
                 self.cost += ((5 + level) * 15) * weight
 
@@ -212,10 +211,11 @@ class VehicleStats(object):
             else:
                 self.weight += weight
                 self.durability += weight * 0.5
+                self.cost += ((5 + level) * 5) * weight
 
             for section_key in self.armor:
-                section_armor = self.armor[section_key]
-                if section_armor > 0:
+                self.armor[section_key] = round(self.armor[section_key])
+                if self.armor[section_key] > 0:
                     self.armored = True
 
             if flag == "AMMO":
@@ -240,7 +240,7 @@ class VehicleStats(object):
         self.speed = [on_road_handling, off_road_handling]
 
     def get_vehicle_movement(self):
-        power_to_weight = round((self.engine_rating * 50) / max(1, self.weight), 1)
+        power_to_weight = (self.engine_rating * 50.0) / max(1.0, self.weight)
 
         drive_mods = self.drive_dict
         suspension_mods = self.suspension_dict
@@ -251,29 +251,25 @@ class VehicleStats(object):
         off_road_handling = suspension_mods["handling"][1] + drive_mods["handling"][
             1] + self.engine_handling
 
-        tonnage_mod = int(self.weight * 0.1)
+        tonnage_mod = round(self.weight * 0.1)
 
         on_road_handling -= tonnage_mod
         off_road_handling -= tonnage_mod
 
-        on_road_speed = min(99, (power_to_weight * suspension_mods["on_road"]) * drive_mods["on_road"])
-        off_road_speed = min(50, (power_to_weight * suspension_mods["off_road"]) * drive_mods["off_road"])
+        on_road_speed = power_to_weight * (suspension_mods["on_road"] + drive_mods["on_road"])
+        off_road_speed = power_to_weight * (suspension_mods["off_road"] + drive_mods["off_road"])
 
-        if self.suspension_rating < self.weight:
-            if self.suspension_rating <= 0:
-                weight_scale = 0.0
-            else:
-                weight_scale = self.suspension_rating / self.weight
+        if self.suspension_rating <= 0:
+            weight_scale = 0.0
+        else:
+            weight_scale = self.suspension_rating / max(1.0, self.weight)
 
-            on_road_speed = int(on_road_speed * weight_scale)
-            off_road_speed = int(off_road_speed * weight_scale)
-            on_road_handling = int(on_road_handling * weight_scale)
-            off_road_handling = int(off_road_handling * weight_scale)
+        on_road_speed = min(99, round(on_road_speed * weight_scale))
+        off_road_speed = min(49, round(off_road_speed * weight_scale))
+        on_road_handling = max(1, round(on_road_handling * weight_scale))
+        off_road_handling = max(1, round(off_road_handling * weight_scale))
 
-        on_road_handling = max(1, on_road_handling)
-        off_road_handling = max(1, off_road_handling)
-
-        self.stability = stability
+        self.stability = max(1, stability)
         self.handling = [on_road_handling, off_road_handling]
         self.speed = [on_road_speed, off_road_speed]
 
@@ -318,6 +314,9 @@ class VehicleStats(object):
             vision_distance += 1
 
         self.vision_distance = vision_distance
+        self.durability = round(self.durability)
+        self.weight = round(self.weight, 1)
+
 
 
 
