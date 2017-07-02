@@ -204,7 +204,7 @@ class VehicleModel(object):
 
             if "MANTLET" in self.stats.flags and turret_size > 0:
                 t_adder = self.gun_adders["turret_gun"][0]
-                mantlet_string = "v_mantlet_{}_{}".format(gun_faction, turret_size)
+                mantlet_string = "v_mantlet_{}_{}".format(gun_faction, turret_size - 1)
                 mantlet = t_adder.scene.addObject(mantlet_string, t_adder, 0)
                 mantlet.setParent(t_adder)
                 self.get_adders("turret_gun", parent=t_adder, parent_key="mount_gun")
@@ -214,7 +214,7 @@ class VehicleModel(object):
 
             for section in sections:
                 location = section[0]
-                weapons = [ob for ob in weapon_dict[location] if ob.flags != "ROCKETS"]
+                weapons = [ob for ob in weapon_dict[location] if ob.flag != "ROCKETS"]
                 weapons = sorted(weapons, key=lambda s_weapon: s_weapon.visual)
                 weapons.reverse()
                 adders = self.gun_adders.get(section[1])
@@ -460,14 +460,14 @@ class ArtilleryModel(object):
 
             else:
 
-                if weapon.flags == "MORTAR":
+                if weapon.flag == "MORTAR":
                     add_gun_mount = False
                     if chassis_size < 2:
                         model = "light_mortar"
                     else:
                         model = "heavy_mortar"
 
-                elif weapon.flags in artillery:
+                elif weapon.flag in artillery:
 
                     artillery_size_dict = {0: "heavy_machine_gun",
                                            1: "light_artillery",
@@ -550,7 +550,7 @@ class ArtilleryModel(object):
                     gun_size = weapon.visual
                     if gun_size != 10:
 
-                        if weapon.flags == "HIGH_VELOCITY":
+                        if weapon.flag == "HIGH_VELOCITY":
                             brake = 0
                         else:
                             brake = 1

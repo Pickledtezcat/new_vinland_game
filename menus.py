@@ -7,6 +7,7 @@ import vehicle_parts
 import builder_tools
 import random
 import vehicle_stats
+import model_display
 
 parts_dict = vehicle_parts.get_vehicle_parts()
 
@@ -333,6 +334,9 @@ class Widget(object):
         self.add_buttons()
         self.shift_held = False
         self.menu.widgets.append(self)
+
+    def update_display(self):
+        pass
 
     def add_box(self):
         return self.adder.scene.addObject("default_widget", self.adder, 0)
@@ -860,7 +864,7 @@ class InventoryWidget(Widget):
         filtered_parts = [p for p in inventory if p[2] == part_filter.upper()]
 
         inventory = sorted(filtered_parts, key=lambda entry: entry[1])
-        self.max_page = max(1, int(len(inventory) / 24) - 1)
+        self.max_page = max(1, int(len(inventory) / 24.0) - 0)
 
         if len(inventory) > 0:
 
@@ -999,6 +1003,22 @@ class StatDisplayWidget(Widget):
         self.header_text = stats
 
         super().__init__(menu, adder)
+        self.rotation = 0.0
+        self.model = model_display.VehicleModel(self.menu.adders[7], self, 0.5)
+
+    def end_widget(self):
+        for button in self.buttons:
+            button.end_button()
+
+        self.box.endObject()
+        self.model.end_vehicle()
+
+    def update_display(self):
+        if self.rotation >= 1.0:
+            self.rotation = 0.0
+        self.rotation += 0.002
+        self.model.preview_update(self.rotation)
+
 
 # menus
 
@@ -1022,14 +1042,27 @@ class Menu(object):
         self.widgets = []
         self.new_level = None
 
+        self.assets = []
+
+        if not self.manager.assets_loaded:
+            vehicle_path = bge.logic.expandPath("//models/vehicles.blend")
+            self.assets.append(bge.logic.LibLoad(vehicle_path, "Scene"))
+            self.manager.assets_loaded = True
+
         self.holding_part = None
 
+    def check_loaded(self):
+
+        for asset in self.assets:
+            if not asset:
+                return False
+
+        return True
+
     def load(self):
-        if self.loading >= 0:
+        if self.check_loaded():
             self.activate()
             self.loaded = True
-        else:
-            self.loading += 1
 
     def activate(self):
         pass
@@ -1067,6 +1100,8 @@ class Menu(object):
         return target_ray
 
     def update(self):
+        for widget in self.widgets:
+            widget.update_display()
 
         self.manager.debugger.printer(type(self).__name__, "menu mode: ")
 

@@ -64,6 +64,7 @@ class GameLoop(object):
 
         self.game_input = game_input.GameInput()
         self.level = None
+        self.assets_loaded = False
 
         bgeutils.load_settings()
         self.set_level()

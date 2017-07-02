@@ -334,11 +334,12 @@ class Level(object):
         vin_infantry_path = bge.logic.expandPath("//infantry_sprites/vin_summer_sprites.blend")
 
         self.infantry_textures = []
-
         self.assets = []
 
-        self.assets.append(bge.logic.LibLoad(hre_infantry_path, "Scene"))
-        self.assets.append(bge.logic.LibLoad(vin_infantry_path, "Scene"))
+        if not self.manager.assets_loaded:
+            self.assets.append(bge.logic.LibLoad(hre_infantry_path, "Scene"))
+            self.assets.append(bge.logic.LibLoad(vin_infantry_path, "Scene"))
+            self.manager.assets_loaded = True
 
         self.load_dict = None
         load_name = bge.logic.globalDict["profiles"][bge.logic.globalDict["active_profile"]]["saved_game"]

@@ -47,6 +47,7 @@ def replace_holding_part():
         active_profile["rotated"] = False
         inventory_group = get_inventory_object(holding_key)
         active_profile["inventory"].append(inventory_group)
+
         active_profile["holding"] = None
 
 

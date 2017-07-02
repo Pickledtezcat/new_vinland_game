@@ -19,6 +19,34 @@ class VehicleWeapon(object):
         self.rating = self.part['rating']
         self.flag = self.part['flag']
 
+        advanced = ["IMPROVED_GUN", "ADVANCED_GUN"]
+        support = ["MORTAR", "SUPPORT_GUN", "PRIMITIVE_GUN"]
+
+        size = 0
+
+        if self.part["rating"] > 4:
+            if self.flag in support:
+                size = 4
+            elif self.flag in advanced:
+                if self.part["rating"] > 7:
+                    size = 5
+                else:
+                    size = 3
+            else:
+                if self.part["rating"] > 7:
+                    size = 6
+                else:
+                    size = 3
+
+        elif self.part["rating"] > 1:
+            if self.flag in support:
+                size = 2
+            elif self.flag in advanced:
+                size = 3
+            else:
+                size = 1
+
+        self.visual = size
         self.rate_of_fire = 0
         self.emitter = None
 
@@ -46,6 +74,8 @@ class VehicleStats(object):
 
     def __init__(self, vehicle):
 
+        self.faction_number = 1
+        # TODO handle getting factions
         self.vehicle_type = "TANK"
         self.options = vehicle["options"]
         self.turret_size = vehicle["turret"]
