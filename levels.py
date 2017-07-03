@@ -332,6 +332,7 @@ class Level(object):
 
         hre_infantry_path = bge.logic.expandPath("//infantry_sprites/hre_summer_sprites.blend")
         vin_infantry_path = bge.logic.expandPath("//infantry_sprites/vin_summer_sprites.blend")
+        vehicle_path = bge.logic.expandPath("//models/vehicles.blend")
 
         self.infantry_textures = []
         self.assets = []
@@ -339,6 +340,7 @@ class Level(object):
         if not self.manager.assets_loaded:
             self.assets.append(bge.logic.LibLoad(hre_infantry_path, "Scene"))
             self.assets.append(bge.logic.LibLoad(vin_infantry_path, "Scene"))
+            self.assets.append(bge.logic.LibLoad(vehicle_path, "Scene"))
             self.manager.assets_loaded = True
 
         self.load_dict = None
@@ -496,6 +498,12 @@ class Level(object):
 
         # for enemy in range(4):
         #     agents.Vehicle(self, None, [35 + (10 * enemy), 35], 1)
+
+        vehicles = bge.logic.globalDict["profiles"][bge.logic.globalDict["active_profile"]]["vehicles"]
+        vehicle_keys = [v_key for v_key in vehicles]
+        for v in range(len(vehicle_keys)):
+            vehicle = vehicles[vehicle_keys[v]]
+            agents.Vehicle(self, vehicle_keys[v], [35 + (10 * v), 60], 0)
 
         for enemy in range(5):
             agents.Infantry(self, random.choice(infantry), [35 + (10 * enemy), 25], 1)
@@ -900,7 +908,7 @@ class Level(object):
 
     def inside_camera(self, agent):
 
-        if self.camera_controller.main_camera.sphereInsideFrustum(agent.box.worldPosition.copy(), 4):
+        if self.camera_controller.main_camera.pointInsideFrustum(agent.center.copy()):
             return True
 
         if agent.agent_type == "INFANTRY":

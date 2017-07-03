@@ -6,7 +6,8 @@ from agent_states import *
 import agent_actions
 import static_dicts
 import random
-
+import vehicle_stats
+import model_display
 
 class Agent(object):
     size = 0
@@ -522,7 +523,13 @@ class Agent(object):
 class Vehicle(Agent):
     def __init__(self, level, load_name, location, team, agent_id=None, load_dict=None):
         self.agent_type = "VEHICLE"
+
+        tiles = bge.logic.globalDict["profiles"][bge.logic.globalDict["active_profile"]]["vehicles"][load_name]
+        self.stats = vehicle_stats.VehicleStats(tiles)
+
         super().__init__(level, load_name, location, team, agent_id, load_dict)
+
+        self.model = model_display.VehicleModel(self.recoil_hook, self, scale=0.45)
 
 
 class Infantry(Agent):
@@ -1125,8 +1132,12 @@ class SoldierWeapon(object):
 
         if target and self.ready:
 
-            closest_soldier, target_distance = target.get_closest_soldier(self.infantryman.box.worldPosition.copy())
-            if not closest_soldier:
+            if target.agent_type == "INFANTRY":
+                closest_soldier, target_distance = target.get_closest_soldier(self.infantryman.box.worldPosition.copy())
+                if not closest_soldier:
+                    target_distance = self.check_range(target)
+            else:
+                closest_soldier = None
                 target_distance = self.check_range(target)
 
             if target_distance < 18.0:
