@@ -41,10 +41,13 @@ class SoundEffect(object):
         sound_ok = self.handle.status != aud.AUD_STATUS_INVALID
 
         if object_ok and sound_ok:
-            profile = bge.logic.globalDict["profiles"][bge.logic.globalDict["active_profile"]]
-            self.handle.volume = profile['volume'] * self.volume_scale
-            self.handle.location = self.game_object.worldPosition.copy()
-            self.handle.orientation = self.game_object.worldOrientation.copy().to_quaternion()
+            try:
+                profile = bge.logic.globalDict["profiles"][bge.logic.globalDict["active_profile"]]
+                self.handle.volume = profile['volume'] * self.volume_scale
+                self.handle.location = self.game_object.worldPosition.copy()
+                self.handle.orientation = self.game_object.worldOrientation.copy().to_quaternion()
+            except:
+                print("problem with {}".format(self.sound_name))
 
         return sound_ok
 

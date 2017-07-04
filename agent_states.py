@@ -104,7 +104,7 @@ class AgentIdle(AgentState):
             if self.agent.waiting:
                 return AgentWaiting
 
-            if self.agent.agent_targeter.enemy_target_id:
+            if self.agent.agent_targeter.set_target_id:
                 return AgentCombat
 
     def process(self):
@@ -130,7 +130,7 @@ class AgentCombat(AgentState):
             return AgentDead
 
         if self.agent.movement.done:
-            if not self.agent.agent_targeter.enemy_target_id:
+            if not self.agent.agent_targeter.set_target_id:
                 return AgentIdle
 
             if self.agent.destinations:
@@ -145,7 +145,8 @@ class AgentCombat(AgentState):
         self.agent.animator.update()
 
         if self.agent.movement.done:
-            self.agent.movement.target_enemy()
+            if self.agent.agent_targeter.set_target_id:
+                self.agent.movement.target_enemy()
         else:
             self.agent.movement.update()
 

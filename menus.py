@@ -1043,26 +1043,33 @@ class Menu(object):
         self.new_level = None
 
         self.assets = []
+        self.loading_progress = 0
 
         if not self.manager.assets_loaded:
             vehicle_path = bge.logic.expandPath("//models/vehicles.blend")
-            self.assets.append(bge.logic.LibLoad(vehicle_path, "Scene"))
+            self.assets.append(bge.logic.LibLoad(vehicle_path, "Scene", async=True))
             self.manager.assets_loaded = True
 
         self.holding_part = None
 
     def check_loaded(self):
 
-        for asset in self.assets:
-            if not asset:
-                return False
+        loaded = True
 
-        return True
+        for asset in self.assets:
+            if not asset.finished:
+                loaded = False
+
+        self.loading_progress += 1
+        return loaded
 
     def load(self):
         if self.check_loaded():
             self.activate()
             self.loaded = True
+        else:
+            self.tool_tip_text = "LOADING ({})".format(self.loading_progress)
+            self.user_interface.update()
 
     def activate(self):
         pass

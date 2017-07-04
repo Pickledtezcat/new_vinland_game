@@ -10,10 +10,30 @@ class VehicleModel(object):
 
         self.adder = adder
         self.scene = self.adder.scene
+        self.cammo = cammo
+        self.faction_icon = faction_icon
         self.owner = owner
         self.stats = self.owner.stats
         self.scale = scale
         self.parts_dict = vehicle_parts.get_vehicle_parts()
+
+        self.vehicle = None
+        self.turret = None
+        self.tracks = None
+        self.wheels = None
+        self.turret_rest = None
+        self.rocket_turret = None
+        self.turret_adder = None
+        self.gun_adders = None
+
+        self.hatch = None
+        self.hatch_open = True
+        self.closed_hatch = None
+        self.open_hatch = None
+
+        self.build_model()
+
+    def build_model(self):
 
         faction_icons = {1: 0,
                          2: 2,
@@ -22,12 +42,12 @@ class VehicleModel(object):
                          5: 5,
                          6: 4}
 
-        if not faction_icon:
+        if not self.faction_icon:
             icon = faction_icons[self.stats.faction_number]
         else:
-            icon = faction_icons[faction_icon]
+            icon = faction_icons[self.faction_icon]
 
-        color = [icon * 0.25, 0.0, cammo * 0.125, 1.0]
+        color = [icon * 0.25, 0.0, self.cammo * 0.125, 1.0]
 
         fast = ["CONICAL_SPRING", "BELL_CRANK", "TORSION_BAR", "HYDRAULIC", "PNEUMATIC"]
         drive_display = {"WHEELED": 0, "HALFTRACK": 1, "TRACKED": 2}
@@ -170,7 +190,6 @@ class VehicleModel(object):
             self.get_adders(g_adder)
 
         if layout > 0:
-
             if "OPEN_TOP" in self.stats.flags:
 
                 if turret_size < 1:
@@ -319,7 +338,19 @@ class VehicleModel(object):
         for ob in self.vehicle.childrenRecursive:
             ob.color = color
 
-        self.vehicle.localScale *= scale
+        self.vehicle.localScale *= self.scale
+
+    def set_open_hatch(self, toggle):
+
+        if self.hatch:
+            if toggle:
+                if not self.hatch_open:
+                    self.hatch.replaceMesh(self.open_hatch)
+                    self.hatch_open = True
+            else:
+                if self.hatch_open:
+                    self.hatch.replaceMesh(self.closed_hatch)
+                    self.hatch_open = False
 
     def get_adders(self, adder_string, parent=None, parent_key=None):
         if not parent:

@@ -9,6 +9,7 @@ import random
 import vehicle_stats
 import model_display
 
+
 class Agent(object):
     size = 0
     max_speed = 0.02
@@ -50,11 +51,17 @@ class Agent(object):
         self.suspect = False
         self.selection_group = None
 
-        self.box = self.add_box()
-        self.movement_hook = bgeutils.get_ob("hook", self.box.childrenRecursive)
-        self.tilt_hook = bgeutils.get_ob("tilt", self.box.childrenRecursive)
-        self.recoil_hook = bgeutils.get_ob("recoil", self.box.childrenRecursive)
-        self.mesh = bgeutils.get_ob("mesh", self.box.childrenRecursive)
+        self.stats = None
+        self.load_stats()
+
+        self.model = None
+        self.movement_hook = None
+        self.tilt_hook = None
+        self.recoil_hook = None
+        self.mesh = None
+        self.box = None
+        self.add_box()
+
         self.debug_label = particles.DebugLabel(self.level, self)
         self.debug_text = "AGENT"
 
@@ -77,8 +84,6 @@ class Agent(object):
         self.navigation = agent_actions.AgentNavigation(self)
         self.agent_targeter = agent_actions.AgentTargeter(self)
         self.animator = agent_actions.AgentAnimator(self)
-
-        self.load_stats()
 
         self.state = None
         self.center = None
@@ -204,10 +209,13 @@ class Agent(object):
 
         occupied = []
 
-        current_tile = self.level.get_tile(self.location)
-        inside = current_tile["occupied"] or current_tile["building"]
-        if inside:
-            return occupied
+        for occupied_tile in self.occupied:
+            current_tile = self.level.get_tile(bgeutils.get_loc(occupied_tile))
+            inside = current_tile["occupied"] or current_tile["building"]
+            if inside:
+                if current_tile["occupied"]:
+                    if current_tile["occupied"] != self.agent_id:
+                        return occupied
 
         x, y = target_tile
         occupied_list = [[x + ox, y + oy] for ox in range(-self.size, self.size + 1) for oy in
@@ -220,20 +228,16 @@ class Agent(object):
 
                 if occupier_id:
                     occupier = self.level.agents.get(occupier_id)
-                    both_infantry = self.agent_type == "INFANTRY" and occupier.agent_type == "INFANTRY"
-
-                    if not both_infantry:
-                        if occupier and occupier != self:
+                    if occupier:
+                        if occupier != self:
                             occupied.append(occupier)
 
-                if not self.enter_building:
-                    building_id = tile["building"]
+                building_id = tile["building"]
+                if building_id:
+                    building = self.level.buildings.get(building_id)
 
-                    if building_id:
-                        occupier = self.level.buildings.get(building_id)
-
-                        if occupier:
-                            occupied.append(occupier)
+                    if building:
+                        occupied.append(building)
 
         return occupied
 
@@ -245,7 +249,12 @@ class Agent(object):
 
     def add_box(self):
         box = self.level.own.scene.addObject("agent", self.level.own, 0)
-        return box
+
+        self.box = box
+        self.movement_hook = bgeutils.get_ob("hook", self.box.childrenRecursive)
+        self.tilt_hook = bgeutils.get_ob("tilt", self.box.childrenRecursive)
+        self.recoil_hook = bgeutils.get_ob("recoil", self.box.childrenRecursive)
+        self.mesh = bgeutils.get_ob("mesh", self.box.childrenRecursive)
 
     def terminate(self):
         self.box.endObject()
@@ -511,6 +520,12 @@ class Agent(object):
             if not self.level.paused:
                 self.state_machine()
 
+        if self.model:
+            if self.stance == "SENTRY":
+                self.model.set_open_hatch(True)
+            else:
+                self.model.set_open_hatch(False)
+
     def infantry_update(self):
         pass
 
@@ -523,13 +538,24 @@ class Agent(object):
 class Vehicle(Agent):
     def __init__(self, level, load_name, location, team, agent_id=None, load_dict=None):
         self.agent_type = "VEHICLE"
-
-        tiles = bge.logic.globalDict["profiles"][bge.logic.globalDict["active_profile"]]["vehicles"][load_name]
-        self.stats = vehicle_stats.VehicleStats(tiles)
-
         super().__init__(level, load_name, location, team, agent_id, load_dict)
 
-        self.model = model_display.VehicleModel(self.recoil_hook, self, scale=0.45)
+    def load_stats(self):
+        tiles = bge.logic.globalDict["profiles"][bge.logic.globalDict["active_profile"]]["vehicles"][self.load_name]
+        self.stats = vehicle_stats.VehicleStats(tiles)
+
+        # TODO get stats from self.stats
+
+        self.size = 1
+        self.max_speed = 0.04
+        self.handling = 0.01
+        self.speed = 0.02
+        self.turning_speed = 0.01
+        self.turret_speed = 0.01
+
+    def add_box(self):
+        super().add_box()
+        self.model = model_display.VehicleModel(self.recoil_hook, self, scale=0.5)
 
 
 class Infantry(Agent):
@@ -538,7 +564,7 @@ class Infantry(Agent):
         self.avoid_radius = 4
         self.spacing = 1.5
         self.prone = False
-        self.size = 1
+        self.size = 0
         self.walk_mod = 1.0
 
         super().__init__(level, load_name, location, team, agent_id, load_dict)
@@ -729,7 +755,11 @@ class Infantry(Agent):
 
     def add_box(self):
         box = self.level.own.scene.addObject("agent_infantry", self.level.own, 0)
-        return box
+        self.box = box
+        self.movement_hook = bgeutils.get_ob("hook", self.box.childrenRecursive)
+        self.tilt_hook = bgeutils.get_ob("tilt", self.box.childrenRecursive)
+        self.recoil_hook = bgeutils.get_ob("recoil", self.box.childrenRecursive)
+        self.mesh = bgeutils.get_ob("mesh", self.box.childrenRecursive)
 
     def infantry_update(self):
         for soldier in self.soldiers:
@@ -827,12 +857,20 @@ class InfantryMan(object):
                 self.grenade.update()
 
     def set_occupied(self, target_tile):
-        self.agent.level.map[bgeutils.get_key(target_tile)]["occupied"] = self.agent.agent_id
+        display = False
+
+        if display:
+            marker = self.box.scene.addObject("debug_marker", self.box, 120)
+            tile = self.agent.level.map[bgeutils.get_key(target_tile)]
+            marker.worldPosition = mathutils.Vector(tile["position"]).to_3d()
+            marker.worldPosition.z = tile["height"]
+
+        self.agent.level.set_tile(target_tile, "occupied", self.agent.agent_id)
         self.occupied = self.location
 
     def clear_occupied(self):
         if self.occupied:
-            self.agent.level.map[bgeutils.get_key(self.occupied)]["occupied"] = None
+            self.agent.level.set_tile(self.occupied, "occupied", None)
             self.occupied = None
 
     def check_occupied(self, target_tile):

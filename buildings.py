@@ -4,6 +4,7 @@ import bgeutils
 
 
 class Building(object):
+    agent_type = "BUILDING"
     building_type = "HOUSE"
 
     def __init__(self, level, load_name, location, direction, building_id=None, load_dict=None):

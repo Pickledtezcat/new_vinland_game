@@ -521,8 +521,9 @@ class AgentNavigation(object):
 
             elif self.agent.agent_type != "INFANTRY":
                 for agent in neighbor_check:
-                    if agent.agent_type == "INFANTRY" and agent.team == self.agent.team:
-                        touching_infantry = True
+                    if agent.agent_type == "INFANTRY":
+                        if agent.team == self.agent.team:
+                            touching_infantry = True
 
         return closest, next_facing, next_target, free, touching_infantry
 
@@ -539,6 +540,7 @@ class AgentNavigation(object):
 
             if self.destination:
                 closest, next_facing, next_target, free, touching_infantry = self.get_next_tile()
+                print(touching_infantry)
 
                 if self.agent.location == self.destination:
                     self.destination = None
@@ -578,6 +580,7 @@ class AgentTargeter(object):
         self.agent = agent
         self.enemy_target_id = None
         self.set_target_id = None
+        self.has_turret = False
         self.turret_angle = 0.0
         self.gun_elevation = 0.0
         self.check_timer = 0.0
@@ -689,10 +692,11 @@ class AgentAnimator(object):
     def __init__(self, agent):
 
         self.agent = agent
-        self.turret = bgeutils.get_ob("agent_turret", self.agent.box.childrenRecursive)
+        self.turret = None
+        if self.agent.model:
+            self.turret = self.agent.model.turret
 
     def update(self):
-
         if self.turret:
             turret_angle = self.agent.agent_targeter.turret_angle
             turret_matrix = mathutils.Matrix.Rotation(turret_angle, 4, 'Z').to_3x3()
