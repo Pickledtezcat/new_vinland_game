@@ -13,6 +13,7 @@ class AgentMovement(object):
         self.target_vector = None
         self.start_normal = None
         self.target_normal = None
+        self.remaining = 0.0
 
         self.target_direction = None
         self.current_orientation = None
@@ -70,8 +71,13 @@ class AgentMovement(object):
                 self.target_direction = None
 
         elif self.target:
-            self.timer = min(1.0, self.timer + self.agent.speed)
+            speed = self.agent.speed + self.remaining
+            self.remaining = 0.0
+
+            self.timer += speed
             if self.timer >= 1.0:
+                self.remaining = self.timer - 1.0
+                self.timer = 1.0
                 self.agent.location = self.target
                 self.target = None
 
@@ -82,8 +88,7 @@ class AgentMovement(object):
                 self.agent.clear_occupied()
                 self.agent.set_occupied(self.agent.location)
 
-        if not self.done:
-            self.set_position()
+        self.set_position()
 
     def set_aim(self):
         self.target_direction = self.agent.aim
@@ -618,6 +623,20 @@ class AgentTargeter(object):
 
         if not target_agent.seen:
             return False
+
+        # TODO integrate minimum armor checks in to AI targeting
+        # armor_facing = target_agent.get_attack_facing(self.agent)
+        # if armor_facing:
+        #     has_turret, facing, armor = armor_facing
+        #
+        #     lowest_armor = armor[facing]
+        #
+        #     if has_turret:
+        #         if armor["TURRET"] < lowest_armor:
+        #             lowest_armor = armor["TURRET"]
+        #
+        #     if self.agent.best_penetration < lowest_armor:
+        #         return False
 
         agent_vector = target_agent.box.worldPosition.copy() - self.agent.box.worldPosition.copy()
         enemy_distance = agent_vector.length

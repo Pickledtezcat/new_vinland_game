@@ -8,6 +8,7 @@ import static_dicts
 import random
 import vehicle_stats
 import model_display
+import math
 
 
 class Agent(object):
@@ -27,6 +28,7 @@ class Agent(object):
     initial_health = 0
     shock = 0.0
     resistance = 0.0
+    best_penetration = 0
 
     stance = "AGGRESSIVE"
     agent_type = "VEHICLE"
@@ -274,6 +276,9 @@ class Agent(object):
         self.turning_speed = 0.01
         self.turret_speed = 0.01
 
+    def get_best_penetration(self):
+        self.best_penetration = 0
+
     def update_stats(self):
 
         self.accuracy = float(self.rank)
@@ -299,12 +304,16 @@ class Agent(object):
         else:
             self.throttle_target = 0.0
 
+        self.get_best_penetration()
         self.set_speed()
 
     def set_speed(self):
         self.throttle = bgeutils.interpolate_float(self.throttle, self.throttle_target, self.handling)
         self.speed = self.max_speed * self.throttle
         self.turning_speed = self.handling * self.throttle
+
+    def get_attack_facing(self, other_agent):
+        return False
 
     def set_position(self):
         self.movement.initial_position()
@@ -536,6 +545,7 @@ class Vehicle(Agent):
         self.stance_speed = 1.0
         self.wait_for_infantry = True
         self.shooting_bonus = 0.0
+        self.weapons = []
 
         super().__init__(level, load_name, location, team, agent_id, load_dict)
 
@@ -555,6 +565,29 @@ class Vehicle(Agent):
 
         self.set_stats()
         self.set_speed()
+
+    def attack_facing(self, other_agent):
+
+        local_y = self.movement_hook.getAxisVect([0.0, 1.0, 0.0])
+        target_vector = self.box.worldPosition.copy() - other_agent.box.worldPosition.copy()
+        if target_vector.length == 0.0:
+            target_vector = other_agent.movement_hook.getAxisVect([0.0, 1.0, 0.0])
+
+        angle = local_y.angle(target_vector)
+        return angle
+
+    def get_attack_facing(self, other_agent):
+
+        has_turret = False
+        if self.stats.turret_size > 0:
+            has_turret = True
+
+        angle = self.attack_facing(other_agent)
+        facing = "FLANKS"
+        if math.degrees(angle) > 90:
+            facing = "FRONT"
+
+        return [has_turret, facing, self.stats.armor]
 
     def set_stats(self):
         self.accuracy = float(self.rank)
@@ -577,6 +610,18 @@ class Vehicle(Agent):
         self.max_speed = self.stats.speed[speed_index] * 0.001
         self.handling = self.stats.handling[speed_index] * 0.0025
         self.turret_speed = self.stats.turret_speed * 0.0025
+
+        self.get_best_penetration()
+        self.handle_weapons()
+
+    def handle_weapons(self):
+
+        #TODO make weapons dependent on agent states
+        for weapon in self.weapons:
+            weapon.update()
+
+    def get_best_penetration(self):
+        self.best_penetration = 0
 
     def set_formation(self):
 
@@ -700,8 +745,20 @@ class Infantry(Agent):
         # else:
         #     self.knocked_out = False
 
+        self.get_best_penetration()
         self.set_soldiers_visible()
         self.set_speed()
+
+    def get_best_penetration(self):
+
+        best_penetration = 0
+
+        for soldier in self.soldiers:
+            if soldier.weapon.ammo > 0.0:
+                if soldier.weapon.power > best_penetration:
+                    best_penetration = soldier.weapon.power
+
+        self.best_penetration = best_penetration
 
     def set_soldiers_visible(self):
         # TODO set other visibility cases
@@ -1168,13 +1225,34 @@ class SoldierWeapon(object):
 
     def update(self):
 
+        self.ready = self.get_ready()
+
+    def get_ready(self):
+
+        target_id, target = self.get_target()
+        if not target:
+            return False
+
         if self.infantryman.agent.enter_building and not self.infantryman.in_building:
-            self.ready = False
+            return False
 
-        elif self.infantryman.agent.knocked_out:
-            self.ready = False
+        if self.infantryman.agent.knocked_out:
+            return False
 
-        elif self.ammo > 0.0:
+        armor_facing = target.get_attack_facing(self.infantryman.agent)
+        if armor_facing:
+            has_turret, facing, armor = armor_facing
+
+            lowest_armor = armor[facing]
+
+            if has_turret:
+                if armor["TURRET"] < lowest_armor:
+                    lowest_armor = armor["TURRET"]
+
+            if self.power < lowest_armor:
+                return False
+
+        if self.ammo > 0.0:
 
             accuracy = self.infantryman.agent.accuracy
             recharge = self.recharge
@@ -1196,9 +1274,7 @@ class SoldierWeapon(object):
 
             self.timer = min(1.0, self.timer + recharge)
             if self.timer >= 1.0:
-                self.ready = True
-        else:
-            self.ready = False
+                return True
 
     def check_range(self, target):
         if target:
@@ -1233,65 +1309,65 @@ class SoldierWeapon(object):
                 return random.choice(valid_windows)
 
     def shoot_weapon(self):
-        target_id, target = self.get_target()
 
-        if target and self.ready:
-
-            if target.agent_type == "INFANTRY":
-                closest_soldier, target_distance = target.get_closest_soldier(self.infantryman.box.worldPosition.copy())
-                if not closest_soldier:
+        if self.ready:
+            target_id, target = self.get_target()
+            if target:
+                if target.agent_type == "INFANTRY":
+                    closest_soldier, target_distance = target.get_closest_soldier(self.infantryman.box.worldPosition.copy())
+                    if not closest_soldier:
+                        target_distance = self.check_range(target)
+                else:
+                    closest_soldier = None
                     target_distance = self.check_range(target)
-            else:
-                closest_soldier = None
-                target_distance = self.check_range(target)
 
-            if target_distance < 18.0:
-                # TODO check for armor penetration
+                if target_distance < 18.0:
+                    # TODO check for armor penetration
 
-                effect = None
+                    effect = None
 
-                if self.infantryman.in_building:
-                    window_position = self.get_window()
-                    if window_position:
-                        origin = window_position
+                    if self.infantryman.in_building:
+                        window_position = self.get_window()
+                        if window_position:
+                            origin = window_position
+                        else:
+                            return False
                     else:
-                        return False
-                else:
-                    origin = self.infantryman.location
+                        origin = self.infantryman.location
 
-                if self.effect_timer > 2 or self.infantryman.in_building:
-                    self.effect_timer = 1
-                    if self.special == "RAPID_FIRE":
-                        effect = "RAPID_YELLOW_STREAK"
+                    if self.effect_timer > 2 or self.infantryman.in_building:
+                        self.effect_timer = 1
+                        if self.special == "RAPID_FIRE":
+                            effect = "RAPID_YELLOW_STREAK"
+                        else:
+                            effect = "YELLOW_STREAK"
                     else:
-                        effect = "YELLOW_STREAK"
-                else:
-                    self.effect_timer += 1
+                        self.effect_timer += 1
 
-                if self.special == "ANTI_TANK":
-                    effect = "RED_STREAK"
+                    if self.special == "ANTI_TANK":
+                        effect = "RED_STREAK"
 
-                effective_range = self.accuracy + self.power
-                effective_power = self.power * random.uniform(0.0, 1.0)
+                    effective_range = self.accuracy + self.power
+                    effective_power = self.power * random.uniform(0.0, 1.0)
 
-                command = {"label": "SMALL_ARMS_SHOOT", "weapon": self, "owner": self.infantryman, "target": target,
-                           "effect": effect, "origin": origin, "effective_range": effective_range,
-                           "effective_power": effective_power, "closest_soldier": closest_soldier,
-                           "target_distance": target_distance, "sound": "I_{}".format(self.sound)}
+                    command = {"label": "SMALL_ARMS_SHOOT", "weapon": self, "owner": self.infantryman, "target": target,
+                               "effect": effect, "origin": origin, "effective_range": effective_range,
+                               "effective_power": effective_power, "closest_soldier": closest_soldier,
+                               "target_distance": target_distance, "sound": "I_{}".format(self.sound)}
 
-                self.infantryman.agent.level.commands.append(command)
+                    self.infantryman.agent.level.commands.append(command)
 
-                self.ready = False
-                self.timer = 0.0
-                self.ammo -= 0.01
+                    self.ready = False
+                    self.timer = 0.0
+                    self.ammo -= 0.01
 
-                if closest_soldier:
-                    target_vector = closest_soldier.box.worldPosition.copy() - self.infantryman.box.worldPosition.copy()
-                else:
-                    target_vector = target.box.worldPosition.copy() - self.infantryman.box.worldPosition.copy()
+                    if closest_soldier:
+                        target_vector = closest_soldier.box.worldPosition.copy() - self.infantryman.box.worldPosition.copy()
+                    else:
+                        target_vector = target.box.worldPosition.copy() - self.infantryman.box.worldPosition.copy()
 
-                self.infantryman.direction = bgeutils.get_closest_vector(target_vector)
+                    self.infantryman.direction = bgeutils.get_closest_vector(target_vector)
 
-                return True
+                    return True
 
         return False

@@ -373,12 +373,19 @@ class Widget(object):
         self.box.endObject()
 
 
-class StartWidget(Widget):
+class NarrowWidget(Widget):
+    text_width = 18
+
+    def add_box(self):
+        return self.adder.scene.addObject("narrow_widget", self.adder, 0)
+
+
+class StartWidget(NarrowWidget):
     header_text = "Start Menu"
 
     def add_buttons(self):
         button_size = button_info["large_button"]["size"]
-        zero = 0.2
+        zero = 0.5
         spacing = button_size[1] + 0.1
 
         Button(self, "large_button", 0.0, zero + spacing, "Set\nProfile",
@@ -775,7 +782,7 @@ class VehicleManagerWidget(Widget):
         self.commands = []
 
 
-class VehicleGoToContentsWidget(Widget):
+class VehicleGoToContentsWidget(NarrowWidget):
     header_text = "Modify vehicle contents"
 
     def __init__(self, menu, adder):

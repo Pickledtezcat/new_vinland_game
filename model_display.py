@@ -256,6 +256,7 @@ class VehicleModel(object):
                             gun_string = "v_gun_{}_{}".format(gun_faction, gun_size)
 
                             gun = w_adder.scene.addObject(gun_string, w_adder, 0)
+                            weapon.set_emitter(gun)
                             if location == "TURRET":
                                 gun.setParent(self.turret)
                             else:

@@ -17,6 +17,7 @@ class VehicleWeapon(object):
 
         self.name = self.part['name']
         self.rating = self.part['rating']
+        self.weight = self.part["x_size"] * self.part["y_size"]
         self.flag = self.part['flag']
 
         advanced = ["IMPROVED_GUN", "ADVANCED_GUN"]
@@ -49,6 +50,27 @@ class VehicleWeapon(object):
         self.visual = size
         self.rate_of_fire = 0
         self.emitter = None
+
+    def set_rate_of_fire(self, manpower):
+
+        required_manpower = self.weight * 2
+        rate_of_fire = manpower / required_manpower
+        rate_of_fire = min(1.0, rate_of_fire)
+
+        fast_firing = ["QUICK", "IMPROVED_GUN"]
+        rapid_firing = ["RAPID", "FLAME_THROWER"]
+        slow_firing = ["MORTAR"]
+
+        if self.flag in fast_firing:
+            rate_of_fire *= 1.5
+        if self.flag in rapid_firing:
+            rate_of_fire *= 2.0
+        if self.flag in slow_firing:
+            rate_of_fire *= 0.5
+
+        self.rate_of_fire = rate_of_fire * 0.005
+
+        print(self.part["name"], round(60 * self.rate_of_fire, 2))
 
     def set_emitter(self, emitter):
         self.emitter = emitter
@@ -256,11 +278,27 @@ class VehicleStats(object):
 
             # TODO handle other flags, handle reliability, turret speed etc...
 
+        self.get_weapons()
+
         if self.vehicle_type == "GUN_CARRIAGE":
             self.get_carriage_movement()
         else:
             self.get_vehicle_movement()
             self.get_vision()
+
+    def get_weapons(self):
+
+        locations = ["TURRET", "FRONT", "FLANKS"]
+        weapon_dict = {location: [i for i in range(len(self.weapons)) if self.weapons[i].location == location] for
+                       location in locations}
+
+        for location_key in weapon_dict:
+            location_group = weapon_dict[location_key]
+            number = len(location_group)
+            divided_manpower = self.manpower[location_key] / max(1.0, number)
+
+            for index in location_group:
+                self.weapons[index].set_rate_of_fire(divided_manpower)
 
     def get_carriage_movement(self):
 
