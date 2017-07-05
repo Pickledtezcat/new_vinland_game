@@ -228,7 +228,7 @@ class DummyExplosion(Particle):
         if tile:
             position = mathutils.Vector([tile["position"][0], tile["position"][1], tile["height"]])
         else:
-            position = location
+            position = mathutils.Vector(location).to_3d()
 
         self.box.worldPosition = position
         sound_command = {"label": "SOUND_EFFECT", "content": ("I_GRENADE", self.box, 0.5, 1.0)}

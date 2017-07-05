@@ -12,6 +12,7 @@ import model_display
 
 class Agent(object):
     size = 0
+    off_road = False
     max_speed = 0.02
     speed = 0.02
     handling = 0.02
@@ -52,6 +53,7 @@ class Agent(object):
         self.selection_group = None
 
         self.stats = None
+        self.health = 0
         self.load_stats()
 
         self.model = None
@@ -133,7 +135,7 @@ class Agent(object):
     def save(self):
 
         save_dict = {"agent_type": self.agent_type, "team": self.team, "location": self.location, "dead": self.dead,
-                     "knocked_out": self.knocked_out, "rank": self.rank, "shock": self.shock,
+                     "knocked_out": self.knocked_out, "rank": self.rank, "shock": self.shock, "health": self.health,
                      "direction": self.direction, "enter_building": self.enter_building,
                      "selected": self.selected, "state_name": self.state.name, "load_name": self.load_name,
                      "state_count": self.state.count, "movement_target": self.movement.target,
@@ -159,6 +161,7 @@ class Agent(object):
         self.knocked_out = agent_dict["knocked_out"]
         self.rank = agent_dict["rank"]
         self.shock = agent_dict["shock"]
+        self.health = agent_dict["health"]
 
         self.movement.load_movement(agent_dict["movement_target"], agent_dict["movement_target_direction"],
                                     agent_dict["movement_timer"])
@@ -520,38 +523,101 @@ class Agent(object):
             if not self.level.paused:
                 self.state_machine()
 
-        if self.model:
-            if self.stance == "SENTRY":
-                self.model.set_open_hatch(True)
-            else:
-                self.model.set_open_hatch(False)
-
     def infantry_update(self):
         pass
 
     def set_formation(self):
-
-        self.accuracy = self.rank
-        self.resistance = self.rank
+        pass
 
 
 class Vehicle(Agent):
     def __init__(self, level, load_name, location, team, agent_id=None, load_dict=None):
         self.agent_type = "VEHICLE"
+        self.stance_speed = 1.0
+        self.wait_for_infantry = True
+        self.shooting_bonus = 0.0
+
         super().__init__(level, load_name, location, team, agent_id, load_dict)
 
     def load_stats(self):
         tiles = bge.logic.globalDict["profiles"][bge.logic.globalDict["active_profile"]]["vehicles"][self.load_name]
         self.stats = vehicle_stats.VehicleStats(tiles)
 
-        # TODO get stats from self.stats
+        if self.stats.chassis_size > 3:
+            self.size = 2
+        else:
+            self.size = 1
 
-        self.size = 1
-        self.max_speed = 0.04
-        self.handling = 0.01
-        self.speed = 0.02
-        self.turning_speed = 0.01
-        self.turret_speed = 0.01
+        self.initial_health = self.health = self.stats.durability
+        self.set_stats()
+
+    def update_stats(self):
+
+        self.set_stats()
+        self.set_speed()
+
+    def set_stats(self):
+        self.accuracy = float(self.rank)
+        self.resistance = float(self.rank)
+
+        resistance = self.resistance * 0.05
+
+        self.shock = max(0.0, self.shock - resistance)
+
+        # if self.shock > 100:
+        #     self.knocked_out = True
+        # else:
+        #     self.knocked_out = False
+
+        if self.off_road:
+            speed_index = 1
+        else:
+            speed_index = 0
+
+        self.max_speed = self.stats.speed[speed_index] * 0.001
+        self.handling = self.stats.handling[speed_index] * 0.0025
+        self.turret_speed = self.stats.turret_speed * 0.0025
+
+    def set_formation(self):
+
+        hatch_open = False
+
+        if self.stance == "AGGRESSIVE":
+            self.stance_speed = 1.0
+            self.shooting_bonus = 0.5
+
+        if self.stance == "SENTRY":
+            self.stance_speed = 0.5
+            self.shooting_bonus = 1.0
+            hatch_open = True
+
+        if self.stance == "DEFEND":
+            self.stance_speed = 0.5
+            self.shooting_bonus = 1.0
+
+        if self.stance == "FLANK":
+            self.stance_speed = 1.5
+            self.shooting_bonus = 0.0
+
+        self.model.set_open_hatch(hatch_open)
+
+    def set_speed(self):
+        if self.movement.target:
+            if self.movement.target == self.navigation.destination:
+                self.throttle_target = 0.3
+            else:
+                self.throttle_target = 1.0
+
+        elif self.movement.target_direction:
+            self.throttle_target = 0.3
+        else:
+            self.throttle_target = 0.0
+
+        self.throttle = bgeutils.interpolate_float(self.throttle, self.throttle_target, self.handling)
+        speed_mod = self.throttle * self.stance_speed
+
+        self.speed = self.max_speed * speed_mod
+        self.turning_speed = self.handling * speed_mod
 
     def add_box(self):
         super().add_box()
@@ -705,7 +771,7 @@ class Infantry(Agent):
 
         if self.stance == "AGGRESSIVE":
             self.prone = False
-            self.avoid_radius = 2
+            self.avoid_radius = 3
             self.walk_mod = 0.85
             order = [self.deep, self.wide]
             spacing = self.spacing * 1.5
@@ -713,7 +779,7 @@ class Infantry(Agent):
 
         if self.stance == "SENTRY":
             self.prone = False
-            self.avoid_radius = 2
+            self.avoid_radius = 3
             self.walk_mod = 0.75
             order = [self.deep, self.wide]
             spacing = self.spacing * 3.0
@@ -857,16 +923,17 @@ class InfantryMan(object):
                 self.grenade.update()
 
     def set_occupied(self, target_tile):
-        display = False
+        if not self.dead:
+            display = False
 
-        if display:
-            marker = self.box.scene.addObject("debug_marker", self.box, 120)
-            tile = self.agent.level.map[bgeutils.get_key(target_tile)]
-            marker.worldPosition = mathutils.Vector(tile["position"]).to_3d()
-            marker.worldPosition.z = tile["height"]
+            if display:
+                marker = self.box.scene.addObject("debug_marker", self.box, 120)
+                tile = self.agent.level.map[bgeutils.get_key(target_tile)]
+                marker.worldPosition = mathutils.Vector(tile["position"]).to_3d()
+                marker.worldPosition.z = tile["height"]
 
-        self.agent.level.set_tile(target_tile, "occupied", self.agent.agent_id)
-        self.occupied = self.location
+            self.agent.level.set_tile(target_tile, "occupied", self.agent.agent_id)
+            self.occupied = self.location
 
     def clear_occupied(self):
         if self.occupied:

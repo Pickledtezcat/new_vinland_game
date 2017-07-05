@@ -120,6 +120,7 @@ class VehicleStats(object):
         self.durability = 0
         self.armored = False
         self.open_top = False
+        self.turret_speed = 0
 
         self.artillery = False
         self.invalid = []
@@ -155,7 +156,9 @@ class VehicleStats(object):
 
     def generate_stats(self):
 
-        parents =[]
+        self.turret_speed = 6 - self.turret_size
+
+        parents = []
         items = []
         for tile_key in self.contents:
             content = self.contents[tile_key]
@@ -251,7 +254,7 @@ class VehicleStats(object):
             if flag == "AMMO":
                 self.ammo += rating
 
-            # TODO handle other flags, handle reliability
+            # TODO handle other flags, handle reliability, turret speed etc...
 
         if self.vehicle_type == "GUN_CARRIAGE":
             self.get_carriage_movement()

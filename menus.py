@@ -86,6 +86,7 @@ class Button(object):
         self.recharge = 0
         self.text_cursor = None
         self.help_text = help_text
+        self.set_display_text()
 
         self.widget.buttons.append(self)
 
@@ -108,7 +109,6 @@ class Button(object):
             self.text_object.color = off_color
 
     def set_display_text(self):
-
         display_text = self.display_text
         self.text_object['Text'] = bgeutils.split_in_lines(str(display_text), self.text_width, center=True)
 
