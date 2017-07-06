@@ -482,7 +482,7 @@ class Level(object):
             for texture_set in self.infantry_textures:
                 del texture_set["saved"]
         except:
-            print()
+            print("error on exit")
 
     def add_agents(self):
 
@@ -700,7 +700,15 @@ class Level(object):
 
         target = command["target"]
         effect = command["effect"]
-        origin = mathutils.Vector(command["origin"]).to_3d()
+        origin = command["origin"]
+
+        if "VEHICLE" in command["label"]:
+            effect_hook = origin
+            origin = origin.worldPosition.copy()
+
+        else:
+            origin = mathutils.Vector(command["origin"]).to_3d()
+
         effective_range = command["effective_range"]
         effective_power = command["effective_power"]
         shock = effective_power * 0.5
@@ -708,7 +716,11 @@ class Level(object):
         target_distance = command["target_distance"]
         sound = command["sound"]
 
-        if command["label"] == "SMALL_ARMS_SHOOT":
+        small_arms = ["SMALL_ARMS_SHOOT", "VEHICLE_SMALL_ARMS_SHOOT"]
+
+        print(command["label"], effective_range, effective_power, best_target, target_distance)
+
+        if command["label"] in small_arms:
 
             if target:
                 if target.agent_type == "INFANTRY":
@@ -757,6 +769,12 @@ class Level(object):
 
                 if not effect:
                     particles.FaintBulletStreak(self, list(origin), list(target_position), sound)
+
+                elif effect == "YELLOW_FLASH":
+                    particles.YellowBulletFlash(self, list(origin), list(target_position), sound, hook=effect_hook)
+                    particles.YellowBulletFlash(self, list(origin), list(target_position), sound, hook=effect_hook, delay=8)
+                    particles.YellowBulletFlash(self, list(origin), list(target_position), sound, hook=effect_hook,
+                                                delay=16)
 
                 elif effect == "RED_STREAK":
                     particles.RedBulletStreak(self, list(origin), list(target_position), sound)

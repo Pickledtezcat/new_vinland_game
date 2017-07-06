@@ -27,6 +27,7 @@ class Agent(object):
     vision_distance = 0
     initial_health = 0
     shock = 0.0
+    ammo = 0.0
     resistance = 0.0
     best_penetration = 0
 
@@ -53,6 +54,7 @@ class Agent(object):
         self.seen = False
         self.suspect = False
         self.selection_group = None
+        self.weapons = []
 
         self.stats = None
         self.health = 0
@@ -78,11 +80,12 @@ class Agent(object):
         self.enter_building = None
         self.aim = None
         self.occupied = []
-
         self.target = None
         self.reverse = False
         self.selected = False
         self.waiting = False
+        self.deployed = 0.0
+        self.shooting_bonus = 0.0
 
         self.movement = agent_actions.AgentMovement(self)
         self.navigation = agent_actions.AgentNavigation(self)
@@ -136,18 +139,20 @@ class Agent(object):
 
     def save(self):
 
+        weapons = [weapon.timer for weapon in self.weapons]
+
         save_dict = {"agent_type": self.agent_type, "team": self.team, "location": self.location, "dead": self.dead,
                      "knocked_out": self.knocked_out, "rank": self.rank, "shock": self.shock, "health": self.health,
                      "direction": self.direction, "enter_building": self.enter_building,
                      "selected": self.selected, "state_name": self.state.name, "load_name": self.load_name,
                      "state_count": self.state.count, "movement_target": self.movement.target,
-                     "movement_target_direction": self.movement.target_direction,
+                     "movement_target_direction": self.movement.target_direction, "weapons": weapons,
                      "movement_timer": self.movement.timer, "initial_health": self.initial_health,
-                     "navigation_destination": self.navigation.destination,
+                     "navigation_destination": self.navigation.destination, "deployed": self.deployed,
                      "navigation_history": self.navigation.history, "destinations": self.destinations,
                      "reverse": self.reverse, "throttle": self.throttle, "occupied": self.occupied, "aim": self.aim,
                      "targeter_id": self.agent_targeter.enemy_target_id, "selection_group": self.selection_group,
-                     "targeter_angle": self.agent_targeter.turret_angle,
+                     "targeter_angle": self.agent_targeter.turret_angle, "ammo": self.ammo,
                      "targeter_elevation": self.agent_targeter.gun_elevation, "stance": self.stance,
                      "soldiers": [solider.save() for solider in self.soldiers]}
 
@@ -164,6 +169,8 @@ class Agent(object):
         self.rank = agent_dict["rank"]
         self.shock = agent_dict["shock"]
         self.health = agent_dict["health"]
+        self.ammo = agent_dict["ammo"]
+        self.deployed = agent_dict["deployed"]
 
         self.movement.load_movement(agent_dict["movement_target"], agent_dict["movement_target_direction"],
                                     agent_dict["movement_timer"])
@@ -172,7 +179,6 @@ class Agent(object):
         self.navigation.history = agent_dict["navigation_history"]
 
         self.selected = agent_dict["selected"]
-
         self.selection_group = agent_dict["selection_group"]
 
         self.destinations = agent_dict["destinations"]
@@ -192,6 +198,11 @@ class Agent(object):
         self.state.count = agent_dict["state_count"]
 
         self.initial_health = agent_dict["initial_health"]
+
+        weapons = agent_dict["weapons"]
+
+        for i in range(len(weapons)):
+            self.weapons[i].timer = weapons[i]
 
     def set_occupied(self, target_tile, occupied_list=None):
         display = False
@@ -538,16 +549,27 @@ class Agent(object):
     def set_formation(self):
         pass
 
+    def deploy(self, deploying):
+        if deploying:
+            self.deployed = bgeutils.smoothstep(bgeutils.interpolate_float(self.deployed, 1.0, 0.02))
+        else:
+            self.deployed = bgeutils.smoothstep(bgeutils.interpolate_float(self.deployed, 0.0, 0.02))
+
 
 class Vehicle(Agent):
     def __init__(self, level, load_name, location, team, agent_id=None, load_dict=None):
         self.agent_type = "VEHICLE"
         self.stance_speed = 1.0
         self.wait_for_infantry = True
-        self.shooting_bonus = 0.0
-        self.weapons = []
 
         super().__init__(level, load_name, location, team, agent_id, load_dict)
+
+        self.set_formation()
+
+    def get_weapons(self):
+        for weapon in self.stats.weapons:
+            weapon.link_agent(self)
+            self.weapons.append(weapon)
 
     def load_stats(self):
         tiles = bge.logic.globalDict["profiles"][bge.logic.globalDict["active_profile"]]["vehicles"][self.load_name]
@@ -559,10 +581,11 @@ class Vehicle(Agent):
             self.size = 1
 
         self.initial_health = self.health = self.stats.durability
+        self.ammo = self.stats.ammo
+        self.get_weapons()
         self.set_stats()
 
     def update_stats(self):
-
         self.set_stats()
         self.set_speed()
 
@@ -592,7 +615,6 @@ class Vehicle(Agent):
     def set_stats(self):
         self.accuracy = float(self.rank)
         self.resistance = float(self.rank)
-
         resistance = self.resistance * 0.05
 
         self.shock = max(0.0, self.shock - resistance)
@@ -610,18 +632,59 @@ class Vehicle(Agent):
         self.max_speed = self.stats.speed[speed_index] * 0.001
         self.handling = self.stats.handling[speed_index] * 0.0025
         self.turret_speed = self.stats.turret_speed * 0.0025
-
         self.get_best_penetration()
-        self.handle_weapons()
 
     def handle_weapons(self):
-
-        #TODO make weapons dependent on agent states
+        # TODO make weapons dependent on agent states
         for weapon in self.weapons:
             weapon.update()
 
+        self.shoot_weapons(False)
+
+    def shoot_weapons(self, on_move):
+
+        for weapon in self.weapons:
+            weapon.shoot(on_move)
+
+    def check_dead(self):
+        # TODO use with artillery and tanks to simulate being knocked out, crew dead but can be recovered
+
+        if not self.dead:
+            if not self.knocked_out:
+                self.process_commands()
+                return
+
+            self.stance = "DEFEND"
+            self.set_formation()
+            self.selected = False
+            return
+
+        self.selected = False
+        return
+
+    def update(self):
+        # TODO integrate pause, dead and other behavior in to states
+
+        #self.debug_text = "{}\n{}".format(str(self.agent_targeter.turret_on_target), str(self.agent_targeter.hull_on_target))
+        self.debug_text = ""
+
+        self.check_dead()
+
+        if not self.ended:
+            if not self.level.paused:
+                self.state_machine()
+
+        if not self.dead:
+            self.handle_weapons()
+
     def get_best_penetration(self):
-        self.best_penetration = 0
+        best_penetration = 0
+
+        for weapon in self.weapons:
+            if weapon.penetration > best_penetration:
+                best_penetration = weapon.penetration
+
+        self.best_penetration = best_penetration
 
     def set_formation(self):
 
@@ -642,7 +705,7 @@ class Vehicle(Agent):
 
         if self.stance == "FLANK":
             self.stance_speed = 1.5
-            self.shooting_bonus = 0.0
+            self.shooting_bonus = 0.25
 
         self.model.set_open_hatch(hatch_open)
 

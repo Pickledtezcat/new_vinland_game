@@ -1,6 +1,7 @@
 import bge
 import bgeutils
 import vehicle_parts
+import random
 
 parts_dict = vehicle_parts.get_vehicle_parts()
 
@@ -10,15 +11,26 @@ class VehicleWeapon(object):
     def __init__(self, part_key, location, weapon_location):
 
         part = parts_dict[part_key]
+        self.agent = None
         self.part_key = part_key
         self.part = part
         self.location = location
         self.weapon_location = weapon_location
+        self.indirect = False
+        self.accuracy = 10
+        self.total_accuracy = 0
 
         self.name = self.part['name']
         self.rating = self.part['rating']
+        self.power = self.rating + 1
+        self.penetration = self.rating
         self.weight = self.part["x_size"] * self.part["y_size"]
         self.flag = self.part['flag']
+        self.timer = 0.0
+
+        # TODO set effect based on weapon caliber and type
+        self.effect = None
+        self.sound = "MG"
 
         advanced = ["IMPROVED_GUN", "ADVANCED_GUN"]
         support = ["MORTAR", "SUPPORT_GUN", "PRIMITIVE_GUN"]
@@ -47,36 +59,211 @@ class VehicleWeapon(object):
             else:
                 size = 1
 
+        indirect = ["SUPPORT_GUN", "ARTILLERY"]
+        rockets = ["MORTAR", "ROCKETS"]
+        rapid_fire = ["QUICK", "RAPID"]
+
+        if self.flag in rapid_fire:
+            self.accuracy = 12
+
+        if self.flag in indirect:
+            self.indirect = True
+            self.power = int(self.power * 1.5)
+            self.accuracy = 6
+
+        if self.flag in rockets:
+            self.indirect = True
+            self.power = int(self.power * 1.5)
+            self.penetration = int(self.penetration * 0.5)
+            self.accuracy = 1
+
+        if self.flag == "PRIMITIVE_GUN":
+            self.penetration = int(self.penetration * 0.8)
+            self.accuracy = 8
+
+        if self.flag == "IMPROVED_GUN":
+            self.penetration = int(self.penetration * 1.5)
+            self.accuracy = 12
+
+        if self.flag == "ADVANCED_GUN":
+            self.penetration = int(self.penetration * 2.0)
+            self.accuracy = 24
+
+        self.accuracy += self.rating
+        self.power *= 10.0
+        self.penetration *= 10.0
+
         self.visual = size
-        self.rate_of_fire = 0
+        self.rate_of_fire = 0.0
+        self.reload_time = 0.0
         self.emitter = None
+        self.ready = False
 
     def set_rate_of_fire(self, manpower):
 
         required_manpower = self.weight * 2
         rate_of_fire = manpower / required_manpower
-        rate_of_fire = min(1.0, rate_of_fire)
+        rate_of_fire = min(2.0, rate_of_fire)
 
+        very_fast_firing = ["ROCKETS"]
         fast_firing = ["QUICK", "IMPROVED_GUN"]
         rapid_firing = ["RAPID", "FLAME_THROWER"]
-        slow_firing = ["MORTAR"]
+        slow_firing = ["PRIMITIVE_GUN", "SUPPORT_GUN"]
+        very_slow_firing = ["MORTAR", "ARTILLERY"]
+        advanced = ["ADVANCED_GUN", "IMPROVED_GUN"]
 
+        if self.flag in very_fast_firing:
+            rate_of_fire *= 6.0
         if self.flag in fast_firing:
-            rate_of_fire *= 1.5
-        if self.flag in rapid_firing:
             rate_of_fire *= 2.0
+        if self.flag in rapid_firing:
+            rate_of_fire *= 4.0
+        if self.flag in advanced:
+            rate_of_fire *= 1.2
         if self.flag in slow_firing:
+            rate_of_fire *= 0.8
+        if self.flag in very_slow_firing:
             rate_of_fire *= 0.5
 
         self.rate_of_fire = rate_of_fire * 0.005
-
-        print(self.part["name"], round(60 * self.rate_of_fire, 2))
+        if self.rate_of_fire > 0.0:
+            self.reload_time = round(1.0 / (60.0 * self.rate_of_fire), 2)
+        else:
+            self.reload_time = 1000
 
     def set_emitter(self, emitter):
         self.emitter = emitter
 
+    def get_ready(self):
+        target_id, target = self.get_target()
+        if not target:
+            return False
+
+        if self.weapon_location == "TURRET":
+            if not self.agent.agent_targeter.turret_on_target:
+                return False
+
+        else:
+            if not self.agent.agent_targeter.hull_on_target:
+                return False
+
+        if self.agent.knocked_out:
+            return False
+
+        if self.indirect and self.agent.deployed < 1.0:
+            #return False
+            print("indirect")
+
+        armor_facing = target.get_attack_facing(self.agent)
+        if armor_facing:
+            has_turret, facing, armor = armor_facing
+
+            lowest_armor = armor[facing]
+
+            if has_turret:
+                if armor["TURRET"] < lowest_armor:
+                    lowest_armor = armor["TURRET"]
+
+            if self.penetration < lowest_armor:
+                return False
+
+        if self.agent.ammo > 0.0:
+
+            accuracy = (self.accuracy + self.agent.accuracy) * self.agent.shooting_bonus
+            recharge = self.rate_of_fire * self.agent.shooting_bonus
+
+            if self.agent.shock > 40:
+                accuracy *= 0.5
+                recharge *= 0.5
+
+            elif self.agent.shock > 20:
+                accuracy *= 0.75
+                recharge *= 0.75
+
+            # TODO integrate vehicle stability in to accuracy calculation
+            self.total_accuracy = accuracy
+
+            self.timer = min(1.0, self.timer + recharge)
+            if self.timer >= 1.0:
+                return True
+
+        return False
+
+    def get_target(self):
+        target_id = self.agent.agent_targeter.enemy_target_id
+        target = self.agent.level.agents.get(target_id)
+        return target_id, target
+
+    def check_range(self, target):
+        if target:
+            distance = (target.box.worldPosition.copy() - self.agent.box.worldPosition.copy()).length
+            return distance
+
     def update(self):
-        pass
+        self.ready = self.get_ready()
+
+    def link_agent(self, agent):
+        self.agent = agent
+
+    def shoot(self, on_move):
+
+        if self.rating > 2:
+            if on_move:
+                return False
+
+        if self.ready:
+            target_id, target = self.get_target()
+            if target:
+                if target.agent_type == "INFANTRY":
+                    closest_soldier, target_distance = target.get_closest_soldier(
+                        self.agent.box.worldPosition.copy())
+                    if not closest_soldier:
+                        target_distance = self.check_range(target)
+                else:
+                    closest_soldier = None
+                    target_distance = self.check_range(target)
+
+                if self.indirect:
+                    return True
+
+                elif target_distance < 18.0:
+                    origin = self.emitter
+
+                    if not on_move:
+                        # TODO continue testing of accuracy ratings, add vehicle size as a modifier
+                        effective_range = self.total_accuracy * 2.0
+                    else:
+                        effective_range = self.total_accuracy
+
+                    effective_power = self.power * random.uniform(0.0, 1.0)
+
+                    if self.rating < 3:
+                        label = "VEHICLE_SMALL_ARMS_SHOOT"
+
+                        rapid = ["RAPID", "QUICK"]
+                        if self.flag in rapid:
+                            effect = "YELLOW_FLASH"
+                        else:
+                            effect = "YELLOW_FLASH"
+
+                    else:
+                        label = "VEHICLE_SHOOT"
+                        effect = self.effect
+
+                    command = {"label": label, "weapon": self, "owner": self.agent, "target": target,
+                               "effect": effect, "origin": origin, "effective_range": effective_range,
+                               "effective_power": effective_power, "closest_soldier": closest_soldier,
+                               "target_distance": target_distance, "sound": "I_{}".format(self.sound)}
+
+                    self.agent.level.commands.append(command)
+
+                    self.ready = False
+                    self.timer = 0.0
+                    self.agent.ammo -= (self.rating * 0.01)
+
+                    return True
+
+        return False
 
 
 class InstalledPart(object):
@@ -182,7 +369,10 @@ class VehicleStats(object):
 
         parents = []
         items = []
-        for tile_key in self.contents:
+
+        parts_keys = sorted([p_key for p_key in self.contents])
+
+        for tile_key in parts_keys:
             content = self.contents[tile_key]
             if content["part"]:
                 if content["parent_tile"] not in parents:

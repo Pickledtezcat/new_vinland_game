@@ -1,6 +1,7 @@
 import bge
 import mathutils
 import bgeutils
+import random
 
 
 class Particle(object):
@@ -88,27 +89,43 @@ class MovementPointIcon(Particle):
 
 class BulletFlash(Particle):
 
-    def __init__(self, level, position, target, delay=0):
+    def __init__(self, level, position, target, sound, hook=None, delay=0):
         super().__init__(level)
 
+        self.hook = hook
+        if hook:
+            self.box.setParent(hook)
+
+        self.sound = sound
         self.color = [1.0, 1.0, 1.0]
         self.position = position
         self.target = target
         self.delay = delay
         self.place_particle()
 
+    def play_sound(self):
+        if self.sound:
+            sound_command = {"label": "SOUND_EFFECT",
+                             "content": (self.sound, self.box, 0.5, 1.0)}
+            self.level.commands.append(sound_command)
+            self.sound = None
+
     def add_box(self):
         return self.level.own.scene.addObject("bullet_flash", self.level.own, 0)
 
     def place_particle(self):
 
-        position = mathutils.Vector(self.position)
-        target = mathutils.Vector(self.target)
-
-        target_vector = target - position
+        if self.hook:
+            position = self.hook.worldPosition.copy()
+        else:
+            position = mathutils.Vector(self.position)
+        # target = mathutils.Vector(self.target)
+        #
+        # target_vector = target - position
         self.box.worldPosition = position
-        self.box.worldOrientation = target_vector.to_track_quat("Y", "Z").to_matrix().to_3x3()
-        self.box.localScale.y = target_vector.length
+        # self.box.worldOrientation = target_vector.to_track_quat("Y", "Z").to_matrix().to_3x3()
+        self.box.worldOrientation = self.hook.worldOrientation
+        self.box.localScale.y = random.uniform(4.0, 8.0)
 
     def update(self):
         r, g, b = self.color
@@ -117,26 +134,26 @@ class BulletFlash(Particle):
             self.delay -= 1
             color = 0.0
         else:
-            self.timer += 0.4
+            self.play_sound()
+            self.timer += 0.2
             color = 1.0 - self.timer
 
         self.box.color = [r * color, g * color, b * color, 1.0]
-        self.box.localScale = [self.timer, self.timer, self.timer]
 
         if self.timer >= 1.0:
             self.ended = True
 
 
 class YellowBulletFlash(BulletFlash):
-    def __init__(self, level, position, target, delay=0):
-        super().__init__(level, position, target, delay)
+    def __init__(self, level, position, target, sound, hook=None, delay=0):
+        super().__init__(level, position, target, sound, hook, delay)
 
-        self.color = [0.5, 0.5, 0.0]
+        self.color = [1.5, 0.5, 1.0]
 
 
 class RedBulletFlash(BulletFlash):
-    def __init__(self, level, position, target, delay=0):
-        super().__init__(level, position, target, delay)
+    def __init__(self, level, position, target, sound, hook=None, delay=0):
+        super().__init__(level, position, target, sound, hook, delay)
 
         self.color = [1.0, 0.0, 0.0]
 
@@ -149,7 +166,6 @@ class BulletStreak(Particle):
         self.color = [1.0, 1.0, 1.0]
         self.sound = sound
 
-        position[2] += 0.5
         target[2] += 0.5
 
         self.position = position

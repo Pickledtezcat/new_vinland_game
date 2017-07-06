@@ -545,7 +545,6 @@ class AgentNavigation(object):
 
             if self.destination:
                 closest, next_facing, next_target, free, touching_infantry = self.get_next_tile()
-                print(touching_infantry)
 
                 if self.agent.location == self.destination:
                     self.destination = None

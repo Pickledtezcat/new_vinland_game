@@ -25,6 +25,7 @@ class VehicleModel(object):
         self.rocket_turret = None
         self.turret_adder = None
         self.gun_adders = None
+        self.gun_block = None
 
         self.hatch = None
         self.hatch_open = True
@@ -197,6 +198,7 @@ class VehicleModel(object):
                     gun_block_string = "v_gun_block_{}_{}".format(gun_faction, chassis_size - 1)
                     gun_block = o_adder.scene.addObject(gun_block_string, o_adder, 0)
                     gun_block.setParent(o_adder)
+                    self.gun_block = gun_block
                     self.get_adders("front_gun", parent=o_adder, parent_key="mount_gun")
 
                 if turret_size > 0:
@@ -204,10 +206,10 @@ class VehicleModel(object):
                     gun_block_string = "v_gun_block_{}_{}".format(gun_faction, turret_size - 1)
                     gun_block = ot_adder.scene.addObject(gun_block_string, ot_adder, 0)
                     gun_block.setParent(ot_adder)
+                    self.gun_block = gun_block
                     self.get_adders("turret_gun", parent=ot_adder, parent_key="mount_gun")
 
             if "SPONSON" in self.stats.flags:
-
                 sponson_locations = [("FRONT", "front_gun"), ("LEFT", "left_gun"), ("RIGHT", "right_gun"),
                                      ("BACK", "back_gun")]
 
@@ -230,6 +232,8 @@ class VehicleModel(object):
 
             sections = [("FRONT", "front_gun"), ("LEFT", "left_gun"), ("RIGHT", "right_gun"), ("BACK", "back_gun"),
                         ("TURRET", "turret_gun")]
+
+            gun_emitter = None
 
             for section in sections:
                 location = section[0]
@@ -256,11 +260,15 @@ class VehicleModel(object):
                             gun_string = "v_gun_{}_{}".format(gun_faction, gun_size)
 
                             gun = w_adder.scene.addObject(gun_string, w_adder, 0)
-                            weapon.set_emitter(gun)
+                            gun_emitter = bgeutils.get_ob("shooter", gun.children)
+                            weapon.set_emitter(gun_emitter)
                             if location == "TURRET":
                                 gun.setParent(self.turret)
                             else:
                                 gun.setParent(self.vehicle)
+                        else:
+                            weapon = weapons[i]
+                            weapon.set_emitter(gun_emitter)
 
         crew_adders = bgeutils.get_ob_list("crew_man", self.vehicle.childrenRecursive)
         for crew_adder in crew_adders:
@@ -317,7 +325,7 @@ class VehicleModel(object):
                 else:
                     hatch_shape = "r"
 
-                if "COMMANDERS_CUPOLA" in self.stats.flags or "NIGHT_VISION_CUPOLA" in self.stats.flags:
+                if "IMPROVED_COMMANDER" in self.stats.flags or "NIGHT_VISION" in self.stats.flags or "ADVANCED_COMMANDER" in self.stats.flags:
                     if hatch_size == "s":
                         self.open_hatch = "small_cupola"
                         self.closed_hatch = "small_cupola"
@@ -388,7 +396,6 @@ class VehicleModel(object):
     def preview_update(self, rotation):
 
         if self.vehicle:
-
             initial_transform = self.adder.worldTransform
             mat_rotation = mathutils.Matrix.Rotation(math.radians(360.0 * rotation), 4, "Z")
 
