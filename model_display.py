@@ -113,6 +113,7 @@ class VehicleModel(object):
 
         self.vehicle = self.scene.addObject(chassis_string, self.adder, 0)
         self.vehicle.setParent(self.adder)
+        self.vehicle.localPosition.z += 0.1
 
         self.tracks = bgeutils.get_ob_list("tracks", self.vehicle.children)
         if self.tracks:
@@ -383,7 +384,7 @@ class VehicleModel(object):
 
     def movement_action(self):
 
-        speed = self.owner.dynamic_stats["display_speed"]
+        speed = self.owner.display_speed
 
         for wheel in self.wheels:
             wheel.applyRotation([-speed, 0.0, 0.0], 1)
@@ -416,10 +417,14 @@ class VehicleModel(object):
     def turret_turn(self):
 
         if self.turret:
-            turret_angle = self.owner.turret_rotation
-            rot_mat = mathutils.Matrix.Rotation(turret_angle, 4, "Z")
-            turret_target = self.turret_rest * rot_mat
-            self.turret.localTransform = turret_target
+            turret_angle = self.owner.agent_targeter.turret_angle
+            turret_matrix = mathutils.Matrix.Rotation(turret_angle, 4, 'Z').to_3x3()
+            self.turret.localOrientation = turret_matrix
+
+            # turret_angle = self.owner.turret_rotation
+            # rot_mat = mathutils.Matrix.Rotation(turret_angle, 4, "Z")
+            # turret_target = self.turret_rest * rot_mat
+            # self.turret.localTransform = turret_target
 
     def game_update(self):
 
@@ -620,7 +625,7 @@ class ArtilleryModel(object):
 
     def movement_action(self):
 
-        speed = self.owner.dynamic_stats["display_speed"]
+        speed = self.owner.display_speed
 
         for wheel in self.wheels:
             wheel.applyRotation([-speed, 0.0, 0.0], 1)
@@ -651,10 +656,14 @@ class ArtilleryModel(object):
     def turret_turn(self):
 
         if self.turret:
-            turret_angle = self.owner.turret_rotation
-            rot_mat = mathutils.Matrix.Rotation(turret_angle, 4, "Z")
-            turret_target = self.turret_rest * rot_mat
-            self.turret.localTransform = turret_target
+            turret_angle = self.owner.agent_targeter.turret_angle
+            turret_matrix = mathutils.Matrix.Rotation(turret_angle, 4, 'Z').to_3x3()
+            self.turret.localOrientation = turret_matrix
+
+            # turret_angle = self.owner.turret_rotation
+            # rot_mat = mathutils.Matrix.Rotation(turret_angle, 4, "Z")
+            # turret_target = self.turret_rest * rot_mat
+            # self.turret.localTransform = turret_target
 
     def preview_update(self, rotation):
 

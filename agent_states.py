@@ -57,7 +57,6 @@ class AgentMovement(AgentState):
 
     def process(self):
         self.agent.agent_targeter.update()
-        self.agent.animator.update()
         self.agent.movement.update()
 
         if self.agent.movement.done:
@@ -82,8 +81,6 @@ class AgentWaiting(AgentState):
 
     def process(self):
         self.agent.agent_targeter.update()
-        self.agent.animator.update()
-
         self.agent.movement.update()
         self.count += 1
 
@@ -110,14 +107,13 @@ class AgentIdle(AgentState):
     def process(self):
 
         self.agent.agent_targeter.update()
-        self.agent.animator.update()
 
         if self.agent.movement.done:
             if self.agent.aim:
                 self.agent.movement.set_aim()
                 self.agent.aim = None
-        else:
-            self.agent.movement.update()
+
+        self.agent.movement.update()
 
 
 class AgentCombat(AgentState):
@@ -142,13 +138,12 @@ class AgentCombat(AgentState):
     def process(self):
 
         self.agent.agent_targeter.update()
-        self.agent.animator.update()
 
         if self.agent.movement.done:
             if self.agent.agent_targeter.set_target_id:
                 self.agent.movement.target_enemy()
-        else:
-            self.agent.movement.update()
+
+        self.agent.movement.update()
 
 
 class AgentDead(AgentState):

@@ -14,6 +14,9 @@ class AgentMovement(object):
         self.start_normal = None
         self.target_normal = None
         self.remaining = 0.0
+        self.recoil = mathutils.Vector([0.0, 0.0, 0.0])
+        self.tilt = 0.0
+        self.damping = 0.03
 
         self.target_direction = None
         self.current_orientation = None
@@ -105,6 +108,19 @@ class AgentMovement(object):
 
     def set_position(self, set_timer=0.0):
 
+        if not self.agent.agent_type == "INFANTRY":
+            throttle = self.agent.throttle
+            throttle_target = self.agent.throttle_target
+            throttle_difference = (throttle - throttle_target) * 0.05
+
+            if self.agent.reverse:
+                throttle_difference *= -1.0
+
+            throttle_difference = min(0.02, max(-0.02, throttle_difference))
+
+            self.tilt = bgeutils.interpolate_float(self.tilt, throttle_difference, self.damping)
+            self.recoil = self.recoil.lerp(mathutils.Vector([0.0, 0.0, 0.0]), self.damping)
+
         if set_timer:
             timer = set_timer
             damping = 1.0
@@ -120,7 +136,8 @@ class AgentMovement(object):
             normal = self.start_normal.lerp(self.target_normal, timer)
 
             local_y = self.agent.movement_hook.getAxisVect([0.0, 1.0, 0.0])
-            local_z = self.agent.tilt_hook.getAxisVect([0.0, 0.0, 1.0])
+            z = self.recoil.copy() + mathutils.Vector([0.0, self.tilt, 1.0])
+            local_z = self.agent.tilt_hook.getAxisVect(z)
 
             target_vector = local_z.lerp(normal, damping)
 
@@ -704,20 +721,4 @@ class AgentTargeter(object):
                 turret_speed /= scale
 
                 self.turret_angle = bgeutils.interpolate_float(self.turret_angle, target_angle, turret_speed)
-
-
-class AgentAnimator(object):
-    def __init__(self, agent):
-
-        self.agent = agent
-        self.turret = None
-        if self.agent.model:
-            self.turret = self.agent.model.turret
-
-    def update(self):
-        if self.turret:
-            turret_angle = self.agent.agent_targeter.turret_angle
-            turret_matrix = mathutils.Matrix.Rotation(turret_angle, 4, 'Z').to_3x3()
-            self.turret.localOrientation = turret_matrix
-
 

@@ -2,6 +2,7 @@ import bge
 import bgeutils
 import vehicle_parts
 import random
+import mathutils
 
 parts_dict = vehicle_parts.get_vehicle_parts()
 
@@ -260,6 +261,13 @@ class VehicleWeapon(object):
                     self.ready = False
                     self.timer = 0.0
                     self.agent.ammo -= (self.rating * 0.01)
+                    recoil_vector = mathutils.Vector([0.0, -1.0, 0.0])
+                    recoil_vector.length = self.rating * 0.01
+                    # TODO set realistic recoil value based on vehicle weight and weapon power
+
+                    if self.weapon_location == "TURRET":
+                        recoil_vector.rotate(self.agent.model.turret.localOrientation)
+                    self.agent.movement.recoil += recoil_vector
 
                     return True
 

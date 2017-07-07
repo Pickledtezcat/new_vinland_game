@@ -495,7 +495,7 @@ class Level(object):
         infantry = ["GRENADIERS", "HEAVY_SUPPORT_TEAM", "SUPPORT_41", "SUPPORT_39", "PARATROOPERS"]
 
         for friend in range(5):
-            agents.Infantry(self, random.choice(infantry), [35 + (10 * friend), 45], 0)
+            agents.Infantry(self, random.choice(infantry), [35 + (10 * friend), 60], 0)
 
         # agents.Infantry(self, "SUPPORT_36", [35, 25], 0)
 
@@ -509,7 +509,7 @@ class Level(object):
             for v in range(len(vehicle_keys)):
                 # TODO set agent type based on vehicle
                 vehicle = vehicles[vehicle_keys[v]]
-                agents.Vehicle(self, vehicle_keys[v], [35 + (10 * v), 60], 0)
+                agents.Vehicle(self, vehicle_keys[v], [35 + (10 * v), 50], 0)
 
         for enemy in range(5):
             agents.Infantry(self, random.choice(infantry), [35 + (10 * enemy), 25], 1)
@@ -671,9 +671,12 @@ class Level(object):
             command = {"label": "STANCE_CHANGE", "stance": "DEFEND"}
         if "f" in self.manager.game_input.keys:
             command = {"label": "STANCE_CHANGE", "stance": "FLANK"}
-            for agent in player_agents:
-                if agent.selection_group == 2:
-                    agent.knocked_out = True
+
+            # TODO experiment with making troops knocked out
+
+            # for agent in player_agents:
+            #     if agent.selection_group == 2:
+            #         agent.knocked_out = True
 
         number_command = None
 
@@ -723,8 +726,6 @@ class Level(object):
         sound = command["sound"]
 
         small_arms = ["SMALL_ARMS_SHOOT", "VEHICLE_SMALL_ARMS_SHOOT"]
-
-        print(command["label"], effective_range, effective_power, best_target, target_distance)
 
         if command["label"] in small_arms:
 
@@ -930,16 +931,6 @@ class Level(object):
         if self.check_level_loaded():
             self.loaded = True
 
-    def inside_camera(self, agent):
-
-        if self.camera_controller.main_camera.pointInsideFrustum(agent.center.copy()):
-            return True
-
-        if agent.agent_type == "INFANTRY":
-            for soldier in agent.soldiers:
-                if self.camera_controller.main_camera.pointInsideFrustum(soldier.box.worldPosition.copy()):
-                    return True
-
     def visibility_update(self):
 
         """visible means the agent can be seen on screen, seen means they can be targeted by AI, suspect means that they
@@ -956,16 +947,12 @@ class Level(object):
 
                 for agent_key in self.agents:
                     agent = self.agents[agent_key]
-                    agent.set_visible(False)
                     agent.set_seen(False)
                     agent.set_suspect(False)
 
                 for agent_key in self.agents:
                     agent = self.agents[agent_key]
                     knocked_out = agent.knocked_out
-
-                    if self.inside_camera(agent):
-                        agent.set_visible(True)
 
                     if not agent.dead:
                         is_enemy = agent.team != 0

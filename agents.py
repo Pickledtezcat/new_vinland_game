@@ -15,7 +15,8 @@ class Agent(object):
     size = 0
     off_road = False
     max_speed = 0.02
-    speed = 0.02
+    speed = 0.0
+    display_speed = 0.0
     handling = 0.02
     throttle = 0.0
     throttle_target = 0.0
@@ -30,6 +31,7 @@ class Agent(object):
     ammo = 0.0
     resistance = 0.0
     best_penetration = 0
+    on_screen = False
 
     stance = "AGGRESSIVE"
     agent_type = "VEHICLE"
@@ -90,7 +92,6 @@ class Agent(object):
         self.movement = agent_actions.AgentMovement(self)
         self.navigation = agent_actions.AgentNavigation(self)
         self.agent_targeter = agent_actions.AgentTargeter(self)
-        self.animator = agent_actions.AgentAnimator(self)
 
         self.state = None
         self.center = None
@@ -445,9 +446,12 @@ class Agent(object):
                         self.destinations = [position]
 
                     if reverse:
+                        self.throttle = 0.0
                         self.reverse = True
                     else:
-                        self.reverse = False
+                        if self.reverse:
+                            self.throttle = 0.0
+                            self.reverse = False
 
                 if command["label"] == "ROTATION_TARGET":
                     self.dismount_building()
@@ -531,6 +535,14 @@ class Agent(object):
         self.selected = False
         return
 
+    def check_on_screen(self):
+        if self.level.camera_controller.main_camera.pointInsideFrustum(self.center.copy()):
+            self.on_screen = True
+        else:
+            self.on_screen = False
+
+        self.set_visible(self.on_screen)
+
     def update(self):
         # TODO integrate pause, dead and other behavior in to states
 
@@ -538,6 +550,7 @@ class Agent(object):
         self.debug_text = ""
 
         self.check_dead()
+        self.check_on_screen()
 
         if not self.ended:
             if not self.level.paused:
@@ -629,7 +642,7 @@ class Vehicle(Agent):
         else:
             speed_index = 0
 
-        self.max_speed = self.stats.speed[speed_index] * 0.001
+        self.max_speed = self.stats.speed[speed_index] * 0.0025
         self.handling = self.stats.handling[speed_index] * 0.0025
         self.turret_speed = self.stats.turret_speed * 0.0025
         self.get_best_penetration()
@@ -669,13 +682,15 @@ class Vehicle(Agent):
         self.debug_text = ""
 
         self.check_dead()
+        self.check_on_screen()
 
         if not self.ended:
             if not self.level.paused:
                 self.state_machine()
 
-        if not self.dead:
-            self.handle_weapons()
+                if not self.dead:
+                    self.handle_weapons()
+                    self.model.game_update()
 
     def get_best_penetration(self):
         best_penetration = 0
@@ -691,41 +706,47 @@ class Vehicle(Agent):
         hatch_open = False
 
         if self.stance == "AGGRESSIVE":
-            self.stance_speed = 1.0
+            self.stance_speed = 0.66
             self.shooting_bonus = 0.5
 
         if self.stance == "SENTRY":
-            self.stance_speed = 0.5
+            self.stance_speed = 0.33
             self.shooting_bonus = 1.0
             hatch_open = True
 
         if self.stance == "DEFEND":
-            self.stance_speed = 0.5
+            self.stance_speed = 0.33
             self.shooting_bonus = 1.0
 
         if self.stance == "FLANK":
-            self.stance_speed = 1.5
+            self.stance_speed = 1.0
             self.shooting_bonus = 0.25
 
         self.model.set_open_hatch(hatch_open)
 
     def set_speed(self):
+
         if self.movement.target:
             if self.movement.target == self.navigation.destination:
-                self.throttle_target = 0.3
+                self.throttle_target = self.stance_speed * 0.5
             else:
-                self.throttle_target = 1.0
+                self.throttle_target = self.stance_speed
 
         elif self.movement.target_direction:
-            self.throttle_target = 0.3
+            self.throttle_target = self.stance_speed * 0.66
         else:
             self.throttle_target = 0.0
 
         self.throttle = bgeutils.interpolate_float(self.throttle, self.throttle_target, self.handling)
         speed_mod = self.throttle * self.stance_speed
+        display_mod = self.throttle_target * self.stance_speed
 
         self.speed = self.max_speed * speed_mod
         self.turning_speed = self.handling * speed_mod
+
+        self.display_speed = (self.max_speed * display_mod) * 5.0
+        if self.reverse:
+            self.display_speed *= -1
 
     def add_box(self):
         super().add_box()
@@ -856,6 +877,16 @@ class Infantry(Agent):
         self.dismount_building()
         self.selected = False
         return
+
+    def check_on_screen(self):
+        on_screen = False
+
+        for soldier in self.soldiers:
+            if self.level.camera_controller.main_camera.pointInsideFrustum(soldier.box.worldPosition.copy()):
+                on_screen = True
+
+        self.on_screen = on_screen
+        self.set_visible(self.on_screen)
 
     def set_speed(self):
         infantry_speed = [soldier.speed for soldier in self.soldiers if not soldier.dead]
