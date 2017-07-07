@@ -790,6 +790,7 @@ class VehicleGoToContentsWidget(NarrowWidget):
 
     def add_buttons(self):
         Button(self, "large_button", 0.0, 1.0, "Modify\nContents", bgeutils.GeneralMessage("NEW_LEVEL", "VehicleContentsMenu"))
+        Button(self, "large_button", 0.0, 0.0, "Save\nTo\nDisk", bgeutils.GeneralMessage("SAVE_VEHICLE", ""))
 
     def process_commands(self):
         for command in self.commands:
@@ -798,6 +799,9 @@ class VehicleGoToContentsWidget(NarrowWidget):
                 bge.logic.globalDict["profiles"][bge.logic.globalDict["active_profile"]][
                     "part_filter"] = "weapon"
                 bge.logic.globalDict["profiles"][bge.logic.globalDict["active_profile"]]["part_page"] = 0
+
+            if command.header == "SAVE_VEHICLE":
+                builder_tools.save_testing_vehicle()
 
         self.commands = []
 

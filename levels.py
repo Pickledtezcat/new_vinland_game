@@ -11,6 +11,7 @@ import buildings
 import LOS
 import map_generation
 import bullets
+import builder_tools
 
 class MovementMarker(object):
     def __init__(self, level, owner, position, offset):
@@ -486,6 +487,8 @@ class Level(object):
 
     def add_agents(self):
 
+        vehicle_testing = True
+
         # for friend in range(4):
         #     agents.Vehicle(self, None, [35 + (10 * friend), 55], 0)
 
@@ -499,11 +502,14 @@ class Level(object):
         # for enemy in range(4):
         #     agents.Vehicle(self, None, [35 + (10 * enemy), 35], 1)
 
-        vehicles = bge.logic.globalDict["profiles"][bge.logic.globalDict["active_profile"]]["vehicles"]
-        vehicle_keys = [v_key for v_key in vehicles]
-        for v in range(len(vehicle_keys)):
-            vehicle = vehicles[vehicle_keys[v]]
-            agents.Vehicle(self, vehicle_keys[v], [35 + (10 * v), 60], 0)
+        if vehicle_testing:
+            vehicles = builder_tools.load_testing_vehicles()
+            bge.logic.globalDict["profiles"][bge.logic.globalDict["active_profile"]]["vehicles"] = vehicles
+            vehicle_keys = [v_key for v_key in vehicles]
+            for v in range(len(vehicle_keys)):
+                # TODO set agent type based on vehicle
+                vehicle = vehicles[vehicle_keys[v]]
+                agents.Vehicle(self, vehicle_keys[v], [35 + (10 * v), 60], 0)
 
         for enemy in range(5):
             agents.Infantry(self, random.choice(infantry), [35 + (10 * enemy), 25], 1)
@@ -741,9 +747,9 @@ class Level(object):
                             shock *= 0.5
                             effective_range -= 5
 
-                        to_hit = max(1, effective_range - target_distance)
+                        to_hit = (effective_range / target_distance) * 0.5
 
-                        if to_hit < random.randint(0, 18):
+                        if to_hit < random.uniform(0.0, 1.0):
                             target_position = None
 
                     if target_position:

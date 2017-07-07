@@ -2,6 +2,7 @@ import bge
 import bgeutils
 import vehicle_parts
 import mathutils
+import json
 
 parts_dict = vehicle_parts.get_vehicle_parts()
 color_dict = vehicle_parts.color_dict
@@ -19,6 +20,7 @@ def add_new_vehicle(vehicle):
     while not added:
         vehicle_id = get_vehicle_id(id_number)
         if vehicle_id not in bge.logic.globalDict["profiles"][bge.logic.globalDict["active_profile"]]["vehicles"]:
+            vehicle["id"] = vehicle_id
             bge.logic.globalDict["profiles"][bge.logic.globalDict["active_profile"]]["vehicles"][vehicle_id] = vehicle
             added = True
         id_number += 1
@@ -26,6 +28,39 @@ def add_new_vehicle(vehicle):
     bgeutils.save_settings()
 
     return vehicle_id
+
+
+def save_testing_vehicle():
+
+    vehicles = load_testing_vehicles()
+
+    out_path = bge.logic.expandPath("//saves/vehicles.txt")
+    editing = get_editing_vehicle()
+
+    added = False
+    index = 0
+    editing_name = editing["name"]
+
+    while not added:
+
+        if editing_name not in vehicles:
+            vehicles[editing_name] = editing
+            added = True
+        else:
+            editing_name = "{}.{}".format(editing["name"], index)
+            index += 1
+
+    with open(out_path, "w") as outfile:
+        json.dump(vehicles, outfile)
+
+
+def load_testing_vehicles():
+    in_path = bge.logic.expandPath("//saves/vehicles.txt")
+
+    with open(in_path, "r") as infile:
+        vehicles = json.load(infile)
+
+    return vehicles
 
 
 def get_editing_vehicle():
