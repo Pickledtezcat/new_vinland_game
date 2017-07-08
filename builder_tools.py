@@ -37,18 +37,8 @@ def save_testing_vehicle():
     out_path = bge.logic.expandPath("//saves/vehicles.txt")
     editing = get_editing_vehicle()
 
-    added = False
-    index = 0
     editing_name = editing["name"]
-
-    while not added:
-
-        if editing_name not in vehicles:
-            vehicles[editing_name] = editing
-            added = True
-        else:
-            editing_name = "{}.{}".format(editing["name"], index)
-            index += 1
+    vehicles[editing_name] = editing
 
     with open(out_path, "w") as outfile:
         json.dump(vehicles, outfile)

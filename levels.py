@@ -727,72 +727,85 @@ class Level(object):
 
         small_arms = ["SMALL_ARMS_SHOOT", "VEHICLE_SMALL_ARMS_SHOOT"]
 
-        if command["label"] in small_arms:
+        if target:
+            if target.agent_type == "INFANTRY":
+                if command["label"] == "VEHICLE_SHOOT":
+                    target_position = best_target.box.worldPosition.copy()
+                    command = {"label": "EXPLOSION", "effect": "DUMMY_EXPLOSION", "damage": 1,
+                               "position": target_position, "owner": owner}
+                    self.commands.append(command)
 
-            if target:
-                if target.agent_type == "INFANTRY":
-                    if best_target:
-                        if best_target.in_building:
-                            shock *= 0.5
+                elif best_target:
+                    if best_target.in_building:
+                        shock *= 0.5
 
-                            if random.randint(0, 3) >= 3:
-                                target_position = None
-
-                            target_building = self.buildings.get(best_target.in_building)
-                            if target_building:
-                                target_position = target_building.get_closest_window(origin)
-                        else:
-                            target_position = best_target.box.worldPosition.copy()
-
-                        if best_target.behavior.prone:
-                            shock *= 0.5
-                            effective_range -= 5
-
-                        to_hit = (effective_range / target_distance) * 0.5
-
-                        if to_hit < random.uniform(0.0, 1.0):
+                        if random.randint(0, 3) >= 3:
                             target_position = None
 
-                    if target_position:
-                        damage = int(effective_power)
-                        if effective_power < best_target.toughness:
-                            damage *= 0.5
-
-                        best_target.toughness -= max(1, int(damage))
-
+                        target_building = self.buildings.get(best_target.in_building)
+                        if target_building:
+                            target_position = target_building.get_closest_window(origin)
                     else:
+                        target_position = best_target.box.worldPosition.copy()
+
+                    if best_target.behavior.prone:
                         shock *= 0.5
-                        if best_target:
-                            base_location = best_target.box.worldPosition.copy()
-                            random_vector = mathutils.Vector(
-                                [random.uniform(-3.0, 3.0), random.uniform(-3.0, 3.0), 0.0])
-                            target_position = base_location + random_vector
+                        effective_range -= 5
 
-                    target.shock += shock
+                    to_hit = (effective_range / target_distance) * 0.5
 
-            if target_position:
+                    if to_hit < random.uniform(0.0, 1.0):
+                        target_position = None
 
-                # TODO add ground bullet hit effect
+                if target_position:
+                    damage = int(effective_power)
+                    if effective_power < best_target.toughness:
+                        damage *= 0.5
 
-                if not effect:
-                    particles.FaintBulletStreak(self, list(origin), list(target_position), sound)
+                    best_target.toughness -= max(1, int(damage))
 
-                elif effect == "YELLOW_FLASH":
-                    particles.YellowBulletFlash(self, list(origin), list(target_position), sound, hook=effect_hook)
-                    particles.YellowBulletFlash(self, list(origin), list(target_position), sound, hook=effect_hook, delay=8)
-                    particles.YellowBulletFlash(self, list(origin), list(target_position), sound, hook=effect_hook,
-                                                delay=16)
+                else:
+                    shock *= 0.5
+                    if best_target:
+                        base_location = best_target.box.worldPosition.copy()
+                        random_vector = mathutils.Vector(
+                            [random.uniform(-3.0, 3.0), random.uniform(-3.0, 3.0), 0.0])
+                        target_position = base_location + random_vector
 
-                elif effect == "RED_STREAK":
-                    particles.RedBulletStreak(self, list(origin), list(target_position), sound)
+                target.shock += shock
 
-                elif effect == "YELLOW_STREAK":
-                    particles.YellowBulletStreak(self, list(origin), list(target_position), sound)
+            else:
+                target_position = target.box.worldPosition.copy()
+                command = {"label": "EXPLOSION", "effect": "DUMMY_EXPLOSION", "damage": 1,
+                           "position": target_position, "owner": owner}
+                self.commands.append(command)
 
-                elif effect == "RAPID_YELLOW_STREAK":
-                    particles.YellowBulletStreak(self, list(origin), list(target_position), sound)
-                    particles.YellowBulletStreak(self, list(origin), list(target_position), sound, delay=8)
-                    particles.YellowBulletStreak(self, list(origin), list(target_position), sound, delay=16)
+        if target_position:
+
+            # TODO add ground bullet hit effect
+
+            if not effect:
+                particles.FaintBulletStreak(self, list(origin), list(target_position), sound)
+
+            elif effect == "YELLOW_FLASH":
+                particles.YellowBulletFlash(self, list(origin), list(target_position), sound, hook=effect_hook)
+                particles.YellowBulletFlash(self, list(origin), list(target_position), sound, hook=effect_hook, delay=8)
+                particles.YellowBulletFlash(self, list(origin), list(target_position), sound, hook=effect_hook,
+                                            delay=16)
+
+            elif effect == "RED_FLASH":
+                particles.YellowBulletFlash(self, list(origin), list(target_position), sound, hook=effect_hook)
+
+            elif effect == "RED_STREAK":
+                particles.RedBulletStreak(self, list(origin), list(target_position), sound)
+
+            elif effect == "YELLOW_STREAK":
+                particles.YellowBulletStreak(self, list(origin), list(target_position), sound)
+
+            elif effect == "RAPID_YELLOW_STREAK":
+                particles.YellowBulletStreak(self, list(origin), list(target_position), sound)
+                particles.YellowBulletStreak(self, list(origin), list(target_position), sound, delay=8)
+                particles.YellowBulletStreak(self, list(origin), list(target_position), sound, delay=16)
 
     def shoot_artillery(self, command):
 

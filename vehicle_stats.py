@@ -102,7 +102,7 @@ class VehicleWeapon(object):
 
     def set_rate_of_fire(self, manpower):
 
-        required_manpower = self.weight * 2
+        required_manpower = self.weight + 2
         rate_of_fire = manpower / required_manpower
         rate_of_fire = min(2.0, rate_of_fire)
 
@@ -136,37 +136,6 @@ class VehicleWeapon(object):
         self.emitter = emitter
 
     def get_ready(self):
-        target_id, target = self.get_target()
-        if not target:
-            return False
-
-        if self.weapon_location == "TURRET":
-            if not self.agent.agent_targeter.turret_on_target:
-                return False
-
-        else:
-            if not self.agent.agent_targeter.hull_on_target:
-                return False
-
-        if self.agent.knocked_out:
-            return False
-
-        if self.indirect and self.agent.deployed < 1.0:
-            #return False
-            print("indirect")
-
-        armor_facing = target.get_attack_facing(self.agent)
-        if armor_facing:
-            has_turret, facing, armor = armor_facing
-
-            lowest_armor = armor[facing]
-
-            if has_turret:
-                if armor["TURRET"] < lowest_armor:
-                    lowest_armor = armor["TURRET"]
-
-            if self.penetration < lowest_armor:
-                return False
 
         if self.agent.ammo > 0.0:
 
@@ -183,8 +152,40 @@ class VehicleWeapon(object):
 
             # TODO integrate vehicle stability in to accuracy calculation
             self.total_accuracy = accuracy
-
             self.timer = min(1.0, self.timer + recharge)
+
+            target_id, target = self.get_target()
+            if not target:
+                return False
+
+            if self.weapon_location == "TURRET":
+                if not self.agent.agent_targeter.turret_on_target:
+                    return False
+
+            else:
+                if not self.agent.agent_targeter.hull_on_target:
+                    return False
+
+            if self.agent.knocked_out:
+                return False
+
+            if self.indirect and self.agent.deployed < 1.0:
+                # return False
+                print("indirect")
+
+            armor_facing = target.get_attack_facing(self.agent)
+            if armor_facing:
+                has_turret, facing, armor = armor_facing
+
+                lowest_armor = armor[facing]
+
+                if has_turret:
+                    if armor["TURRET"] < lowest_armor:
+                        lowest_armor = armor["TURRET"]
+
+                if self.penetration < lowest_armor:
+                    return False
+
             if self.timer >= 1.0:
                 return True
 
@@ -249,7 +250,7 @@ class VehicleWeapon(object):
 
                     else:
                         label = "VEHICLE_SHOOT"
-                        effect = self.effect
+                        effect = "RED_FLASH" # self.effect
 
                     command = {"label": label, "weapon": self, "owner": self.agent, "target": target,
                                "effect": effect, "origin": origin, "effective_range": effective_range,
@@ -325,7 +326,7 @@ class VehicleStats(object):
         self.crew = 0
         self.range = 0
         self.stores = 0
-        self.ammo = 0
+        self.ammo = 0.0
         self.reliability = 0
         self.cost = 0
 
@@ -338,6 +339,7 @@ class VehicleStats(object):
         self.armored = False
         self.open_top = False
         self.turret_speed = 0
+        self.has_commander = False
 
         self.artillery = False
         self.invalid = []
@@ -558,17 +560,13 @@ class VehicleStats(object):
             else:
                 good_vision = True
 
-        if "COMMANDER" in self.flags:
-            if self.turret_size > 0:
-                great_vision = True
-            else:
-                good_vision = True
-
-        if "COMMANDERS_CUPOLA" in self.flags:
-            if self.turret_size > 0:
-                great_vision = True
-            else:
-                good_vision = True
+        for flag in self.flags:
+            if "COMMANDER" in flag:
+                self.has_commander = True
+                if self.turret_size > 0:
+                    great_vision = True
+                else:
+                    good_vision = True
 
         if not self.armored:
             vision_distance += 1

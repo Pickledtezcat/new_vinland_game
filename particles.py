@@ -98,10 +98,16 @@ class BulletFlash(Particle):
 
         self.sound = sound
         self.color = [1.0, 1.0, 1.0]
+        self.scale = 1.0
         self.position = position
         self.target = target
         self.delay = delay
+        self.get_attributes()
         self.place_particle()
+
+    def get_attributes(self):
+        self.color = [1.0, 1.0, 1.0]
+        self.scale = 1.0
 
     def play_sound(self):
         if self.sound:
@@ -126,6 +132,8 @@ class BulletFlash(Particle):
         # self.box.worldOrientation = target_vector.to_track_quat("Y", "Z").to_matrix().to_3x3()
         self.box.worldOrientation = self.hook.worldOrientation
         self.box.localScale.y = random.uniform(4.0, 8.0)
+        self.box.localScale.x = self.scale
+        self.box.localScale.z = self.scale
 
     def update(self):
         r, g, b = self.color
@@ -152,10 +160,10 @@ class YellowBulletFlash(BulletFlash):
 
 
 class RedBulletFlash(BulletFlash):
-    def __init__(self, level, position, target, sound, hook=None, delay=0):
-        super().__init__(level, position, target, sound, hook, delay)
 
+    def get_attributes(self):
         self.color = [1.0, 0.0, 0.0]
+        self.scale = 3.0
 
 
 class BulletStreak(Particle):

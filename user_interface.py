@@ -8,6 +8,18 @@ import vehicle_parts
 parts_dict = vehicle_parts.get_vehicle_parts()
 color_dict = vehicle_parts.color_dict
 
+status_dict = {"ammo": "yellow",
+               "empty": "red",
+               "carrying": "green",
+               "disabled": "yellow",
+               "knocked_out": "red",
+               "shocked": "yellow",
+               "broken": "red",
+               "damaged": "red",
+               "sentry": "green",
+               "nothing": "green"}
+
+
 class UserInterface(object):
     def __init__(self, level):
 
@@ -173,8 +185,21 @@ class StatusBar(object):
     def secondary_icons(self, setting):
 
         self.stance_icon.visible = setting
+        self.status_icon.visible = setting
 
         if setting:
+            status = self.get_status()
+            if status != self.status:
+                self.status = status
+                status_color = status_dict[self.status]
+                self.status_icon.replaceMesh("status_{}".format(self.status))
+                set_color = self.green
+                if status_color == "yellow":
+                    set_color = self.yellow
+                if status_color == "red":
+                    set_color = self.red
+                self.status_icon.color = set_color
+
             stance = self.agent.stance
             if self.stance != stance:
                 self.stance = stance
@@ -199,9 +224,38 @@ class StatusBar(object):
             self.rank_icon.visible = setting
             self.group_number_icon.visible = setting
 
-
-
         # TODO do other secondary icons (status, rank)
+
+    def get_status(self):
+
+        if self.agent.knocked_out:
+            return "knocked_out"
+
+        if self.agent.is_carrying:
+            return "carrying"
+
+        if self.agent.is_shocked == 1:
+            return "broken"
+
+        if self.agent.is_damaged == 1:
+            return "disabled"
+
+        if self.agent.has_ammo < 0:
+            return "empty"
+
+        if self.agent.is_shocked == 0:
+            return "shocked"
+
+        if self.agent.has_ammo < 1:
+            return "ammo"
+
+        if self.agent.is_damaged == 0:
+            return "damaged"
+
+        if self.agent.is_sentry:
+            return "sentry"
+
+        return "nothing"
 
     def update_position(self):
 
