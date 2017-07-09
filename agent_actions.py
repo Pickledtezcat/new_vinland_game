@@ -654,7 +654,16 @@ class AgentTargeter(object):
         #     if self.agent.best_penetration < lowest_armor:
         #         return False
 
-        agent_vector = target_agent.box.worldPosition.copy() - self.agent.box.worldPosition.copy()
+        best_target = None
+        if target_agent.agent_type == "INFANTRY":
+            closest_soldier, enemy_distance = target_agent.get_closest_soldier(self.agent.box.worldPosition.copy())
+            if closest_soldier:
+                best_target = closest_soldier.box
+
+        if not best_target:
+            best_target = target_agent.box
+
+        agent_vector = best_target.worldPosition.copy() - self.agent.box.worldPosition.copy()
         enemy_distance = agent_vector.length
 
         return agent_vector.to_2d(), enemy_distance

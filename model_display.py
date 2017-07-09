@@ -26,6 +26,7 @@ class VehicleModel(object):
         self.turret_adder = None
         self.gun_adders = None
         self.gun_block = None
+        self.gun_block_rest = None
 
         self.hatch = None
         self.hatch_open = True
@@ -200,6 +201,7 @@ class VehicleModel(object):
                     gun_block = o_adder.scene.addObject(gun_block_string, o_adder, 0)
                     gun_block.setParent(o_adder)
                     self.gun_block = gun_block
+                    self.gun_block_rest = self.gun_block.localTransform
                     self.get_adders("front_gun", parent=o_adder, parent_key="mount_gun")
 
                 if turret_size > 0:
@@ -208,6 +210,7 @@ class VehicleModel(object):
                     gun_block = ot_adder.scene.addObject(gun_block_string, ot_adder, 0)
                     gun_block.setParent(ot_adder)
                     self.gun_block = gun_block
+                    self.gun_block_rest = self.gun_block.localTransform
                     self.get_adders("turret_gun", parent=ot_adder, parent_key="mount_gun")
 
             if "SPONSON" in self.stats.flags:
@@ -263,10 +266,12 @@ class VehicleModel(object):
                             gun = w_adder.scene.addObject(gun_string, w_adder, 0)
                             gun_emitter = bgeutils.get_ob("shooter", gun.children)
                             weapon.set_emitter(gun_emitter)
-                            if location == "TURRET":
-                                gun.setParent(self.turret)
-                            else:
-                                gun.setParent(self.vehicle)
+                            gun.setParent(w_adder)
+
+                            # if location == "TURRET":
+                            #     gun.setParent(self.turret)
+                            # else:
+                            #     gun.setParent(self.vehicle)
                         else:
                             weapon = weapons[i]
                             weapon.set_emitter(gun_emitter)
@@ -426,8 +431,16 @@ class VehicleModel(object):
             # turret_target = self.turret_rest * rot_mat
             # self.turret.localTransform = turret_target
 
+    def deploy(self):
+
+        if self.gun_block:
+            rot_mat = mathutils.Matrix.Rotation(self.owner.deployed, 4, "X")
+            gun_target = self.gun_block_rest * rot_mat
+            self.gun_block.localTransform = gun_target
+
     def game_update(self):
 
+        self.deploy()
         self.movement_action()
         self.turret_turn()
 

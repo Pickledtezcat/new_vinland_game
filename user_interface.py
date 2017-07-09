@@ -267,7 +267,7 @@ class StatusBar(object):
         else:
             position = self.agent.box.worldPosition.copy()
 
-        position.z += 2.0
+        position.z += 2.5
 
         location = self.ui.camera.getScreenPosition(position)
         ray = self.ui.mouse_ray(location)

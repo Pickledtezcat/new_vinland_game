@@ -137,8 +137,12 @@ class VehicleWeapon(object):
 
     def get_ready(self):
 
-        if self.agent.ammo > 0.0:
+        if self.agent.ammo <= 0.0:
+            if self.indirect:
+                self.agent.deploy(False)
+                return False
 
+        else:
             accuracy = (self.accuracy + self.agent.accuracy) * self.agent.shooting_bonus
             recharge = self.rate_of_fire * self.agent.shooting_bonus
 
@@ -155,6 +159,22 @@ class VehicleWeapon(object):
             self.timer = min(1.0, self.timer + recharge)
 
             target_id, target = self.get_target()
+
+            if self.indirect:
+                if not target:
+                    self.agent.deploy(False)
+                    return False
+                else:
+                    basic_distance = self.check_range(target)
+                    deploy_angle = min(1.0, basic_distance / 36.0)
+                    if self.agent.deployed < (deploy_angle - 0.1):
+                        self.agent.deploy(True)
+                        return False
+
+                    if self.agent.deployed > (deploy_angle + 0.1):
+                        self.agent.deploy(False)
+                        return False
+
             if not target:
                 return False
 
@@ -168,10 +188,6 @@ class VehicleWeapon(object):
 
             if self.agent.knocked_out:
                 return False
-
-            if self.indirect and self.agent.deployed < 1.0:
-                # return False
-                print("indirect")
 
             armor_facing = target.get_attack_facing(self.agent)
             if armor_facing:
@@ -209,12 +225,13 @@ class VehicleWeapon(object):
 
     def shoot(self, on_move):
 
-        if self.rating > 2:
-            if on_move:
-                return False
+        target_id, target = self.get_target()
 
         if self.ready:
-            target_id, target = self.get_target()
+            if self.rating > 2:
+                if on_move:
+                    return False
+
             if target:
                 if target.agent_type == "INFANTRY":
                     closest_soldier, target_distance = target.get_closest_soldier(
@@ -225,10 +242,8 @@ class VehicleWeapon(object):
                     closest_soldier = None
                     target_distance = self.check_range(target)
 
-                if self.indirect:
-                    return True
+                if target_distance < 18.0:
 
-                elif target_distance < 18.0:
                     origin = self.emitter
 
                     if not on_move:

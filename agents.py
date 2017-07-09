@@ -568,10 +568,12 @@ class Agent(object):
         pass
 
     def deploy(self, deploying):
+
+        adjust = -0.02
         if deploying:
-            self.deployed = bgeutils.smoothstep(bgeutils.interpolate_float(self.deployed, 1.0, 0.02))
-        else:
-            self.deployed = bgeutils.smoothstep(bgeutils.interpolate_float(self.deployed, 0.0, 0.02))
+            adjust = 0.02
+
+        self.deployed = min(1.0, max(0.0, self.deployed + adjust))
 
 
 class Vehicle(Agent):
@@ -666,25 +668,28 @@ class Vehicle(Agent):
 
     def check_status(self):
         # TODO set other status flags
-        if self.ammo <= 0.0:
-            self.has_ammo = -1
-        elif self.ammo < 0.25:
-            self.has_ammo = 0
-        else:
-            self.has_ammo = 1
-
-        self.is_sentry = False
-        if self.stats.has_commander:
-            if self.stance == "SENTRY":
-                self.is_sentry = True
-
-        #is_damaged = -1
-        #is_carrying = False
-
-        #is_sentry = False
-        #is_shocked = False
+        # TODO set some stats to update on move
 
         if not self.dead:
+            if self.on_screen:
+                if self.ammo <= 0.0:
+                    self.has_ammo = -1
+                elif self.ammo < 0.25:
+                    self.has_ammo = 0
+                else:
+                    self.has_ammo = 1
+
+                self.is_sentry = False
+                if self.stats.has_commander:
+                    if self.stance == "SENTRY":
+                        self.is_sentry = True
+
+                #is_damaged = -1
+                #is_carrying = False
+
+                #is_sentry = False
+                #is_shocked = False
+
             if not self.knocked_out:
                 self.process_commands()
                 return
@@ -701,7 +706,8 @@ class Vehicle(Agent):
         # TODO integrate pause, dead and other behavior in to states
 
         #self.debug_text = "{}\n{}".format(str(self.agent_targeter.turret_on_target), str(self.agent_targeter.hull_on_target))
-        self.debug_text = ""
+        #self.debug_text = ""
+        self.debug_text = self.deployed
 
         self.check_status()
         self.check_on_screen()
@@ -878,41 +884,44 @@ class Infantry(Agent):
     def check_status(self):
 
         if not self.dead:
-            self.has_ammo = 1
-            self.is_sentry = False
-            commanders = ["COMMANDER", "OBSERVER", "OFFICER"]
 
-            out_of_grenades = 0
-            out_of_ammo = 0
-            if self.shock > 40:
-                self.is_shocked = 1
-            elif self.shock > 20:
-                self.is_shocked = 0
-            else:
-                self.is_shocked = -1
+            if self.on_screen:
+                self.has_ammo = 1
+                self.is_sentry = False
+                commanders = ["COMMANDER", "OBSERVER", "OFFICER"]
+
+                out_of_grenades = 0
+                out_of_ammo = 0
+                if self.shock > 40:
+                    self.is_shocked = 1
+                elif self.shock > 20:
+                    self.is_shocked = 0
+                else:
+                    self.is_shocked = -1
+
+                for soldier in self.soldiers:
+                    if self.stance == "SENTRY":
+                        if soldier.special in commanders:
+                            self.is_sentry = True
+                    if soldier.weapon.ammo <= 0.0:
+                        out_of_ammo += 1
+                    if soldier.grenade:
+                        if soldier.grenade.ammo <= 0:
+                            out_of_grenades += 1
+                    else:
+                        out_of_grenades += 1
+
+                if out_of_grenades >= len(self.soldiers):
+                    self.has_ammo -= 1
+                if out_of_ammo >= len(self.soldiers):
+                    self.has_ammo -= 2
+                elif out_of_ammo >= int(len(self.soldiers) * 0.5):
+                    self.has_ammo -= 1
 
             dead = True
             for soldier in self.soldiers:
-                if self.stance == "SENTRY":
-                    if soldier.special in commanders:
-                        self.is_sentry = True
-                if soldier.weapon.ammo <= 0.0:
-                    out_of_ammo += 1
-                if soldier.grenade:
-                    if soldier.grenade.ammo <= 0:
-                        out_of_grenades += 1
-                else:
-                    out_of_grenades += 1
-
                 if not soldier.dead:
                     dead = False
-
-            if out_of_grenades >= len(self.soldiers):
-                self.has_ammo -= 1
-            if out_of_ammo >= len(self.soldiers):
-                self.has_ammo -= 2
-            elif out_of_ammo >= int(len(self.soldiers) * 0.5):
-                self.has_ammo -= 1
 
             if dead:
                 self.dead = True
