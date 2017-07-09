@@ -6,9 +6,7 @@ import mathutils
 
 parts_dict = vehicle_parts.get_vehicle_parts()
 
-
 class VehicleWeapon(object):
-
     def __init__(self, part_key, location, weapon_location):
 
         part = parts_dict[part_key]
@@ -69,12 +67,10 @@ class VehicleWeapon(object):
 
         if self.flag in indirect:
             self.indirect = True
-            self.power = int(self.power * 1.5)
             self.accuracy = 6
 
         if self.flag in rockets:
             self.indirect = True
-            self.power = int(self.power * 1.5)
             self.penetration = int(self.penetration * 0.5)
             self.accuracy = 1
 
@@ -91,12 +87,21 @@ class VehicleWeapon(object):
             self.accuracy = 24
 
         self.accuracy += self.rating
-        self.power *= 10.0
-        self.penetration *= 10.0
+        self.power *= 10
+        self.penetration *= 10
 
         self.visual = size
+        self.bullet = None
         self.rate_of_fire = 0.0
         self.reload_time = 0.0
+        self.ammo_drain = self.rating * 0.005
+        if self.flag in rapid_fire or self.flag in indirect:
+            self.ammo_drain *= 2.0
+
+        if self.flag in rockets:
+            self.ammo_drain *= 3.0
+
+        self.shots_per_ton = int(1.0 / self.ammo_drain)
         self.emitter = None
         self.ready = False
 
@@ -131,6 +136,13 @@ class VehicleWeapon(object):
             self.reload_time = round(1.0 / (60.0 * self.rate_of_fire), 2)
         else:
             self.reload_time = 1000
+
+        rockets = ["MORTAR", "ROCKETS"]
+
+        if self.flag in rockets:
+            self.bullet = "ROCKET"
+        else:
+            self.bullet = "SHELL"
 
     def set_emitter(self, emitter):
         self.emitter = emitter
@@ -223,13 +235,14 @@ class VehicleWeapon(object):
     def link_agent(self, agent):
         self.agent = agent
 
-    def shoot(self, on_move):
+    def shoot(self):
+        moving = not self.agent.movement.done
 
         target_id, target = self.get_target()
 
         if self.ready:
             if self.rating > 2:
-                if on_move:
+                if moving:
                     return False
 
             if target:
@@ -242,11 +255,34 @@ class VehicleWeapon(object):
                     closest_soldier = None
                     target_distance = self.check_range(target)
 
+                if self.indirect:
+                    if target_distance < 50.0 and not moving:
+                        origin = self.emitter
+
+                        command = {"label": "ARTILLERY", "owner": self.agent, "target_id": target_id,
+                                   "accuracy": self.total_accuracy, "origin": origin, "bullet": self.bullet,
+                                   "damage": self.power, "effect": "fill_later", "sound": "I_{}".format(self.sound)}
+
+                        self.agent.level.commands.append(command)
+
+                        self.ready = False
+                        self.timer = 0.0
+                        self.agent.ammo -= self.ammo_drain
+                        recoil_vector = mathutils.Vector([0.0, -1.0, 0.0])
+                        recoil_vector.length = self.rating * 0.01
+                        # TODO set realistic recoil value based on vehicle weight and weapon power
+
+                        if self.weapon_location == "TURRET":
+                            recoil_vector.rotate(self.agent.model.turret.localOrientation)
+                        self.agent.movement.recoil += recoil_vector
+
+                        return True
+
                 if target_distance < 18.0:
 
                     origin = self.emitter
 
-                    if not on_move:
+                    if not moving:
                         # TODO continue testing of accuracy ratings, add vehicle size as a modifier
                         effective_range = self.total_accuracy * 2.0
                     else:
@@ -264,8 +300,10 @@ class VehicleWeapon(object):
                             effect = "YELLOW_FLASH"
 
                     else:
+                        # TODO handle large caliber weapons
+
                         label = "VEHICLE_SHOOT"
-                        effect = "RED_FLASH" # self.effect
+                        effect = "RED_FLASH"  # self.effect
 
                     command = {"label": label, "weapon": self, "owner": self.agent, "target": target,
                                "effect": effect, "origin": origin, "effective_range": effective_range,
@@ -276,7 +314,7 @@ class VehicleWeapon(object):
 
                     self.ready = False
                     self.timer = 0.0
-                    self.agent.ammo -= (self.rating * 0.01)
+                    self.agent.ammo -= self.ammo_drain
                     recoil_vector = mathutils.Vector([0.0, -1.0, 0.0])
                     recoil_vector.length = self.rating * 0.01
                     # TODO set realistic recoil value based on vehicle weight and weapon power
@@ -304,7 +342,6 @@ class InstalledPart(object):
 
 
 class VehicleStats(object):
-
     def __init__(self, vehicle):
 
         self.faction_number = 1
@@ -491,7 +528,7 @@ class VehicleStats(object):
             if flag == "AMMO":
                 self.ammo += rating
 
-            # TODO handle other flags, handle reliability, turret speed etc...
+                # TODO handle other flags, handle reliability, turret speed etc...
 
         self.get_weapons()
 
@@ -598,26 +635,3 @@ class VehicleStats(object):
         self.vision_distance = vision_distance
         self.durability = round(self.durability)
         self.weight = round(self.weight, 1)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

@@ -3,14 +3,15 @@ import bgeutils
 import mathutils
 import particles
 
+
 class Bullet(object):
-    def __init__(self, level, curve, owner, bullet_id=None, timer=0.0, effect=None):
+    def __init__(self, level, curve, owner, damage, bullet_id=None, timer=0.0):
 
         self.bullet_type = "BULLET"
         self.level = level
         self.box = self.add_box()
         self.box.visible = False
-        self.effect = effect
+        self.damage = damage
 
         if not bullet_id:
             self.bullet_id = "{}_{}".format("bullet", self.level.get_new_id())
@@ -59,3 +60,30 @@ class Bullet(object):
                 self.box.visible = True
             else:
                 self.done = True
+
+
+class Grenade(Bullet):
+    bullet_type = "GRENADE"
+
+    def detonate(self):
+        command = {"label": "EXPLOSION", "effect": "DUMMY_EXPLOSION", "damage": self.damage, "position": self.box.worldPosition.copy(), "owner": self.owner}
+        self.level.commands.append(command)
+        self.done = True
+
+
+class Rocket(Bullet):
+    bullet_type = "ROCKET"
+
+    def detonate(self):
+        command = {"label": "EXPLOSION", "effect": "DUMMY_EXPLOSION", "damage": self.damage, "position": self.box.worldPosition.copy(), "owner": self.owner}
+        self.level.commands.append(command)
+        self.done = True
+
+
+class Shell(Bullet):
+    bullet_type = "SHELL"
+
+    def detonate(self):
+        command = {"label": "EXPLOSION", "effect": "DUMMY_EXPLOSION", "damage": self.damage, "position": self.box.worldPosition.copy(), "owner": self.owner}
+        self.level.commands.append(command)
+        self.done = True

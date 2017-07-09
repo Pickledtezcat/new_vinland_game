@@ -89,18 +89,15 @@ class MovementPointIcon(Particle):
 
 class BulletFlash(Particle):
 
-    def __init__(self, level, position, target, sound, hook=None, delay=0):
+    def __init__(self, level, hook, sound, delay=0):
         super().__init__(level)
 
         self.hook = hook
-        if hook:
-            self.box.setParent(hook)
+        self.box.setParent(hook)
 
         self.sound = sound
         self.color = [1.0, 1.0, 1.0]
         self.scale = 1.0
-        self.position = position
-        self.target = target
         self.delay = delay
         self.get_attributes()
         self.place_particle()
@@ -120,16 +117,7 @@ class BulletFlash(Particle):
         return self.level.own.scene.addObject("bullet_flash", self.level.own, 0)
 
     def place_particle(self):
-
-        if self.hook:
-            position = self.hook.worldPosition.copy()
-        else:
-            position = mathutils.Vector(self.position)
-        # target = mathutils.Vector(self.target)
-        #
-        # target_vector = target - position
-        self.box.worldPosition = position
-        # self.box.worldOrientation = target_vector.to_track_quat("Y", "Z").to_matrix().to_3x3()
+        self.box.worldPosition = self.hook.worldPosition.copy()
         self.box.worldOrientation = self.hook.worldOrientation
         self.box.localScale.y = random.uniform(4.0, 8.0)
         self.box.localScale.x = self.scale
@@ -153,9 +141,8 @@ class BulletFlash(Particle):
 
 
 class YellowBulletFlash(BulletFlash):
-    def __init__(self, level, position, target, sound, hook=None, delay=0):
-        super().__init__(level, position, target, sound, hook, delay)
 
+    def get_attributes(self):
         self.color = [1.5, 0.5, 1.0]
 
 

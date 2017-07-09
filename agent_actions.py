@@ -2,6 +2,7 @@ import bge
 import bgeutils
 import mathutils
 import random
+import math
 
 
 class AgentMovement(object):
@@ -108,6 +109,13 @@ class AgentMovement(object):
 
     def set_position(self, set_timer=0.0):
 
+        if set_timer:
+            timer = set_timer
+            damping = 1.0
+        else:
+            timer = self.timer
+            damping = self.agent.damping
+
         if not self.agent.agent_type == "INFANTRY":
             throttle = self.agent.throttle
             throttle_target = self.agent.throttle_target
@@ -118,15 +126,8 @@ class AgentMovement(object):
 
             throttle_difference = min(0.02, max(-0.02, throttle_difference))
 
-            self.tilt = bgeutils.interpolate_float(self.tilt, throttle_difference, self.damping)
-            self.recoil = self.recoil.lerp(mathutils.Vector([0.0, 0.0, 0.0]), self.damping)
-
-        if set_timer:
-            timer = set_timer
-            damping = 1.0
-        else:
-            timer = self.timer
-            damping = self.agent.damping
+            self.tilt = bgeutils.interpolate_float(self.tilt, throttle_difference, damping)
+            self.recoil = self.recoil.lerp(mathutils.Vector([0.0, 0.0, 0.0]), damping)
 
         self.agent.box.worldPosition = self.start_vector.lerp(self.target_vector, timer)
         rotation = self.current_orientation.lerp(self.target_orientation, bgeutils.smoothstep(timer))
@@ -603,6 +604,7 @@ class AgentTargeter(object):
         self.set_target_id = None
         self.has_turret = False
         self.turret_angle = 0.0
+        self.hull_angle = 0.0
         self.gun_elevation = 0.0
         self.check_timer = 0.0
         self.turret_on_target = False
@@ -681,7 +683,12 @@ class AgentTargeter(object):
                 set_target = self.agent.level.agents[self.set_target_id]
                 check_set_target = self.is_valid_target(set_target)
                 if check_set_target:
-                    self.enemy_target_id = self.set_target_id
+                    set_target_vector, set_target_distance = check_set_target
+
+                    if set_target_distance < 50:
+                        self.enemy_target_id = self.set_target_id
+                    else:
+                        self.set_target_id = None
                 else:
                     self.set_target_id = None
 
@@ -713,16 +720,18 @@ class AgentTargeter(object):
             else:
                 target_angle = 0.0
 
+            self.hull_angle = target_angle
+
             turret_speed = self.agent.turret_speed
             turret_difference = abs(self.turret_angle - target_angle)
 
             self.turret_on_target = False
             self.hull_on_target = False
 
-            if abs(target_angle) < 0.5:
+            if math.degrees(abs(target_angle)) < 91:
                 self.hull_on_target = True
 
-            if turret_difference < 0.5:
+            if math.degrees(turret_difference) < 45:
                 self.turret_on_target = True
 
             if turret_difference > 0.02:

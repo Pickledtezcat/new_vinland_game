@@ -21,7 +21,9 @@ class Agent(object):
     throttle = 0.0
     throttle_target = 0.0
     turning_speed = 0.01
-    damping = 0.1
+    # TODO set damping to match vehicle weight
+
+    damping = 0.15
     turret_speed = 0.01
     rank = 2
     accuracy = 6
@@ -38,7 +40,7 @@ class Agent(object):
     is_sentry = False
     is_shocked = -1
 
-    stance = "AGGRESSIVE"
+    stance = "DEFEND"
     agent_type = "VEHICLE"
 
     def __init__(self, level, load_name, location, team, agent_id=None, load_dict=None):
@@ -70,7 +72,6 @@ class Agent(object):
         self.model = None
         self.movement_hook = None
         self.tilt_hook = None
-        self.recoil_hook = None
         self.mesh = None
         self.box = None
         self.add_box()
@@ -275,7 +276,6 @@ class Agent(object):
         self.box = box
         self.movement_hook = bgeutils.get_ob("hook", self.box.childrenRecursive)
         self.tilt_hook = bgeutils.get_ob("tilt", self.box.childrenRecursive)
-        self.recoil_hook = bgeutils.get_ob("recoil", self.box.childrenRecursive)
         self.mesh = bgeutils.get_ob("mesh", self.box.childrenRecursive)
 
     def terminate(self):
@@ -649,9 +649,9 @@ class Vehicle(Agent):
         else:
             speed_index = 0
 
-        self.max_speed = self.stats.speed[speed_index] * 0.0025
-        self.handling = self.stats.handling[speed_index] * 0.0025
-        self.turret_speed = self.stats.turret_speed * 0.0025
+        self.max_speed = self.stats.speed[speed_index] * 0.001
+        self.handling = self.stats.handling[speed_index] * 0.001
+        self.turret_speed = self.stats.turret_speed * 0.001
         self.get_best_penetration()
 
     def handle_weapons(self):
@@ -659,12 +659,11 @@ class Vehicle(Agent):
         for weapon in self.weapons:
             weapon.update()
 
-        self.shoot_weapons(False)
+        self.shoot_weapons()
 
-    def shoot_weapons(self, on_move):
-
+    def shoot_weapons(self):
         for weapon in self.weapons:
-            weapon.shoot(on_move)
+            weapon.shoot()
 
     def check_status(self):
         # TODO set other status flags
@@ -706,8 +705,7 @@ class Vehicle(Agent):
         # TODO integrate pause, dead and other behavior in to states
 
         #self.debug_text = "{}\n{}".format(str(self.agent_targeter.turret_on_target), str(self.agent_targeter.hull_on_target))
-        #self.debug_text = ""
-        self.debug_text = self.deployed
+        self.debug_text = ""
 
         self.check_status()
         self.check_on_screen()
@@ -734,34 +732,36 @@ class Vehicle(Agent):
         hatch_open = False
 
         if self.stance == "AGGRESSIVE":
-            self.stance_speed = 0.66
-            self.shooting_bonus = 0.5
+            self.stance_speed = 0.75
+            self.shooting_bonus = 0.75
 
         if self.stance == "SENTRY":
-            self.stance_speed = 0.33
-            self.shooting_bonus = 1.0
+            self.stance_speed = 0.5
+            self.shooting_bonus = 0.75
             hatch_open = True
 
         if self.stance == "DEFEND":
-            self.stance_speed = 0.33
+            self.stance_speed = 0.5
             self.shooting_bonus = 1.0
 
         if self.stance == "FLANK":
             self.stance_speed = 1.0
-            self.shooting_bonus = 0.25
+            self.shooting_bonus = 0.5
 
         self.model.set_open_hatch(hatch_open)
 
     def set_speed(self):
 
         if self.movement.target:
-            if self.movement.target == self.navigation.destination:
-                self.throttle_target = self.stance_speed * 0.5
+            if self.movement.target_direction:
+                self.throttle_target = self.stance_speed * 0.75
+            elif self.movement.target == self.navigation.destination:
+                self.throttle_target = self.stance_speed * 0.3
             else:
                 self.throttle_target = self.stance_speed
 
         elif self.movement.target_direction:
-            self.throttle_target = self.stance_speed * 0.66
+            self.throttle_target = self.stance_speed * 0.75
         else:
             self.throttle_target = 0.0
 
@@ -778,7 +778,7 @@ class Vehicle(Agent):
 
     def add_box(self):
         super().add_box()
-        self.model = model_display.VehicleModel(self.recoil_hook, self, scale=0.5)
+        self.model = model_display.VehicleModel(self.tilt_hook, self, scale=0.5)
 
 
 class Infantry(Agent):
@@ -1036,7 +1036,6 @@ class Infantry(Agent):
         self.box = box
         self.movement_hook = bgeutils.get_ob("hook", self.box.childrenRecursive)
         self.tilt_hook = bgeutils.get_ob("tilt", self.box.childrenRecursive)
-        self.recoil_hook = bgeutils.get_ob("recoil", self.box.childrenRecursive)
         self.mesh = bgeutils.get_ob("mesh", self.box.childrenRecursive)
 
     def infantry_update(self):
@@ -1296,6 +1295,7 @@ class SoldierGrenade(object):
         self.accuracy = self.infantryman.agent.accuracy
         self.max_range = 8
         self.recharge = 0.002
+        self.power = 10
         self.timer = 0.0
         self.ready = False
         self.action = "FIDGET"
@@ -1327,12 +1327,12 @@ class SoldierGrenade(object):
     def shoot(self):
         target_id, target = self.get_target()
         action = None
-        origin = self.infantryman.box.worldPosition.copy()
+        origin = self.infantryman.box
         accuracy = self.accuracy
 
         if target and self.ready and self.check_in_range():
             command = {"label": "ARTILLERY", "owner": self.infantryman.agent, "target_id": target_id,
-                       "accuracy": accuracy, "origin": origin, "bullet": self.bullet, "effect": None}
+                       "accuracy": accuracy, "origin": origin, "bullet": self.bullet, "damage": self.power}
 
             self.infantryman.agent.level.commands.append(command)
             self.ready = False
@@ -1352,13 +1352,15 @@ class SoldierGrenade(object):
 class SoldierSatchelCharge(SoldierGrenade):
     def __init__(self, infantryman, ammo):
         super().__init__(infantryman, ammo)
-        self.bullet = "SATCHEL_CHARGE"
+        self.bullet = "GRENADE"
+        self.power = 30
 
 
 class SoldierRifleGrenade(SoldierGrenade):
     def __init__(self, infantryman, ammo):
         super().__init__(infantryman, ammo)
-        self.bullet = "RIFLE_GRENADE"
+        self.bullet = "ROCKET"
+        self.power = 10
         self.max_range = 18
         self.sound = "ANTI_TANK"
         self.action = "SHOOTING"

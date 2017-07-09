@@ -324,7 +324,6 @@ class Level(object):
         self.agents = {}
         self.buildings = {}
         self.particles = []
-        self.messages = []
         self.artillery_bullets = {}
         # TODO add bullets, for artillery weapons
 
@@ -752,7 +751,7 @@ class Level(object):
                         shock *= 0.5
                         effective_range -= 5
 
-                    to_hit = (effective_range / target_distance) * 0.5
+                    to_hit = (effective_range / target_distance) * 0.25
 
                     if to_hit < random.uniform(0.0, 1.0):
                         target_position = None
@@ -788,13 +787,12 @@ class Level(object):
                 particles.FaintBulletStreak(self, list(origin), list(target_position), sound)
 
             elif effect == "YELLOW_FLASH":
-                particles.YellowBulletFlash(self, list(origin), list(target_position), sound, hook=effect_hook)
-                particles.YellowBulletFlash(self, list(origin), list(target_position), sound, hook=effect_hook, delay=8)
-                particles.YellowBulletFlash(self, list(origin), list(target_position), sound, hook=effect_hook,
-                                            delay=16)
+                particles.YellowBulletFlash(self, effect_hook, sound)
+                particles.YellowBulletFlash(self, effect_hook, sound, delay=8)
+                particles.YellowBulletFlash(self, effect_hook, sound, delay=16)
 
             elif effect == "RED_FLASH":
-                particles.YellowBulletFlash(self, list(origin), list(target_position), sound, hook=effect_hook)
+                particles.RedBulletFlash(self, effect_hook, sound)
 
             elif effect == "RED_STREAK":
                 particles.RedBulletStreak(self, list(origin), list(target_position), sound)
@@ -816,20 +814,23 @@ class Level(object):
 
         target_position = None
         origin = command["origin"]
+        origin_position = origin.worldPosition.copy()
         owner = command["owner"]
         # TODO give xp etc... to owner
 
         target = self.agents.get(command["target_id"])
         accuracy = command["accuracy"]
-        effect = command["effect"]
+        damage = command["damage"]
         bullet = command["bullet"]
+        effect = command.get("effect")
+        sound = command.get("sound")
 
         if not target:
             print("artillery error: target doesn't exist!!")
         else:
             target_position = target.center.copy()
 
-            target_vector = target_position - origin
+            target_vector = target_position - origin_position
             target_distance = target_vector.length
 
             # TODO ensure accuracy is matched to weapon accuracy as well as gunner skill
@@ -841,7 +842,7 @@ class Level(object):
 
             if target_distance > 0.0:
                 high_point = target_distance * 0.3
-                start = origin
+                start = origin_position.copy()
                 end = target_position
                 mid_point = start.lerp(end, 0.5)
 
@@ -855,7 +856,15 @@ class Level(object):
                 curve = mathutils.geometry.interpolate_bezier(start, start_handle, end_handle, end, resolution)
                 bullet_arc = [list(point) for point in curve]
 
-                bullets.Bullet(self, bullet_arc, owner, effect=effect)
+                if bullet == "GRENADE":
+                    bullets.Grenade(self, bullet_arc, owner, damage)
+                if bullet == "ROCKET":
+                    bullets.Rocket(self, bullet_arc, owner, damage)
+                if bullet == "SHELL":
+                    bullets.Shell(self, bullet_arc, owner, damage)
+
+            if effect:
+                particles.RedBulletFlash(self, origin, sound)
 
     def explosion(self, command):
 
@@ -867,7 +876,7 @@ class Level(object):
         effect = command["effect"]
         damage = command["damage"]
 
-        explosion_chart = [0, 1, 2, 4, 8, 16, 32, 64, 128, 256]
+        explosion_chart = [8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096]
         max_fall_off = 0
 
         if effect:
@@ -900,9 +909,6 @@ class Level(object):
 
                             if agent:
                                 if agent.agent_type == "INFANTRY":
-                                    effective_damage *= 10
-                                    shock *= 10
-
                                     soldier_list = [soldier for soldier in agent.soldiers if soldier.location == explosion_key]
                                     if soldier_list:
                                         soldier = soldier_list[0]
@@ -985,7 +991,11 @@ class Level(object):
 
                                 if enemy.team != 0:
                                     if enemy_key not in seen_agents:
-                                        enemy_distance = agent.box.getDistanceTo(enemy.box)
+                                        if enemy.agent_type == "INFANTRY":
+                                            closest_soldier, enemy_distance = enemy.get_closest_soldier(agent.box.worldPosition.copy())
+                                        else:
+                                            enemy_distance = agent.box.getDistanceTo(enemy.box)
+
                                         if enemy_distance <= max_distance:
                                             seen_agents.append(enemy_key)
                                             enemy.set_seen(True)

@@ -185,20 +185,8 @@ class StatusBar(object):
     def secondary_icons(self, setting):
 
         self.stance_icon.visible = setting
-        self.status_icon.visible = setting
 
         if setting:
-            status = self.get_status()
-            if status != self.status:
-                self.status = status
-                status_color = status_dict[self.status]
-                self.status_icon.replaceMesh("status_{}".format(self.status))
-                set_color = self.green
-                if status_color == "yellow":
-                    set_color = self.yellow
-                if status_color == "red":
-                    set_color = self.red
-                self.status_icon.color = set_color
 
             stance = self.agent.stance
             if self.stance != stance:
@@ -225,6 +213,24 @@ class StatusBar(object):
             self.group_number_icon.visible = setting
 
         # TODO do other secondary icons (status, rank)
+
+    def set_status_icon(self):
+        status = self.get_status()
+        if status == "noting":
+            self.status_icon.visible = False
+        else:
+            self.status_icon.visible = True
+
+            if status != self.status:
+                self.status = status
+                status_color = status_dict[self.status]
+                self.status_icon.replaceMesh("status_{}".format(self.status))
+                set_color = self.green
+                if status_color == "yellow":
+                    set_color = self.yellow
+                if status_color == "red":
+                    set_color = self.red
+                self.status_icon.color = set_color
 
     def get_status(self):
 
@@ -281,6 +287,7 @@ class StatusBar(object):
         if self.agent.team == 0:
             self.update_health()
             self.update_position()
+            self.set_status_icon()
             if self.agent.selected:
                 self.secondary_icons(True)
             else:
@@ -292,6 +299,7 @@ class StatusBar(object):
             else:
                 self.update_health()
                 self.update_position()
+                self.set_status_icon()
                 self.box.localScale = [1.0, 1.0, 1.0]
                 self.secondary_icons(False)
 

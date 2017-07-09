@@ -63,6 +63,7 @@ class AgentMovement(AgentState):
             self.agent.navigation.update()
 
 
+
 class AgentWaiting(AgentState):
     def __init__(self, agent):
         super().__init__(agent)
