@@ -119,12 +119,9 @@ class AgentMovement(object):
         if not self.agent.agent_type == "INFANTRY":
             throttle = self.agent.throttle
             throttle_target = self.agent.throttle_target
-            throttle_difference = (throttle - throttle_target) * 0.05
-
+            throttle_difference = (throttle - throttle_target)
             if self.agent.reverse:
                 throttle_difference *= -1.0
-
-            throttle_difference = min(0.02, max(-0.02, throttle_difference))
 
             self.tilt = bgeutils.interpolate_float(self.tilt, throttle_difference, damping)
             self.recoil = self.recoil.lerp(mathutils.Vector([0.0, 0.0, 0.0]), damping)
@@ -135,9 +132,11 @@ class AgentMovement(object):
 
         if self.agent.agent_type != "INFANTRY":
             normal = self.start_normal.lerp(self.target_normal, timer)
-
             local_y = self.agent.movement_hook.getAxisVect([0.0, 1.0, 0.0])
-            z = self.recoil.copy() + mathutils.Vector([0.0, self.tilt, 1.0])
+
+            tilt = self.tilt * 0.01
+
+            z = self.recoil.copy() + mathutils.Vector([0.0, tilt, 1.0]).normalized()
             local_z = self.agent.tilt_hook.getAxisVect(z)
 
             target_vector = local_z.lerp(normal, damping)
@@ -230,9 +229,9 @@ class InfantryAnimation(object):
         shooting_actions = ["FACE_TARGET"]
 
         if action in shooting_actions:
-            target = self.infantryman.agent.level.agents.get(self.infantryman.agent.agent_targeter.enemy_target_id)
+            target = self.infantryman.agent.agent_targeter.enemy_target
             if target:
-                target_vector = target.box.worldPosition.copy() - self.infantryman.box.worldPosition.copy()
+                target_vector = self.infantryman.agent.agent_targeter.target_vector
                 return bgeutils.get_closest_vector(target_vector)
 
         return self.infantryman.direction
@@ -386,8 +385,6 @@ class InfantryBehavior(object):
         if shooting:
             return "SHOOTING"
 
-        # TODO add grenade throw
-
         destination = self.infantryman.get_destination()
         if destination != self.destination:
             self.destination = destination
@@ -403,11 +400,13 @@ class InfantryBehavior(object):
 
             if self.infantryman.agent.agent_type == "ARTILLERY":
                 self.history = [self.infantryman.location]
+                # TODO make infantry face gun
                 return "FACE_GUN"
-            if self.infantryman.agent.agent_targeter.enemy_target_id:
 
+            if self.infantryman.agent.agent_targeter.enemy_target:
                 self.history = [self.infantryman.location]
                 return "FACE_TARGET"
+
             self.history = [self.infantryman.location]
 
             if not self.prone:
@@ -600,38 +599,58 @@ class AgentTargeter(object):
 
     def __init__(self, agent):
         self.agent = agent
-        self.enemy_target_id = None
-        self.set_target_id = None
         self.has_turret = False
+        self.check_timer = 0
+        self.set_target_id = None
+
+        self.enemy_target_id = None
+        self.enemy_target = None
+        self.target_vector = None
         self.turret_angle = 0.0
         self.hull_angle = 0.0
-        self.gun_elevation = 0.0
-        self.check_timer = 0.0
-        self.turret_on_target = False
-        self.hull_on_target = False
+        self.turret_on_target = 180.0
+        self.hull_on_target = 180.0
+        self.closest_soldier = None
+        self.target_distance = 0.0
 
     def get_closest_enemy(self):
         agents = self.agent.level.agents
 
         closest = 2000
-
+        best_vector = None
         best_target = None
+        best_closest_soldier = None
 
         for agent_key in agents:
             enemy_agent = agents[agent_key]
 
-            target = self.is_valid_target(enemy_agent)
+            valid_target = self.check_target(enemy_agent)
 
-            if target:
-                agent_vector, target_distance = target
+            if valid_target:
+                closest_soldier, target_vector = enemy_agent.get_target(self.agent)
+                target_distance = target_vector.length
 
                 if target_distance < closest:
                     closest = target_distance
-                    best_target = agent_key
+                    best_vector = target_vector
+                    best_target = enemy_agent
+                    if closest_soldier:
+                        best_closest_soldier = closest_soldier
+                    else:
+                        best_closest_soldier = None
 
-        return best_target
+        if best_target:
+            self.enemy_target = best_target
+            self.target_vector = best_vector
+            self.target_distance = closest
+            self.closest_soldier = best_closest_soldier
+        else:
+            self.reset_values()
 
-    def is_valid_target(self, target_agent):
+    def check_target(self, target_agent):
+
+        if not target_agent:
+            return False
 
         if self.agent.team == target_agent.team:
             return False
@@ -656,87 +675,66 @@ class AgentTargeter(object):
         #     if self.agent.best_penetration < lowest_armor:
         #         return False
 
-        best_target = None
-        if target_agent.agent_type == "INFANTRY":
-            closest_soldier, enemy_distance = target_agent.get_closest_soldier(self.agent.box.worldPosition.copy())
-            if closest_soldier:
-                best_target = closest_soldier.box
+        return True
 
-        if not best_target:
-            best_target = target_agent.box
+    def reset_values(self):
+        self.enemy_target = None
+        self.target_vector = None
+        self.hull_angle = 0.0
+        self.turret_on_target = 180.0
+        self.hull_on_target = 180.0
+        self.closest_soldier = None
+        self.target_distance = 0.0
 
-        agent_vector = best_target.worldPosition.copy() - self.agent.box.worldPosition.copy()
-        enemy_distance = agent_vector.length
+    def set_closest_target(self):
 
-        return agent_vector.to_2d(), enemy_distance
+        enemy_agent = self.agent.level.agents[self.set_target_id]
+        self.closest_soldier, self.target_vector = enemy_agent.get_target(self.agent)
+        self.target_distance = self.target_vector.length
 
     def update(self):
 
-        """use set_target_id to manually set a target, otherwise automatically gets nearest"""
-
         if self.agent.dead:
-            self.enemy_target_id = None
             self.set_target_id = None
+            self.reset_values()
 
         else:
             if self.set_target_id:
                 set_target = self.agent.level.agents[self.set_target_id]
-                check_set_target = self.is_valid_target(set_target)
-                if check_set_target:
-                    set_target_vector, set_target_distance = check_set_target
 
-                    if set_target_distance < 50:
-                        self.enemy_target_id = self.set_target_id
-                    else:
-                        self.set_target_id = None
+                set_target_check = self.check_target(set_target)
+                if set_target_check:
+                    self.set_closest_target()
                 else:
                     self.set_target_id = None
+                    self.reset_values()
 
             else:
-                if self.check_timer < 0:
-                    self.check_timer = 12
-                    closest_enemy_id = self.get_closest_enemy()
+                # if not self.check_target(self.enemy_target):
+                #     self.reset_values()
 
-                    if closest_enemy_id:
-                        self.enemy_target_id = closest_enemy_id
+                if self.check_timer <= 0:
+                    self.check_timer = 12
+                    self.get_closest_enemy()
 
                 else:
                     self.check_timer -= 1
 
-            local_y = self.agent.movement_hook.getAxisVect([0.0, 1.0, 0.0]).to_2d()
-            target_vector = None
+        local_y = self.agent.movement_hook.getAxisVect([0.0, 1.0, 0.0]).to_2d()
+        target_angle = 0.0
 
-            if self.enemy_target_id:
-                enemy_agent = self.agent.level.agents[self.enemy_target_id]
-                target = self.is_valid_target(enemy_agent)
+        if self.enemy_target:
+            target_angle = local_y.angle_signed(self.target_vector.to_2d(), 0.0) * -1.0
 
-                if target:
-                    target_vector, target_distance = target
-                else:
-                    self.enemy_target_id = None
+        self.hull_angle = target_angle
+        turret_speed = self.agent.turret_speed
+        turret_difference = abs(self.turret_angle - target_angle)
 
-            if target_vector:
-                target_angle = local_y.angle_signed(target_vector, 0.0) * -1.0
-            else:
-                target_angle = 0.0
+        self.hull_on_target = math.degrees(abs(target_angle))
+        self.turret_on_target = math.degrees(turret_difference)
 
-            self.hull_angle = target_angle
+        if turret_difference > 0.02:
+            scale = turret_difference / 3.142
+            turret_speed /= scale
 
-            turret_speed = self.agent.turret_speed
-            turret_difference = abs(self.turret_angle - target_angle)
-
-            self.turret_on_target = False
-            self.hull_on_target = False
-
-            if math.degrees(abs(target_angle)) < 91:
-                self.hull_on_target = True
-
-            if math.degrees(turret_difference) < 45:
-                self.turret_on_target = True
-
-            if turret_difference > 0.02:
-                scale = turret_difference / 3.142
-                turret_speed /= scale
-
-                self.turret_angle = bgeutils.interpolate_float(self.turret_angle, target_angle, turret_speed)
-
+            self.turret_angle = bgeutils.interpolate_float(self.turret_angle, target_angle, turret_speed)

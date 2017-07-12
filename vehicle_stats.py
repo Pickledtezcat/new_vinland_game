@@ -6,6 +6,7 @@ import mathutils
 
 parts_dict = vehicle_parts.get_vehicle_parts()
 
+
 class VehicleWeapon(object):
     def __init__(self, part_key, location, weapon_location):
 
@@ -150,63 +151,45 @@ class VehicleWeapon(object):
     def get_ready(self):
 
         if self.agent.ammo <= 0.0:
-            if self.indirect:
-                self.agent.deploy(False)
-                return False
+            return False
 
-        else:
-            accuracy = (self.accuracy + self.agent.accuracy) * self.agent.shooting_bonus
-            recharge = self.rate_of_fire * self.agent.shooting_bonus
+        if self.agent.knocked_out:
+            return False
 
-            if self.agent.shock > 40:
-                accuracy *= 0.5
-                recharge *= 0.5
+        accuracy = (self.accuracy + self.agent.accuracy) * self.agent.shooting_bonus
+        recharge = self.rate_of_fire * self.agent.shooting_bonus
 
-            elif self.agent.shock > 20:
-                accuracy *= 0.75
-                recharge *= 0.75
+        if self.agent.shock > 40:
+            accuracy *= 0.5
+            recharge *= 0.5
 
-            # TODO integrate vehicle stability in to accuracy calculation
-            self.total_accuracy = accuracy
-            self.timer = min(1.0, self.timer + recharge)
+        elif self.agent.shock > 20:
+            accuracy *= 0.75
+            recharge *= 0.75
 
-            target_id, target = self.get_target()
+        # TODO integrate vehicle stability in to accuracy calculation
+        self.total_accuracy = accuracy
+        self.timer = min(1.0, self.timer + recharge)
 
-            if self.indirect:
-                if not target:
-                    self.agent.deploy(False)
-                    return False
-                else:
-                    basic_distance = self.check_range(target)
-                    deploy_angle = min(1.0, basic_distance / 36.0)
-                    if self.agent.deployed < (deploy_angle - 0.1):
-                        self.agent.deploy(True)
-                        return False
-
-                    if self.agent.deployed > (deploy_angle + 0.1):
-                        self.agent.deploy(False)
-                        return False
+        if self.timer >= 1.0:
+            target = self.agent.agent_targeter.enemy_target
 
             if not target:
                 return False
 
             if self.weapon_location == "TURRET":
-                if not self.agent.agent_targeter.turret_on_target:
+                if self.agent.agent_targeter.turret_on_target > 45.0:
                     return False
 
             else:
-                if not self.agent.agent_targeter.hull_on_target:
+                if self.agent.agent_targeter.hull_on_target > 45.0:
                     return False
-
-            if self.agent.knocked_out:
-                return False
 
             armor_facing = target.get_attack_facing(self.agent)
             if armor_facing:
                 has_turret, facing, armor = armor_facing
 
-                lowest_armor = armor[facing]
-
+                lowest_armor = (armor[facing] * 0.5)
                 if has_turret:
                     if armor["TURRET"] < lowest_armor:
                         lowest_armor = armor["TURRET"]
@@ -214,15 +197,9 @@ class VehicleWeapon(object):
                 if self.penetration < lowest_armor:
                     return False
 
-            if self.timer >= 1.0:
-                return True
+            return True
 
         return False
-
-    def get_target(self):
-        target_id = self.agent.agent_targeter.enemy_target_id
-        target = self.agent.level.agents.get(target_id)
-        return target_id, target
 
     def check_range(self, target):
         if target:
@@ -235,10 +212,47 @@ class VehicleWeapon(object):
     def link_agent(self, agent):
         self.agent = agent
 
+    def aligning_gun(self, moving):
+
+        # TODO handle rotating gun on anti-tank artillery
+
+        if self.indirect:
+            if moving:
+                self.stowing_gun()
+                return True
+
+            if self.agent.ammo <= 0.0:
+                self.stowing_gun()
+                return True
+
+            target = self.agent.agent_targeter.enemy_target
+            target_distance = self.agent.agent_targeter.target_distance
+
+            if not target:
+                self.agent.deploy(False)
+                return True
+            else:
+                deploy_angle = min(1.0, target_distance / 36.0)
+                if self.agent.deployed < (deploy_angle - 0.1):
+                    self.agent.deploy(True)
+                    return True
+
+                if self.agent.deployed > (deploy_angle + 0.1):
+                    self.agent.deploy(False)
+                    return True
+
+    def stowing_gun(self):
+        if self.indirect:
+            self.agent.deploy(False)
+
     def shoot(self):
         moving = not self.agent.movement.done
 
-        target_id, target = self.get_target()
+        aligning = self.aligning_gun(moving)
+        if aligning:
+            return False
+
+        target = self.agent.agent_targeter.enemy_target
 
         if self.ready:
             if self.rating > 2:
@@ -246,20 +260,15 @@ class VehicleWeapon(object):
                     return False
 
             if target:
-                if target.agent_type == "INFANTRY":
-                    closest_soldier, target_distance = target.get_closest_soldier(
-                        self.agent.box.worldPosition.copy())
-                    if not closest_soldier:
-                        target_distance = self.check_range(target)
-                else:
-                    closest_soldier = None
-                    target_distance = self.check_range(target)
+                closest_soldier = self.agent.agent_targeter.closest_soldier
+                target_distance = self.agent.agent_targeter.target_distance
 
                 if self.indirect:
-                    if target_distance < 50.0 and not moving:
+                    if target_distance < 32.0:
                         origin = self.emitter
 
-                        command = {"label": "ARTILLERY", "owner": self.agent, "target_id": target_id,
+                        command = {"label": "ARTILLERY", "owner": self.agent, "target": target,
+                                   "closest_soldier": closest_soldier,
                                    "accuracy": self.total_accuracy, "origin": origin, "bullet": self.bullet,
                                    "damage": self.power, "effect": "fill_later", "sound": "I_{}".format(self.sound)}
 
@@ -270,7 +279,7 @@ class VehicleWeapon(object):
                         self.agent.ammo -= self.ammo_drain
                         recoil_vector = mathutils.Vector([0.0, -1.0, 0.0])
                         recoil_vector.length = self.rating * 0.01
-                        # TODO set realistic recoil value based on vehicle weight and weapon power
+                        # TODO set realistic recoil value based on vehicle weight and weapon power add gun effect when shooting, not in message
 
                         if self.weapon_location == "TURRET":
                             recoil_vector.rotate(self.agent.model.turret.localOrientation)
@@ -344,7 +353,7 @@ class InstalledPart(object):
 class VehicleStats(object):
     def __init__(self, vehicle):
 
-        self.faction_number = 1
+        self.faction_number = 3
         # TODO handle getting factions
         self.vehicle_type = "TANK"
         self.options = vehicle["options"]

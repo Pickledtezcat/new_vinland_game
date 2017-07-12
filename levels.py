@@ -710,10 +710,11 @@ class Level(object):
         effect = command["effect"]
         origin = command["origin"]
 
+        effect_hook = None
+
         if "VEHICLE" in command["label"]:
             effect_hook = origin
             origin = origin.worldPosition.copy()
-
         else:
             origin = mathutils.Vector(command["origin"]).to_3d()
 
@@ -780,7 +781,6 @@ class Level(object):
                 self.commands.append(command)
 
         if target_position:
-
             # TODO add ground bullet hit effect
 
             if not effect:
@@ -812,13 +812,13 @@ class Level(object):
         # example_command = {"label": "ARTILLERY", "weapon": self, "owner": self.infantryman, "target_id": target_id,
         #            "accuracy": accuracy, "origin": origin, "bullet": self.bullet}
 
-        target_position = None
         origin = command["origin"]
         origin_position = origin.worldPosition.copy()
         owner = command["owner"]
         # TODO give xp etc... to owner
 
-        target = self.agents.get(command["target_id"])
+        target = command["target"]
+        closest_soldier = command["closest_soldier"]
         accuracy = command["accuracy"]
         damage = command["damage"]
         bullet = command["bullet"]
@@ -828,7 +828,10 @@ class Level(object):
         if not target:
             print("artillery error: target doesn't exist!!")
         else:
-            target_position = target.center.copy()
+            if closest_soldier:
+                target_position = closest_soldier.box.worldPosition.copy()
+            else:
+                target_position = target.center.copy()
 
             target_vector = target_position - origin_position
             target_distance = target_vector.length
@@ -991,10 +994,9 @@ class Level(object):
 
                                 if enemy.team != 0:
                                     if enemy_key not in seen_agents:
-                                        if enemy.agent_type == "INFANTRY":
-                                            closest_soldier, enemy_distance = enemy.get_closest_soldier(agent.box.worldPosition.copy())
-                                        else:
-                                            enemy_distance = agent.box.getDistanceTo(enemy.box)
+
+                                        closest_soldier, target_vector = enemy.get_target(agent)
+                                        enemy_distance = target_vector.length
 
                                         if enemy_distance <= max_distance:
                                             seen_agents.append(enemy_key)
@@ -1011,7 +1013,9 @@ class Level(object):
 
                                 if player.team == 0:
                                     if player_key not in seen_agents:
-                                        player_distance = agent.box.getDistanceTo(player.box)
+                                        closest_soldier, target_vector = player.get_target(agent)
+                                        player_distance = target_vector.length
+
                                         if player_distance <= max_distance:
                                             seen_agents.append(player_key)
                                             player.set_seen(True)

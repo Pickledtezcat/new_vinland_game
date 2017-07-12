@@ -23,7 +23,7 @@ class Agent(object):
     turning_speed = 0.01
     # TODO set damping to match vehicle weight
 
-    damping = 0.15
+    damping = 0.07
     turret_speed = 0.01
     rank = 2
     accuracy = 6
@@ -158,10 +158,8 @@ class Agent(object):
                      "navigation_destination": self.navigation.destination, "deployed": self.deployed,
                      "navigation_history": self.navigation.history, "destinations": self.destinations,
                      "reverse": self.reverse, "throttle": self.throttle, "occupied": self.occupied, "aim": self.aim,
-                     "targeter_id": self.agent_targeter.enemy_target_id, "selection_group": self.selection_group,
-                     "targeter_angle": self.agent_targeter.turret_angle, "ammo": self.ammo,
-                     "targeter_elevation": self.agent_targeter.gun_elevation, "stance": self.stance,
-                     "soldiers": [solider.save() for solider in self.soldiers]}
+                     "selection_group": self.selection_group, "turret_angle": self.agent_targeter.turret_angle,
+                     "ammo": self.ammo, "stance": self.stance, "soldiers": [solider.save() for solider in self.soldiers]}
 
         self.clear_occupied()
         return save_dict
@@ -195,9 +193,7 @@ class Agent(object):
         self.set_occupied(None, agent_dict["occupied"])
         self.stance = agent_dict["stance"]
 
-        self.agent_targeter.enemy_target_id = agent_dict["targeter_id"]
-        self.agent_targeter.turret_angle = agent_dict["targeter_angle"]
-        self.agent_targeter.gun_elevation = agent_dict["targeter_elevation"]
+        self.agent_targeter.turret_angle = agent_dict["turret_angle"]
 
         state_class = globals()[agent_dict["state_name"]]
 
@@ -355,12 +351,9 @@ class Agent(object):
         return best_facing
 
     def get_enemy_direction(self):
-        if self.agent_targeter.enemy_target_id:
-            enemy_agent = self.level.agents.get(self.agent_targeter.enemy_target_id)
-            if enemy_agent:
-                target_vector = (enemy_agent.box.worldPosition.copy() - self.box.worldPosition.copy()).to_2d()
+        if self.agent_targeter.enemy_target:
+            return self.get_facing(self.agent_targeter.target_vector)
 
-                return self.get_facing(target_vector)
 
     def process_commands(self):
 
@@ -475,7 +468,8 @@ class Agent(object):
 
                     self.navigation.stop = True
                     self.destinations = []
-                    self.aim = best_facing
+                    if best_facing != self.direction:
+                        self.aim = best_facing
                     self.agent_targeter.set_target_id = None
 
                 if command["label"] == "TARGET_ENEMY":
@@ -551,7 +545,6 @@ class Agent(object):
     def update(self):
         # TODO integrate pause, dead and other behavior in to states
 
-        # self.debug_text = "{}\n{}".format(str(self.agent_id), str(self.agent_targeter.enemy_target_id))
         self.debug_text = ""
 
         self.check_status()
@@ -574,6 +567,10 @@ class Agent(object):
             adjust = 0.02
 
         self.deployed = min(1.0, max(0.0, self.deployed + adjust))
+
+    def get_target(self, origin):
+        target_vector = self.center.copy() - origin.center.copy()
+        return None, target_vector
 
 
 class Vehicle(Agent):
@@ -663,7 +660,7 @@ class Vehicle(Agent):
 
     def shoot_weapons(self):
         for weapon in self.weapons:
-            weapon.shoot()
+            shooting = weapon.shoot()
 
     def check_status(self):
         # TODO set other status flags
@@ -683,11 +680,11 @@ class Vehicle(Agent):
                     if self.stance == "SENTRY":
                         self.is_sentry = True
 
-                #is_damaged = -1
-                #is_carrying = False
+                        # is_damaged = -1
+                        # is_carrying = False
 
-                #is_sentry = False
-                #is_shocked = False
+                        # is_sentry = False
+                        # is_shocked = False
 
             if not self.knocked_out:
                 self.process_commands()
@@ -704,8 +701,16 @@ class Vehicle(Agent):
     def update(self):
         # TODO integrate pause, dead and other behavior in to states
 
-        #self.debug_text = "{}\n{}".format(str(self.agent_targeter.turret_on_target), str(self.agent_targeter.hull_on_target))
         self.debug_text = ""
+
+        #self.debug_text = "{}\n{}".format(self.movement.tilt, str(list(self.movement.recoil.copy())))
+
+        # if self.agent_targeter.enemy_target:
+        #     target = self.agent_targeter.enemy_target.agent_id
+        # else:
+        #     target = "None"
+        #
+        # self.debug_text = "{}\n{}\n{}".format(str(self.agent_id), target, self.seen)
 
         self.check_status()
         self.check_on_screen()
@@ -956,20 +961,32 @@ class Infantry(Agent):
         else:
             self.speed = 0.0
 
-    def get_closest_soldier(self, target):
+    def get_target(self, origin):
+        closest_soldier, best_vector = self.get_closest_soldier(origin)
+        if closest_soldier:
+            return closest_soldier, best_vector
+
+        else:
+            target_vector = self.center.copy() - origin.center.copy()
+            return None, target_vector
+
+    def get_closest_soldier(self, origin):
+
         closest = 2000
         closest_soldier = None
+        best_vector = None
 
         for soldier in self.soldiers:
             if not soldier.dead:
-                target_vector = soldier.box.worldPosition.copy() - target
+                target_vector = soldier.box.worldPosition.copy() - origin.box.worldPosition.copy()
                 distance = target_vector.length
 
                 if distance < closest:
                     closest = distance
+                    best_vector = target_vector
                     closest_soldier = soldier
 
-        return closest_soldier, closest
+        return closest_soldier, best_vector
 
     def set_formation(self):
 
@@ -1312,26 +1329,21 @@ class SoldierGrenade(object):
                             if self.timer >= 1.0:
                                 self.ready = True
 
-    def get_target(self):
-        target_id = self.infantryman.agent.agent_targeter.enemy_target_id
-        target = self.infantryman.agent.level.agents.get(target_id)
-        return target_id, target
-
-    def check_in_range(self):
-        target_id, target = self.get_target()
-        if target:
-            distance = (target.box.worldPosition.copy() - self.infantryman.box.worldPosition.copy()).length
-            if self.max_range >= distance > 3:
-                return True
-
     def shoot(self):
-        target_id, target = self.get_target()
+
+        target = self.infantryman.agent.agent_targeter.enemy_target
+        closest_soldier = self.infantryman.agent.agent_targeter.closest_soldier
+        target_distance = self.infantryman.agent.agent_targeter.target_distance
+
+        in_range = self.max_range >= target_distance > 3
+
         action = None
         origin = self.infantryman.box
         accuracy = self.accuracy
 
-        if target and self.ready and self.check_in_range():
-            command = {"label": "ARTILLERY", "owner": self.infantryman.agent, "target_id": target_id,
+        if target and self.ready and in_range:
+            command = {"label": "ARTILLERY", "owner": self.infantryman.agent, "target": target,
+                       "closest_soldier": closest_soldier,
                        "accuracy": accuracy, "origin": origin, "bullet": self.bullet, "damage": self.power}
 
             self.infantryman.agent.level.commands.append(command)
@@ -1386,7 +1398,8 @@ class SoldierWeapon(object):
 
     def get_ready(self):
 
-        target_id, target = self.get_target()
+        target = self.infantryman.agent.agent_targeter.enemy_target
+
         if not target:
             return False
 
@@ -1396,21 +1409,7 @@ class SoldierWeapon(object):
         if self.infantryman.agent.knocked_out:
             return False
 
-        armor_facing = target.get_attack_facing(self.infantryman.agent)
-        if armor_facing:
-            has_turret, facing, armor = armor_facing
-
-            lowest_armor = armor[facing]
-
-            if has_turret:
-                if armor["TURRET"] < lowest_armor:
-                    lowest_armor = armor["TURRET"]
-
-            if self.power < lowest_armor:
-                return False
-
         if self.ammo > 0.0:
-
             accuracy = self.infantryman.agent.accuracy
             recharge = self.recharge
             prone = self.infantryman.agent.prone
@@ -1431,6 +1430,19 @@ class SoldierWeapon(object):
 
             self.timer = min(1.0, self.timer + recharge)
             if self.timer >= 1.0:
+                armor_facing = target.get_attack_facing(self.infantryman.agent)
+                if armor_facing:
+                    has_turret, facing, armor = armor_facing
+
+                    lowest_armor = armor[facing] * 0.5
+
+                    if has_turret:
+                        if armor["TURRET"] < lowest_armor:
+                            lowest_armor = armor["TURRET"]
+
+                    if self.power < lowest_armor:
+                        return False
+
                 return True
 
     def check_range(self, target):
@@ -1438,13 +1450,9 @@ class SoldierWeapon(object):
             distance = (target.box.worldPosition.copy() - self.infantryman.box.worldPosition.copy()).length
             return distance
 
-    def get_target(self):
-        target_id = self.infantryman.agent.agent_targeter.enemy_target_id
-        target = self.infantryman.agent.level.agents.get(target_id)
-        return target_id, target
-
     def get_window(self):
-        target_id, target = self.get_target()
+
+        target = self.infantryman.agent.agent_targeter.enemy_target
         building = self.infantryman.agent.level.buildings.get(self.infantryman.in_building)
 
         valid_windows = []
@@ -1468,15 +1476,11 @@ class SoldierWeapon(object):
     def shoot_weapon(self):
 
         if self.ready:
-            target_id, target = self.get_target()
+            target = self.infantryman.agent.agent_targeter.enemy_target
+
             if target:
-                if target.agent_type == "INFANTRY":
-                    closest_soldier, target_distance = target.get_closest_soldier(self.infantryman.box.worldPosition.copy())
-                    if not closest_soldier:
-                        target_distance = self.check_range(target)
-                else:
-                    closest_soldier = None
-                    target_distance = self.check_range(target)
+                closest_soldier = self.infantryman.agent.agent_targeter.closest_soldier
+                target_distance = self.infantryman.agent.agent_targeter.target_distance
 
                 if target_distance < 18.0:
                     # TODO check for armor penetration
@@ -1518,12 +1522,8 @@ class SoldierWeapon(object):
                     self.timer = 0.0
                     self.ammo -= 0.01
 
-                    if closest_soldier:
-                        target_vector = closest_soldier.box.worldPosition.copy() - self.infantryman.box.worldPosition.copy()
-                    else:
-                        target_vector = target.box.worldPosition.copy() - self.infantryman.box.worldPosition.copy()
-
-                    self.infantryman.direction = bgeutils.get_closest_vector(target_vector)
+                    self.infantryman.direction = bgeutils.get_closest_vector(
+                        self.infantryman.agent.agent_targeter.target_vector)
 
                     return True
 

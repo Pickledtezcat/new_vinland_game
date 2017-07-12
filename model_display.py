@@ -6,7 +6,7 @@ import vehicle_parts
 
 
 class VehicleModel(object):
-    def __init__(self, adder, owner, scale=1.0, cammo=0, faction_icon=None):
+    def __init__(self, adder, owner, scale=1.0, cammo=2, faction_icon=None):
 
         self.adder = adder
         self.scene = self.adder.scene
