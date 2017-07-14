@@ -699,7 +699,7 @@ class Level(object):
         if "escape" in self.manager.game_input.keys:
             self.save_level()
 
-    def shoot(self, command):
+    def shootx(self, command):
 
         target_position = None
         weapon = command["weapon"]
@@ -716,7 +716,7 @@ class Level(object):
             effect_hook = origin
             origin = origin.worldPosition.copy()
         else:
-            origin = mathutils.Vector(command["origin"]).to_3d()
+            origin = command["origin"]
 
         effective_range = command["effective_range"]
         effective_power = command["effective_power"]
@@ -730,9 +730,16 @@ class Level(object):
         if target:
             if target.agent_type == "INFANTRY":
                 if command["label"] == "VEHICLE_SHOOT":
-                    target_position = best_target.box.worldPosition.copy()
-                    command = {"label": "EXPLOSION", "effect": "DUMMY_EXPLOSION", "damage": 1,
+                    # TODO get shot data from owner or weapon
+
+                    variance = max(0.0, 10.0 - weapon.total_accuracy)
+                    random_vector = mathutils.Vector(
+                        [random.uniform(-variance, variance), random.uniform(-variance, variance), 0.0])
+
+                    target_position = best_target.box.worldPosition.copy() + random_vector
+                    command = {"label": "EXPLOSION", "effect": "DUMMY_EXPLOSION", "damage": weapon.power,
                                "position": target_position, "owner": owner}
+
                     self.commands.append(command)
 
                 elif best_target:
@@ -747,10 +754,13 @@ class Level(object):
                             target_position = target_building.get_closest_window(origin)
                     else:
                         target_position = best_target.box.worldPosition.copy()
+                        target_position.z += 0.5
 
                     if best_target.behavior.prone:
-                        shock *= 0.5
-                        effective_range -= 5
+
+                        if target_distance > 10:
+                            shock *= 0.5
+                            effective_range *= 0.5
 
                     to_hit = (effective_range / target_distance) * 0.25
 
@@ -775,9 +785,15 @@ class Level(object):
                 target.shock += shock
 
             else:
-                target_position = target.box.worldPosition.copy()
+                variance = target.size
+                random_vector = mathutils.Vector(
+                    [random.uniform(-variance, variance), random.uniform(-variance, variance), 0.0])
+
+                target_position = target.box.worldPosition.copy() + random_vector
+
                 command = {"label": "EXPLOSION", "effect": "DUMMY_EXPLOSION", "damage": 1,
                            "position": target_position, "owner": owner}
+
                 self.commands.append(command)
 
         if target_position:
@@ -787,12 +803,12 @@ class Level(object):
                 particles.FaintBulletStreak(self, list(origin), list(target_position), sound)
 
             elif effect == "YELLOW_FLASH":
-                particles.YellowBulletFlash(self, effect_hook, sound)
-                particles.YellowBulletFlash(self, effect_hook, sound, delay=8)
-                particles.YellowBulletFlash(self, effect_hook, sound, delay=16)
+                particles.YellowBulletFlash(self, effect_hook)
+                particles.YellowBulletFlash(self, effect_hook, delay=8)
+                particles.YellowBulletFlash(self, effect_hook, delay=16)
 
             elif effect == "RED_FLASH":
-                particles.RedBulletFlash(self, effect_hook, sound)
+                particles.RedBulletFlash(self, effect_hook)
 
             elif effect == "RED_STREAK":
                 particles.RedBulletStreak(self, list(origin), list(target_position), sound)
@@ -805,79 +821,178 @@ class Level(object):
                 particles.YellowBulletStreak(self, list(origin), list(target_position), sound, delay=8)
                 particles.YellowBulletStreak(self, list(origin), list(target_position), sound, delay=16)
 
+    def small_arms_shoot(self, command):
+
+        agent = command["agent"]
+        weapon = command["weapon"]
+        origin = command["origin"]
+
+        target = agent.agent_targeter.enemy_target
+        if target:
+            if target.agent_type == "INFANTRY":
+                closest_soldier = agent.agent_targeter.closest_soldier
+                target_distance = agent.agent_targeter.target_distance
+                power = weapon.power * random.uniform(0.0, 1.0)
+                effective_range = weapon.effective_range
+                if agent.agent_type != "INFANTRY":
+                    if not agent.movement.done:
+                        effective_range *= 0.5
+
+                shock = power
+                building = self.buildings.get(closest_soldier.in_building)
+
+                if building:
+                    power *= building.damage_reduction
+                    target_position = building.get_closest_window(origin)
+                    shock *= building.damage_reduction
+
+                else:
+                    target_position = closest_soldier.box.worldPosition.copy()
+                    target_position.z += 0.5
+
+                if closest_soldier.behavior.prone:
+
+                    if target_distance > 10:
+                        shock *= 0.5
+                        effective_range *= 0.5
+
+                to_hit = (effective_range / target_distance) * 0.25
+
+                if to_hit < random.uniform(0.0, 1.0):
+                    target_position = None
+
+                if target_position:
+                    damage = int(power)
+                    if power < closest_soldier.toughness:
+                        damage *= 0.5
+
+                    closest_soldier.toughness -= max(1, int(damage))
+
+                else:
+                    shock *= 0.5
+                    if closest_soldier:
+                        base_location = closest_soldier.box.worldPosition.copy()
+                        random_vector = mathutils.Vector(
+                            [random.uniform(-3.0, 3.0), random.uniform(-3.0, 3.0), 0.0])
+                        target_position = base_location + random_vector
+
+                target.shock += shock
+
+                if agent.agent_type == "INFANTRY":
+                    particles.InfantryBullet(self, target_position, weapon, origin)
+                else:
+                    rapid = ["QUICK", "RAPID"]
+
+                    instances = 1
+                    delay = 8
+                    if weapon.flag in rapid:
+                        if weapon.flag == "RAPID":
+                            delay = 4
+
+                        instances = 3
+
+                    for i in range(instances):
+                        particles.YellowBulletFlash(self, weapon.emitter, delay=delay * i)
+
+            else:
+                pass
+                # TODO handle infantry weapons vs vehicles
+
+    def shoot_shells(self, command):
+
+        agent = command["agent"]
+        weapon = command["weapon"]
+        origin = command["origin"]
+
+        target = agent.agent_targeter.enemy_target
+        if target:
+            closest_soldier = agent.agent_targeter.closest_soldier
+            target_distance = agent.agent_targeter.target_distance
+            power = weapon.power * random.uniform(0.0, 1.0)
+            effective_range = weapon.effective_range
+            accuracy = weapon.total_accuracy
+
+            if target.agent_type == "INFANTRY":
+                variance = max(0.0, 10.0 - weapon.total_accuracy)
+                random_vector = mathutils.Vector(
+                    [random.uniform(-variance, variance), random.uniform(-variance, variance), 0.0])
+
+                target_position = closest_soldier.box.worldPosition.copy() + random_vector
+                command = {"label": "EXPLOSION", "effect": "DUMMY_EXPLOSION", "damage": weapon.power,
+                           "position": target_position, "agent": agent}
+                self.commands.append(command)
+
+                particles.RedBulletFlash(self, weapon.emitter)
+
+            else:
+                # TODO handle vehicle vs vehicle shooting
+                pass
+
     def shoot_artillery(self, command):
 
-        # TODO save and load artillery bullets
+        agent = command["agent"]
+        weapon = command["weapon"]
+        hook = command["hook"]
+        origin = hook.worldPosition.copy()
 
-        # example_command = {"label": "ARTILLERY", "weapon": self, "owner": self.infantryman, "target_id": target_id,
-        #            "accuracy": accuracy, "origin": origin, "bullet": self.bullet}
-
-        origin = command["origin"]
-        origin_position = origin.worldPosition.copy()
-        owner = command["owner"]
-        # TODO give xp etc... to owner
-
-        target = command["target"]
-        closest_soldier = command["closest_soldier"]
-        accuracy = command["accuracy"]
-        damage = command["damage"]
-        bullet = command["bullet"]
-        effect = command.get("effect")
-        sound = command.get("sound")
+        target = agent.agent_targeter.enemy_target
 
         if not target:
-            print("artillery error: target doesn't exist!!")
-        else:
+            print("error firing {}".format(agent.agent_id))
+
+        if target:
+            closest_soldier = agent.agent_targeter.closest_soldier
+            target_distance = agent.agent_targeter.target_distance
+
+            accuracy = weapon.total_accuracy
+            bullet = weapon.bullet
+            effect = weapon.effect
+            damage = weapon.power
+
             if closest_soldier:
                 target_position = closest_soldier.box.worldPosition.copy()
             else:
                 target_position = target.center.copy()
-
-            target_vector = target_position - origin_position
-            target_distance = target_vector.length
-
-            # TODO ensure accuracy is matched to weapon accuracy as well as gunner skill
 
             scatter = target_distance / accuracy
 
             scatter_vector = mathutils.Vector([random.uniform(- scatter, scatter) for _ in range(3)])
             target_position += scatter_vector
 
-            if target_distance > 0.0:
-                high_point = target_distance * 0.3
-                start = origin_position.copy()
-                end = target_position
-                mid_point = start.lerp(end, 0.5)
+            high_point = target_distance * 0.3
+            start = origin.copy()
+            end = target_position
+            mid_point = start.lerp(end, 0.5)
 
-                start_handle = mid_point.copy()
-                start_handle.z += high_point
-                end_handle = target_position.copy()
-                end_handle.z += high_point
+            start_handle = mid_point.copy()
+            start_handle.z += high_point
+            end_handle = target_position.copy()
+            end_handle.z += high_point
 
-                resolution = max(3, int(target_distance * 0.5))
+            resolution = max(3, int(target_distance * 0.5))
 
-                curve = mathutils.geometry.interpolate_bezier(start, start_handle, end_handle, end, resolution)
-                bullet_arc = [list(point) for point in curve]
+            curve = mathutils.geometry.interpolate_bezier(start, start_handle, end_handle, end, resolution)
+            bullet_arc = [list(point) for point in curve]
 
-                if bullet == "GRENADE":
-                    bullets.Grenade(self, bullet_arc, owner, damage)
-                if bullet == "ROCKET":
-                    bullets.Rocket(self, bullet_arc, owner, damage)
-                if bullet == "SHELL":
-                    bullets.Shell(self, bullet_arc, owner, damage)
+            if bullet == "GRENADE":
+                bullets.Grenade(self, bullet_arc, agent, damage)
+            if bullet == "ROCKET":
+                bullets.Rocket(self, bullet_arc, agent, damage)
+            if bullet == "SHELL":
+                bullets.Shell(self, bullet_arc, agent, damage)
 
             if effect:
-                particles.RedBulletFlash(self, origin, sound)
+                particles.RedBulletFlash(self, hook)
 
     def explosion(self, command):
 
-        owner = command["owner"]
+        agent = command["agent"]
         # TODO give xp etc... to owner passed as agent_id
         position = command["position"]
         location = [int(position[0]), int(position[1])]
 
         effect = command["effect"]
-        damage = command["damage"]
+        damage = command["damage"] * random.uniform(0.5, 1.0)
 
         explosion_chart = [8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096]
         max_fall_off = 0
@@ -899,8 +1014,8 @@ class Level(object):
                 damage_reduction = explosion_chart[abs(ex)]
                 shock_reduction = explosion_chart[max(0, abs(ex) - 1)]
 
-                effective_damage = max(0, damage - damage_reduction)
-                shock = max(0, damage - shock_reduction)
+                effective_damage = max(0, damage - damage_reduction) * random.uniform(0.0, 1.0)
+                shock = max(0, damage - shock_reduction) * random.uniform(0.0, 1.0)
 
                 if shock > 0:
                     explosion_key = [x+ex, y+ey]
@@ -931,8 +1046,11 @@ class Level(object):
     def process_commands(self):
 
         for command in self.commands:
-            if "SHOOT" in command["label"]:
-                self.shoot(command)
+            if command["label"] == "SMALL_ARMS":
+                self.small_arms_shoot(command)
+
+            if command["label"] == "SHOOT_SHELLS":
+                self.shoot_shells(command)
 
             if "ARTILLERY" in command["label"]:
                 self.shoot_artillery(command)

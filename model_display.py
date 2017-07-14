@@ -6,7 +6,7 @@ import vehicle_parts
 
 
 class VehicleModel(object):
-    def __init__(self, adder, owner, scale=1.0, cammo=2, faction_icon=None):
+    def __init__(self, adder, owner, scale=1.0, cammo=7, faction_icon=None):
 
         self.adder = adder
         self.scene = self.adder.scene
@@ -86,12 +86,12 @@ class VehicleModel(object):
         has_weapons = len(self.stats.weapons)
 
         armor_amounts = [self.stats.armor[location] for location in self.stats.armor]
-        armor_scale = sum(armor_amounts) / max(1.0, self.stats.weight)
+        min_armor = int(min(armor_amounts))
 
-        armor_threshold = 0.6
+        armor_threshold = 50
 
         if turret_size > 0:
-            if armor_scale > armor_threshold:
+            if min_armor > armor_threshold:
                 layout = 2
             else:
                 layout = 1
@@ -99,10 +99,10 @@ class VehicleModel(object):
         elif self.stats.open_top:
             layout = 3
 
-        elif armor_scale > 0.0 or "MANTLET" in self.stats.flags:
+        elif min_armor > 0 or "MANTLET" in self.stats.flags:
             if "SUPERSTRUCTURE" in self.stats.flags:
                 layout = 4
-            elif armor_scale > 1.0:
+            elif min_armor > armor_threshold:
                 layout = 2
             else:
                 layout = 1
@@ -138,31 +138,31 @@ class VehicleModel(object):
                 turret_number = 1
 
             elif self.stats.open_top:
-                if armor_scale > armor_threshold:
+                if min_armor > armor_threshold:
                     turret_number = 3
                 else:
                     turret_number = 2
 
             elif "SLOPED" in self.stats.flags:
-                if armor_scale > armor_threshold:
+                if min_armor > armor_threshold:
                     turret_number = 9
                 else:
                     turret_number = 8
 
             elif "SLOPED" in self.stats.flags:
-                if armor_scale > armor_threshold:
+                if min_armor > armor_threshold:
                     turret_number = 9
                 else:
                     turret_number = 8
 
             elif self.stats.suspension_type in fast:
-                if armor_scale > armor_threshold:
+                if min_armor > armor_threshold:
                     turret_number = 7
                 else:
                     turret_number = 6
 
             else:
-                if armor_scale > armor_threshold:
+                if min_armor > armor_threshold:
                     turret_number = 5
                 else:
                     turret_number = 4
@@ -305,7 +305,7 @@ class VehicleModel(object):
             rocket_adder = bgeutils.get_ob("turret", attach_point.children)
             if rocket_adder:
                 rocket_armor = 0
-                if armor_scale > 1.0:
+                if min_armor > armor_threshold:
                     rocket_armor = 1
 
                 rocket_turret = "v_turret_0_{}_{}".format(rocket_size, rocket_armor)

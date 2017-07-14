@@ -61,7 +61,7 @@ def soldiers():
                     "SHOCK_TROOPER": ["SMG", 6, 6, 9, 4, 3, "SMG", "RAPID_FIRE"],
                     "COMBAT_OFFICER": ["SMG", 6, 6, 9, 5, 1, "PISTOL", "OFFICER"]}
 
-    label_keys = ["mesh_name", "speed", "toughness", "power", "ROF", "grenades", "sound", "special"]
+    label_keys = ["mesh_name", "speed", "toughness", "power", "ROF", "grenades", "effect", "special"]
 
     soldier_dict = {}
 

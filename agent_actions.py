@@ -597,6 +597,9 @@ class AgentNavigation(object):
 
 class AgentTargeter(object):
 
+    """the agent targeter is controlled by set_target_id and can provide information on the current target,
+    enemy distance, target_vector and so on"""
+
     def __init__(self, agent):
         self.agent = agent
         self.has_turret = False
@@ -613,13 +616,19 @@ class AgentTargeter(object):
         self.closest_soldier = None
         self.target_distance = 0.0
 
+    def get_basic_distance(self, target):
+        target_vector = target.center.copy() - self.agent.center.copy()
+
+        return target_vector.length
+
     def get_closest_enemy(self):
+
+        # TODO implement a target ranking system
+
         agents = self.agent.level.agents
 
         closest = 2000
-        best_vector = None
         best_target = None
-        best_closest_soldier = None
 
         for agent_key in agents:
             enemy_agent = agents[agent_key]
@@ -627,23 +636,15 @@ class AgentTargeter(object):
             valid_target = self.check_target(enemy_agent)
 
             if valid_target:
-                closest_soldier, target_vector = enemy_agent.get_target(self.agent)
-                target_distance = target_vector.length
+                target_distance = self.get_basic_distance(enemy_agent)
 
                 if target_distance < closest:
                     closest = target_distance
-                    best_vector = target_vector
-                    best_target = enemy_agent
-                    if closest_soldier:
-                        best_closest_soldier = closest_soldier
-                    else:
-                        best_closest_soldier = None
+                    best_target = agent_key
 
         if best_target:
-            self.enemy_target = best_target
-            self.target_vector = best_vector
-            self.target_distance = closest
-            self.closest_soldier = best_closest_soldier
+            self.enemy_target_id = best_target
+            self.set_closest_target(best_target)
         else:
             self.reset_values()
 
@@ -678,6 +679,7 @@ class AgentTargeter(object):
         return True
 
     def reset_values(self):
+        self.enemy_target_id = None
         self.enemy_target = None
         self.target_vector = None
         self.hull_angle = 0.0
@@ -686,9 +688,9 @@ class AgentTargeter(object):
         self.closest_soldier = None
         self.target_distance = 0.0
 
-    def set_closest_target(self):
-
-        enemy_agent = self.agent.level.agents[self.set_target_id]
+    def set_closest_target(self, target_id):
+        enemy_agent = self.agent.level.agents[target_id]
+        self.enemy_target = enemy_agent
         self.closest_soldier, self.target_vector = enemy_agent.get_target(self.agent)
         self.target_distance = self.target_vector.length
 
@@ -697,14 +699,13 @@ class AgentTargeter(object):
         if self.agent.dead:
             self.set_target_id = None
             self.reset_values()
-
         else:
             if self.set_target_id:
                 set_target = self.agent.level.agents[self.set_target_id]
 
                 set_target_check = self.check_target(set_target)
                 if set_target_check:
-                    self.set_closest_target()
+                    self.set_closest_target(self.set_target_id)
                 else:
                     self.set_target_id = None
                     self.reset_values()

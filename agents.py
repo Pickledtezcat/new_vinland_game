@@ -40,7 +40,7 @@ class Agent(object):
     is_sentry = False
     is_shocked = -1
 
-    stance = "DEFEND"
+    stance = "FLANK"
     agent_type = "VEHICLE"
 
     def __init__(self, level, load_name, location, team, agent_id=None, load_dict=None):
@@ -159,7 +159,8 @@ class Agent(object):
                      "navigation_history": self.navigation.history, "destinations": self.destinations,
                      "reverse": self.reverse, "throttle": self.throttle, "occupied": self.occupied, "aim": self.aim,
                      "selection_group": self.selection_group, "turret_angle": self.agent_targeter.turret_angle,
-                     "ammo": self.ammo, "stance": self.stance, "soldiers": [solider.save() for solider in self.soldiers]}
+                     "ammo": self.ammo, "stance": self.stance,
+                     "soldiers": [solider.save() for solider in self.soldiers]}
 
         self.clear_occupied()
         return save_dict
@@ -353,7 +354,6 @@ class Agent(object):
     def get_enemy_direction(self):
         if self.agent_targeter.enemy_target:
             return self.get_facing(self.agent_targeter.target_vector)
-
 
     def process_commands(self):
 
@@ -562,9 +562,9 @@ class Agent(object):
 
     def deploy(self, deploying):
 
-        adjust = -0.02
+        adjust = -0.002
         if deploying:
-            adjust = 0.02
+            adjust = 0.002
 
         self.deployed = min(1.0, max(0.0, self.deployed + adjust))
 
@@ -578,6 +578,8 @@ class Vehicle(Agent):
         self.agent_type = "VEHICLE"
         self.stance_speed = 1.0
         self.wait_for_infantry = True
+        self.aligning = False
+        self.gun_timer = 0.0
 
         super().__init__(level, load_name, location, team, agent_id, load_dict)
 
@@ -587,6 +589,43 @@ class Vehicle(Agent):
         for weapon in self.stats.weapons:
             weapon.link_agent(self)
             self.weapons.append(weapon)
+
+    def stowing_gun(self):
+        if self.stats.artillery:
+            self.deploy(False)
+
+    def aligning_gun(self):
+
+        # TODO handle rotating gun on anti-tank artillery
+
+        moving = not self.movement.done
+
+        if self.stats.artillery:
+            if moving:
+                self.stowing_gun()
+                return True
+
+            if self.ammo <= 0.0:
+                self.stowing_gun()
+                return True
+
+            target = self.agent_targeter.enemy_target
+            target_distance = self.agent_targeter.target_distance
+
+            if not target:
+                self.stowing_gun()
+                return True
+            else:
+                deploy_angle = min(1.0, target_distance / 36.0)
+                if self.deployed < (deploy_angle - 0.1):
+                    self.deploy(True)
+                    return True
+
+                if self.deployed > (deploy_angle + 0.1):
+                    self.deploy(False)
+                    return True
+
+        return False
 
     def load_stats(self):
         tiles = bge.logic.globalDict["profiles"][bge.logic.globalDict["active_profile"]]["vehicles"][self.load_name]
@@ -630,7 +669,7 @@ class Vehicle(Agent):
         return [has_turret, facing, self.stats.armor]
 
     def set_stats(self):
-        self.accuracy = float(self.rank)
+        self.accuracy = float(self.rank) + self.stats.stability
         self.resistance = float(self.rank)
         resistance = self.resistance * 0.05
 
@@ -653,10 +692,17 @@ class Vehicle(Agent):
 
     def handle_weapons(self):
         # TODO make weapons dependent on agent states
+
+        self.aligning = self.aligning_gun()
+
         for weapon in self.weapons:
             weapon.update()
 
-        self.shoot_weapons()
+        self.gun_timer += 1
+
+        if self.gun_timer > 12:
+            self.gun_timer = 0
+            self.shoot_weapons()
 
     def shoot_weapons(self):
         for weapon in self.weapons:
@@ -703,7 +749,7 @@ class Vehicle(Agent):
 
         self.debug_text = ""
 
-        #self.debug_text = "{}\n{}".format(self.movement.tilt, str(list(self.movement.recoil.copy())))
+        # self.debug_text = "{}\n{}".format(self.movement.tilt, str(list(self.movement.recoil.copy())))
 
         # if self.agent_targeter.enemy_target:
         #     target = self.agent_targeter.enemy_target.agent_id
@@ -889,7 +935,6 @@ class Infantry(Agent):
     def check_status(self):
 
         if not self.dead:
-
             if self.on_screen:
                 self.has_ammo = 1
                 self.is_sentry = False
@@ -897,6 +942,7 @@ class Infantry(Agent):
 
                 out_of_grenades = 0
                 out_of_ammo = 0
+
                 if self.shock > 40:
                     self.is_shocked = 1
                 elif self.shock > 20:
@@ -914,7 +960,7 @@ class Infantry(Agent):
                         if soldier.grenade.ammo <= 0:
                             out_of_grenades += 1
                     else:
-                        out_of_grenades += 1
+                        out_of_grenades -= 1
 
                 if out_of_grenades >= len(self.soldiers):
                     self.has_ammo -= 1
@@ -1086,7 +1132,7 @@ class InfantryMan(object):
         self.power = stats["power"]
         self.rof = stats["ROF"]
         self.special = stats["special"]
-        self.sound = stats["sound"]
+        self.effect = stats["effect"]
         self.visible = True
 
         self.grenade = None
@@ -1307,56 +1353,66 @@ class SoldierGrenade(object):
         self.weapon_type = "ARTILLERY"
         self.infantryman = infantryman
         self.sound = None
+        self.effect = None
         self.ammo = ammo
         self.bullet = "GRENADE"
-        self.accuracy = self.infantryman.agent.accuracy
-        self.max_range = 8
+        self.total_accuracy = self.infantryman.agent.accuracy
+        self.max_range = 8.0
         self.recharge = 0.002
         self.power = 10
         self.timer = 0.0
-        self.ready = False
         self.action = "FIDGET"
 
     def update(self):
+        self.timer = min(1.0, self.timer + self.recharge)
 
-        if self.ammo > 0:
-            if not self.infantryman.agent.prone:
-                if not self.infantryman.in_building:
-                    if not self.infantryman.agent.knocked_out:
-                        if self.infantryman.agent.shock < 30:
+    def get_ready(self):
 
-                            self.timer = min(1.0, self.timer + self.recharge)
-                            if self.timer >= 1.0:
-                                self.ready = True
+        if self.ammo <= 0:
+            return False
+
+        if self.infantryman.agent.prone:
+            return False
+
+        if self.infantryman.in_building:
+            return False
+
+        if self.infantryman.agent.knocked_out:
+            return False
+
+        if self.timer < 1.0:
+            return False
+
+        return True
 
     def shoot(self):
 
         target = self.infantryman.agent.agent_targeter.enemy_target
-        closest_soldier = self.infantryman.agent.agent_targeter.closest_soldier
         target_distance = self.infantryman.agent.agent_targeter.target_distance
 
-        in_range = self.max_range >= target_distance > 3
-
+        in_range = self.max_range >= target_distance > 3.0
         action = None
-        origin = self.infantryman.box
-        accuracy = self.accuracy
 
-        if target and self.ready and in_range:
-            command = {"label": "ARTILLERY", "owner": self.infantryman.agent, "target": target,
-                       "closest_soldier": closest_soldier,
-                       "accuracy": accuracy, "origin": origin, "bullet": self.bullet, "damage": self.power}
+        self.total_accuracy = self.infantryman.agent.accuracy
+        if self.infantryman.agent.prone:
+            self.total_accuracy = self.infantryman.agent.accuracy * 0.5
 
-            self.infantryman.agent.level.commands.append(command)
-            self.ready = False
-            self.timer = 0.0
-            self.ammo -= 1
+        if target:
+            if in_range and self.get_ready():
 
-            if self.sound:
-                sound_command = {"label": "SOUND_EFFECT",
-                                 "content": ("I_{}".format(self.sound), self.infantryman.box, 0.5, 1.0)}
-                self.infantryman.agent.level.commands.append(sound_command)
+                command = {"label": "ARTILLERY", "agent": self.infantryman.agent, "weapon": self,
+                           "hook": self.infantryman.box}
 
-            action = self.action
+                self.infantryman.agent.level.commands.append(command)
+                self.timer = 0.0
+                self.ammo -= 1
+
+                if self.sound:
+                    sound_command = {"label": "SOUND_EFFECT",
+                                     "content": (self.sound, self.infantryman.box, 0.5, 1.0)}
+                    self.infantryman.agent.level.commands.append(sound_command)
+
+                action = self.action
 
         return action
 
@@ -1373,8 +1429,8 @@ class SoldierRifleGrenade(SoldierGrenade):
         super().__init__(infantryman, ammo)
         self.bullet = "ROCKET"
         self.power = 10
-        self.max_range = 18
-        self.sound = "ANTI_TANK"
+        self.max_range = 18.0
+        self.sound = "I_ANTI_TANK"
         self.action = "SHOOTING"
 
 
@@ -1383,31 +1439,15 @@ class SoldierWeapon(object):
         self.weapon_type = "INFANTRY_WEAPON"
         self.infantryman = infantryman
         self.power = self.infantryman.power
-        self.sound = self.infantryman.sound
-        self.recharge = (self.infantryman.rof * 0.0025) * random.uniform(0.8, 1.0)
-        self.special = self.infantryman.special
-        self.accuracy = self.infantryman.agent.accuracy
+        self.effect = self.infantryman.effect
+        self.recharge = (self.infantryman.rof * 0.0015) * random.uniform(0.8, 1.0)
+        self.flag = self.infantryman.special
+        self.total_accuracy = self.infantryman.agent.accuracy
+        self.effective_range = 0.0
         self.timer = 0.0
         self.ammo = 1.0
-        self.effect_timer = random.randint(0, 3)
-        self.ready = False
 
     def update(self):
-
-        self.ready = self.get_ready()
-
-    def get_ready(self):
-
-        target = self.infantryman.agent.agent_targeter.enemy_target
-
-        if not target:
-            return False
-
-        if self.infantryman.agent.enter_building and not self.infantryman.in_building:
-            return False
-
-        if self.infantryman.agent.knocked_out:
-            return False
 
         if self.ammo > 0.0:
             accuracy = self.infantryman.agent.accuracy
@@ -1426,9 +1466,25 @@ class SoldierWeapon(object):
                 accuracy *= 0.75
                 recharge *= 0.75
 
-            self.accuracy = accuracy
+            self.total_accuracy = accuracy
+            self.effective_range = self.total_accuracy + self.power
 
             self.timer = min(1.0, self.timer + recharge)
+
+    def get_ready(self):
+
+        target = self.infantryman.agent.agent_targeter.enemy_target
+
+        if not target:
+            return False
+
+        if self.infantryman.agent.enter_building and not self.infantryman.in_building:
+            return False
+
+        if self.infantryman.agent.knocked_out:
+            return False
+
+        if self.ammo > 0.0:
             if self.timer >= 1.0:
                 armor_facing = target.get_attack_facing(self.infantryman.agent)
                 if armor_facing:
@@ -1444,11 +1500,6 @@ class SoldierWeapon(object):
                         return False
 
                 return True
-
-    def check_range(self, target):
-        if target:
-            distance = (target.box.worldPosition.copy() - self.infantryman.box.worldPosition.copy()).length
-            return distance
 
     def get_window(self):
 
@@ -1475,17 +1526,14 @@ class SoldierWeapon(object):
 
     def shoot_weapon(self):
 
-        if self.ready:
-            target = self.infantryman.agent.agent_targeter.enemy_target
+        target = self.infantryman.agent.agent_targeter.enemy_target
 
-            if target:
-                closest_soldier = self.infantryman.agent.agent_targeter.closest_soldier
+        if target:
+            if self.get_ready():
                 target_distance = self.infantryman.agent.agent_targeter.target_distance
 
                 if target_distance < 18.0:
                     # TODO check for armor penetration
-
-                    effect = None
 
                     if self.infantryman.in_building:
                         window_position = self.get_window()
@@ -1494,31 +1542,13 @@ class SoldierWeapon(object):
                         else:
                             return False
                     else:
-                        origin = self.infantryman.location
+                        origin = self.infantryman.box.worldPosition.copy()
+                        origin.z += 0.5
 
-                    if self.effect_timer > 2 or self.infantryman.in_building:
-                        self.effect_timer = 1
-                        if self.special == "RAPID_FIRE":
-                            effect = "RAPID_YELLOW_STREAK"
-                        else:
-                            effect = "YELLOW_STREAK"
-                    else:
-                        self.effect_timer += 1
-
-                    if self.special == "ANTI_TANK":
-                        effect = "RED_STREAK"
-
-                    effective_range = self.accuracy + self.power
-                    effective_power = self.power * random.uniform(0.0, 1.0)
-
-                    command = {"label": "SMALL_ARMS_SHOOT", "weapon": self, "owner": self.infantryman, "target": target,
-                               "effect": effect, "origin": origin, "effective_range": effective_range,
-                               "effective_power": effective_power, "closest_soldier": closest_soldier,
-                               "target_distance": target_distance, "sound": "I_{}".format(self.sound)}
+                    command = {"label": "SMALL_ARMS", "weapon": self, "agent": self.infantryman.agent,
+                               "origin": origin}
 
                     self.infantryman.agent.level.commands.append(command)
-
-                    self.ready = False
                     self.timer = 0.0
                     self.ammo -= 0.01
 

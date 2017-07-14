@@ -4,8 +4,16 @@ import bgeutils
 import random
 
 
-class Particle(object):
+infantry_bullet_dict = {"PISTOL": {"color": None, "instances": 1},
+                        "MG": {"color": [1.0, 1.0, 1.0], "instances": 3},
+                        "LIGHT_MG": {"color": [0.5, 0.5, 0.5], "instances": 3},
+                        "RIFLE": {"color": None, "instances": 1},
+                        "HEAVY_RIFLE": {"color": [1.0, 1.0, 1.0], "instances": 1},
+                        "ANTI_TANK": {"color": [1.0, 0.2, 0.0], "instances": 1},
+                        "SMG": {"color": None, "instances": 3}}
 
+
+class Particle(object):
     def __init__(self, level):
         self.level = level
         self.ended = False
@@ -25,7 +33,6 @@ class Particle(object):
 
 
 class DebugLabel(Particle):
-
     def __init__(self, level, owner):
         super().__init__(level)
 
@@ -46,7 +53,6 @@ class DebugLabel(Particle):
 
 
 class MovementPointIcon(Particle):
-
     def __init__(self, level, position):
         super().__init__(level)
         self.released = False
@@ -88,14 +94,13 @@ class MovementPointIcon(Particle):
 
 
 class BulletFlash(Particle):
-
-    def __init__(self, level, hook, sound, delay=0):
+    def __init__(self, level, hook, delay=0):
         super().__init__(level)
 
         self.hook = hook
         self.box.setParent(hook)
 
-        self.sound = sound
+        self.sound = "I_LIGHT_MG"
         self.color = [1.0, 1.0, 1.0]
         self.scale = 1.0
         self.delay = delay
@@ -141,45 +146,55 @@ class BulletFlash(Particle):
 
 
 class YellowBulletFlash(BulletFlash):
-
     def get_attributes(self):
         self.color = [1.5, 0.5, 1.0]
 
 
 class RedBulletFlash(BulletFlash):
+    def __init__(self, level, hook, delay=0):
+        super().__init__(level, hook, delay)
+        self.sound = "I_HEAVY_RIFLE"
 
     def get_attributes(self):
         self.color = [1.0, 0.0, 0.0]
         self.scale = 3.0
 
 
-class BulletStreak(Particle):
-
-    def __init__(self, level, position, target, sound, delay=0):
+class InfantryBullet(Particle):
+    def __init__(self, level, target_position, weapon, origin):
         super().__init__(level)
 
-        self.color = [1.0, 1.0, 1.0]
-        self.sound = sound
+        self.level = level
+        self.weapon = weapon
+        self.effect = self.weapon.effect
 
-        target[2] += 0.5
+        effect_details = infantry_bullet_dict.get(self.effect)
+        if not effect_details:
+            self.ended = True
+            print("no details for {}".format(self.effect))
+
+        for i in range(effect_details["instances"]):
+            InfantryBulletStreak(self.level, origin, target_position, self.effect, delay=8 * i)
+            BulletHitGround(self.level, list(target_position), delay=8 * i)
+
+        self.ended = True
+
+
+class InfantryBulletStreak(Particle):
+    def __init__(self, level, position, target, effect, delay=0):
+        super().__init__(level)
 
         self.position = position
         self.target = target
-        self.delay = delay + 18
+        self.effect = effect
+        self.delay = delay
+        self.sound = "I_{}".format(self.effect)
+
+        effect_details = infantry_bullet_dict.get(self.effect)
+        self.color = effect_details["color"]
+        if not self.color:
+            self.box.visible = False
         self.place_particle()
-
-    def add_box(self):
-        return self.level.own.scene.addObject("bullet_streak", self.level.own, 0)
-
-    def place_particle(self):
-
-        position = mathutils.Vector(self.position)
-        target = mathutils.Vector(self.target)
-
-        target_vector = target - position
-        self.box.worldPosition = position
-        self.box.worldOrientation = target_vector.to_track_quat("Y", "Z").to_matrix().to_3x3()
-        self.box.localScale.y = target_vector.length
 
     def play_sound(self):
         if self.sound:
@@ -188,8 +203,22 @@ class BulletStreak(Particle):
             self.level.commands.append(sound_command)
             self.sound = None
 
+    def add_box(self):
+        return self.level.own.scene.addObject("bullet_streak", self.level.own, 0)
+
+    def place_particle(self):
+
+        position = mathutils.Vector(self.position)
+        self.box.worldPosition = position
+
+        if self.color:
+            target = mathutils.Vector(self.target)
+
+            target_vector = target - position
+            self.box.worldOrientation = target_vector.to_track_quat("Y", "Z").to_matrix().to_3x3()
+            self.box.localScale.y = target_vector.length
+
     def update(self):
-        r, g, b = self.color
 
         if self.delay > 0:
             self.delay -= 1
@@ -199,31 +228,50 @@ class BulletStreak(Particle):
             self.timer += 0.4
             color = 1.0 - self.timer
 
-        self.box.color = [r * color, g * color, b * color, 1.0]
+        if self.color:
+            r, g, b = self.color
+            self.box.color = [r * color, g * color, b * color, 1.0]
 
         if self.timer >= 1.0:
             self.ended = True
 
 
-class FaintBulletStreak(BulletStreak):
-    def __init__(self, level, position, target, sound, delay=0):
-        super().__init__(level, position, target, sound, delay)
+class BulletHitGround(Particle):
+    def __init__(self, level, location, delay=0):
+        super().__init__(level)
 
-        self.color = [0.1, 0.0, 0.0]
+        self.level = level
+        self.location = location
+        self.delay = delay
 
+        tile = self.level.get_tile(self.location)
+        if tile:
+            height = tile["height"]
+            variance = 0.5
+            random_vector = mathutils.Vector([random.uniform(-variance, variance), random.uniform(-variance, variance), 0.0])
+            self.box.worldPosition = self.location
+            self.box.worldPosition.z = height
+            self.box.worldPosition += random_vector
+        else:
+            self.ended = True
 
-class YellowBulletStreak(BulletStreak):
-    def __init__(self, level, position, target, sound, delay=0):
-        super().__init__(level, position, target, sound, delay)
+    def add_box(self):
+        return self.level.own.scene.addObject("bullet_hit_ground", self.level.own, 0)
 
-        self.color = [0.5, 0.5, 0.0]
+    def update(self):
 
+        if self.delay > 0:
+            self.box.visible = False
+        else:
+            self.delay -= 1
+            self.box.visible = True
+            self.timer += 0.2
 
-class RedBulletStreak(BulletStreak):
-    def __init__(self, level, position, target, sound, delay=0):
-        super().__init__(level, position, target, sound, delay)
+            c = 1.0 - self.timer
+            self.box.color = [c, c, c, 1.0]
 
-        self.color = [1.0, 0.0, 0.0]
+        if self.timer >= 1.0:
+            self.ended = True
 
 
 class DummyExplosion(Particle):
@@ -260,9 +308,3 @@ class DummyExplosion(Particle):
             self.box.color = [color, color * color, 0.0, 1.0]
 
             self.box.localScale = self.start_scale.lerp(self.end_scale, self.timer)
-
-
-
-
-
-

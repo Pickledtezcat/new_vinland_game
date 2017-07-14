@@ -5,7 +5,7 @@ import particles
 
 
 class Bullet(object):
-    def __init__(self, level, curve, owner, damage, bullet_id=None, timer=0.0):
+    def __init__(self, level, curve, agent, damage, bullet_id=None, timer=0.0):
 
         self.bullet_type = "BULLET"
         self.level = level
@@ -22,7 +22,7 @@ class Bullet(object):
         self.curve_vector = None
         self.timer = timer
         self.index = 0
-        self.owner = owner
+        self.agent = agent
         self.speed = 0.15
         self.done = False
         self.level.artillery_bullets.append(self)
@@ -34,7 +34,7 @@ class Bullet(object):
         return self.level.scene.addObject("grenade_object", self.level.own, 0)
 
     def detonate(self):
-        command = {"label": "EXPLOSION", "effect": "DUMMY_EXPLOSION", "damage": 1, "position": self.box.worldPosition.copy(), "owner": self.owner}
+        command = {"label": "EXPLOSION", "effect": "DUMMY_EXPLOSION", "damage": 1, "position": self.box.worldPosition.copy(), "agent": self.agent}
         self.level.commands.append(command)
         self.done = True
 
@@ -66,7 +66,7 @@ class Grenade(Bullet):
     bullet_type = "GRENADE"
 
     def detonate(self):
-        command = {"label": "EXPLOSION", "effect": "DUMMY_EXPLOSION", "damage": self.damage, "position": self.box.worldPosition.copy(), "owner": self.owner}
+        command = {"label": "EXPLOSION", "effect": "DUMMY_EXPLOSION", "damage": self.damage, "position": self.box.worldPosition.copy(), "agent": self.agent}
         self.level.commands.append(command)
         self.done = True
 
@@ -75,7 +75,7 @@ class Rocket(Bullet):
     bullet_type = "ROCKET"
 
     def detonate(self):
-        command = {"label": "EXPLOSION", "effect": "DUMMY_EXPLOSION", "damage": self.damage, "position": self.box.worldPosition.copy(), "owner": self.owner}
+        command = {"label": "EXPLOSION", "effect": "DUMMY_EXPLOSION", "damage": self.damage, "position": self.box.worldPosition.copy(), "agent": self.agent}
         self.level.commands.append(command)
         self.done = True
 
@@ -84,6 +84,6 @@ class Shell(Bullet):
     bullet_type = "SHELL"
 
     def detonate(self):
-        command = {"label": "EXPLOSION", "effect": "DUMMY_EXPLOSION", "damage": self.damage, "position": self.box.worldPosition.copy(), "owner": self.owner}
+        command = {"label": "EXPLOSION", "effect": "DUMMY_EXPLOSION", "damage": self.damage, "position": self.box.worldPosition.copy(), "agent": self.agent}
         self.level.commands.append(command)
         self.done = True

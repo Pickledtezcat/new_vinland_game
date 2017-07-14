@@ -19,6 +19,9 @@ class Building(object):
         self.location = location
         self.direction = direction
         self.load_name = load_name
+        self.damage_reduction = 0.8
+        self.max_damage = 100
+        self.damage = 0
         self.box = None
         self.doors = []
         self.windows = []
@@ -88,7 +91,8 @@ class Building(object):
 
     def save(self):
         save_dict = {"load_name": self.load_name, "building_type": self.building_type, "location": self.location,
-                     "direction": self.direction, "doors": self.doors, "windows": self.windows, "occupier": self.occupier}
+                     "damage": self.damage, "direction": self.direction, "doors": self.doors, "windows": self.windows,
+                     "occupier": self.occupier}
 
         return save_dict
 
@@ -99,6 +103,7 @@ class Building(object):
         self.doors = building_dict["doors"]
         self.windows = building_dict["windows"]
         self.occupier = building_dict["occupier"]
+        self.damage = building_dict["damage"]
 
     def set_location(self):
         location = self.level.map.get(bgeutils.get_key(self.location))
