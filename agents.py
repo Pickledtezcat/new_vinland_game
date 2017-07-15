@@ -80,6 +80,7 @@ class Agent(object):
         self.debug_text = "AGENT"
 
         self.commands = []
+        self.hits = []
         self.soldiers = []
 
         self.location = location
