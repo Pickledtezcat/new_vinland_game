@@ -23,7 +23,7 @@ class Agent(object):
     turning_speed = 0.01
     # TODO set damping to match vehicle weight
 
-    damping = 0.07
+    damping = 0.05
     turret_speed = 0.01
     rank = 2
     accuracy = 6
@@ -631,6 +631,7 @@ class Vehicle(Agent):
     def load_stats(self):
         tiles = bge.logic.globalDict["profiles"][bge.logic.globalDict["active_profile"]]["vehicles"][self.load_name]
         self.stats = vehicle_stats.VehicleStats(tiles)
+        self.stats.faction_number = self.team
 
         if self.stats.chassis_size > 3:
             self.size = 2

@@ -3,10 +3,11 @@ import mathutils
 import bgeutils
 import math
 import vehicle_parts
+import time
 
 
 class VehicleModel(object):
-    def __init__(self, adder, owner, scale=1.0, cammo=7, faction_icon=None):
+    def __init__(self, adder, owner, scale=1.0, cammo=0, faction_icon=None):
 
         self.adder = adder
         self.scene = self.adder.scene
@@ -37,6 +38,8 @@ class VehicleModel(object):
 
     def build_model(self):
 
+        self.cammo = self.stats.faction_number + 1
+
         faction_icons = {1: 0,
                          2: 2,
                          3: 1,
@@ -45,9 +48,9 @@ class VehicleModel(object):
                          6: 4}
 
         if not self.faction_icon:
-            icon = faction_icons[self.stats.faction_number]
+            icon = faction_icons[self.stats.faction_number + 1]
         else:
-            icon = faction_icons[self.faction_icon]
+            icon = faction_icons[self.faction_icon + 1]
 
         color = [icon * 0.25, 0.0, self.cammo * 0.125, 1.0]
 
@@ -287,7 +290,7 @@ class VehicleModel(object):
             crew_man.setParent(crew_adder)
 
         self.hatch = None
-        commander_flags = ["COMMANDER", "COMMANDERS_CUPOLA", "NIGHT_VISION_CUPOLA"]
+        commander_flags = ["COMMANDER", "IMPROVED_COMMANDER", "NIGHT_VISION", "ADVANCED_COMMANDER"]
         has_commander = False
 
         for commander_flag in commander_flags:
@@ -331,7 +334,7 @@ class VehicleModel(object):
                 else:
                     hatch_shape = "r"
 
-                if "IMPROVED_COMMANDER" in self.stats.flags or "NIGHT_VISION" in self.stats.flags or "ADVANCED_COMMANDER" in self.stats.flags:
+                if "IMPROVED_COMMANDER" in self.stats.flags or"ADVANCED_COMMANDER" in self.stats.flags:
                     if hatch_size == "s":
                         self.open_hatch = "small_cupola"
                         self.closed_hatch = "small_cupola"
@@ -345,7 +348,7 @@ class VehicleModel(object):
                 self.hatch = hatch_adder.scene.addObject(self.open_hatch, hatch_adder, 0)
                 self.hatch.setParent(attach_point)
 
-                if "NIGHT_VISION_CUPOLA" in self.stats.flags:
+                if "NIGHT_VISION" in self.stats.flags:
                     night_scope = hatch_adder.scene.addObject("v_night_scope", hatch_adder, 0)
                     night_scope.setParent(self.hatch)
 
@@ -399,7 +402,12 @@ class VehicleModel(object):
             transform = mathutils.Matrix.Translation((speed * 0.01, 0.0, 0.0))
             mesh.transformUV(0, transform)
 
-    def preview_update(self, rotation):
+    def preview_update(self):
+
+        rotation_time = time.clock()
+
+        rotation = (rotation_time / 6.0) % 2
+        turret_rotation = (rotation_time / 12.0) % 2
 
         if self.vehicle:
             initial_transform = self.adder.worldTransform
@@ -409,7 +417,8 @@ class VehicleModel(object):
             self.vehicle.localScale = [self.scale, self.scale, self.scale]
 
             if self.turret:
-                self.turret.applyRotation([0.0, 0.0, 0.001], 1)
+                turret_matrix = mathutils.Matrix.Rotation(math.radians(360.0 * turret_rotation), 4, "Z").to_3x3()
+                self.turret.localOrientation = turret_matrix
 
             for ob in self.wheels:
                 ob.applyRotation([-0.05, 0.0, 0.0], 1)

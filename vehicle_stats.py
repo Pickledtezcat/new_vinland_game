@@ -6,7 +6,6 @@ import mathutils
 
 parts_dict = vehicle_parts.get_vehicle_parts()
 
-
 class VehicleWeapon(object):
     def __init__(self, part_key, location, weapon_location):
 
@@ -19,6 +18,7 @@ class VehicleWeapon(object):
         self.indirect = False
         self.accuracy = 10
         self.total_accuracy = 0
+        self.recoil_amount = 0.0
 
         self.name = self.part['name']
         self.rating = self.part['rating']
@@ -106,7 +106,7 @@ class VehicleWeapon(object):
         self.shots_per_ton = int(1.0 / self.ammo_drain)
         self.emitter = None
 
-    def set_rate_of_fire(self, manpower):
+    def set_rate_of_fire(self, manpower, vehicle_weight):
 
         required_manpower = self.weight + 2
         rate_of_fire = manpower / required_manpower
@@ -144,6 +144,8 @@ class VehicleWeapon(object):
             self.bullet = "ROCKET"
         else:
             self.bullet = "SHELL"
+
+        self.recoil_amount = min(0.025, ((self.rating * self.rating) / vehicle_weight) * 0.01)
 
     def set_emitter(self, emitter):
         self.emitter = emitter
@@ -229,7 +231,7 @@ class VehicleWeapon(object):
                     self.timer = 0.0
                     self.agent.ammo -= self.ammo_drain
                     recoil_vector = mathutils.Vector([0.0, -1.0, 0.0])
-                    recoil_vector.length = self.rating * 0.01
+                    recoil_vector.length = self.recoil_amount
                     # TODO set realistic recoil value based on vehicle weight and weapon power
 
                     if self.weapon_location == "TURRET":
@@ -255,8 +257,9 @@ class VehicleWeapon(object):
                 self.timer = 0.0
                 self.agent.ammo -= self.ammo_drain
                 recoil_vector = mathutils.Vector([0.0, -1.0, 0.0])
-                recoil_vector.length = self.rating * 0.01
-                # TODO set realistic recoil value based on vehicle weight and weapon power
+                recoil_vector.length = self.recoil_amount
+
+                print(round(self.recoil_amount, 4), self.name)
 
                 if self.weapon_location == "TURRET":
                     recoil_vector.rotate(self.agent.model.turret.localOrientation)
@@ -271,7 +274,7 @@ class InstalledPart(object):
     def __init__(self, part_key, location, weapon_location):
         part = parts_dict[part_key]
         self.part_key = part_key
-        self.weight = part["x_size"] * part["y_size"]
+        self.weight = (part["x_size"] * part["y_size"]) * 0.5
         self.rating = part["rating"]
         self.level = part["level"]
         self.item_type = part["part_type"]
@@ -405,7 +408,7 @@ class VehicleStats(object):
             weight = item.weight
             location = item.location
 
-            for i in range(weight):
+            for i in range(int(weight)):
                 self.crits[location].append(item_type)
 
             if item_type == "CREW":
@@ -491,7 +494,7 @@ class VehicleStats(object):
             divided_manpower = self.manpower[location_key] / max(1.0, number)
 
             for index in location_group:
-                self.weapons[index].set_rate_of_fire(divided_manpower)
+                self.weapons[index].set_rate_of_fire(divided_manpower, self.weight)
 
     def get_carriage_movement(self):
 

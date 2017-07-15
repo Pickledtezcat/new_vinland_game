@@ -43,7 +43,6 @@ class VisionPaint(object):
 
         tex = bge.texture.Texture(self.ground, 0, 0)
         tex.source = bge.texture.ImageBuff(color=0)
-
         tex.source.load(b'\x00\x00\x00' * (canvas_size * canvas_size), canvas_size, canvas_size)
 
         return tex

@@ -65,6 +65,7 @@ class GameLoop(object):
         self.game_input = game_input.GameInput()
         self.level = None
         self.assets_loaded = False
+        self.white_canvas = None
 
         bgeutils.load_settings()
         self.set_level()
@@ -80,8 +81,13 @@ class GameLoop(object):
     def debugger_update(self):
         self.debugger.update()
 
-    def set_mode(self):
+    def unload_white_canvas(self):
+        try:
+            del self.white_canvas
+        except:
+            print("problem with white canvas")
 
+    def set_mode(self):
         next_menu_mode = "Menu" in bge.logic.globalDict["next_level"]
         current_menu_mode = bge.logic.globalDict["game_mode"] == "MENU_MODE"
 

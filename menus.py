@@ -359,9 +359,15 @@ class Widget(object):
         for command in self.commands:
 
             if command.header == "EXIT":
+                self.menu.manager.unload_white_canvas()
                 bge.logic.endGame()
 
             if command.header == "NEW_LEVEL":
+                # TODO unload white canvas when joining a game
+
+                if command.content == "Level":
+                    self.menu.manager.unload_white_canvas()
+
                 self.menu.new_level = command.content
 
         self.commands = []
@@ -1014,7 +1020,6 @@ class StatDisplayWidget(Widget):
         self.header_text = stats
 
         super().__init__(menu, adder)
-        self.rotation = 0.0
         self.model = model_display.VehicleModel(self.menu.adders[7], self, 0.5)
 
     def end_widget(self):
@@ -1025,11 +1030,7 @@ class StatDisplayWidget(Widget):
         self.model.end_vehicle()
 
     def update_display(self):
-        if self.rotation >= 1.0:
-            self.rotation = 0.0
-        self.rotation += 0.002
-        self.model.preview_update(self.rotation)
-
+        self.model.preview_update()
 
 # menus
 
@@ -1047,6 +1048,7 @@ class Menu(object):
         self.tool_tip_text = ""
         self.user_interface = user_interface.MenuInterface(self)
         self.commands = []
+        self.white_canvas = None
 
         widget_adders = bgeutils.get_ob_list("widget_adder", self.level_object.children)
         self.adders = sorted(widget_adders, key=lambda adder: adder.get("widget_adder"))
@@ -1074,8 +1076,22 @@ class Menu(object):
         self.loading_progress += 1
         return loaded
 
+    def set_white_canvas(self):
+        texture = "vin_vehicles_texture"
+        texture_object = self.scene.addObject(texture, self.manager.own, 0)
+        texture_object.worldPosition.y += 120
+        material_id = bge.texture.materialID(texture_object, "MAvin_vehicles_texture_mat")
+
+        self.manager.white_canvas = bge.texture.Texture(texture_object, material_id)
+        path = bge.logic.expandPath("//textures//white_canvas.png")
+        tex = bge.texture.ImageFFmpeg(path)
+
+        self.manager.white_canvas.source = tex
+        self.manager.white_canvas.refresh(False)
+
     def load(self):
         if self.check_loaded():
+            self.set_white_canvas()
             self.activate()
             self.loaded = True
         else:
@@ -1118,6 +1134,8 @@ class Menu(object):
         return target_ray
 
     def update(self):
+        #self.manager.white_canvas.refresh(False)
+
         for widget in self.widgets:
             widget.update_display()
 

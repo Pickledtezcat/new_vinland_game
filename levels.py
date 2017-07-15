@@ -13,6 +13,7 @@ import map_generation
 import bullets
 import builder_tools
 
+
 class MovementMarker(object):
     def __init__(self, level, owner, position, offset):
         self.level = level
@@ -382,7 +383,7 @@ class Level(object):
         return True
 
     def load_infantry_textures(self):
-        texture_list = ["hre_summer_texture", "vin_summer_texture"]
+        texture_list = ["hre_summer_texture", "vin_summer_texture", "vin_vehicles_texture"]
         for texture in texture_list:
             owner = self.scene.addObject(texture, self.own, 0)
             owner.worldPosition.z = 300
@@ -508,7 +509,14 @@ class Level(object):
             for v in range(len(vehicle_keys)):
                 # TODO set agent type based on vehicle
                 vehicle = vehicles[vehicle_keys[v]]
-                agents.Vehicle(self, vehicle_keys[v], [35 + (10 * v), 50], random.choice([0, 1]))
+
+                team = random.choice([0, 1])
+                if team == 0:
+                    y = 50
+                else:
+                    y = 15
+
+                agents.Vehicle(self, vehicle_keys[v], [35 + (10 * v), y], team)
 
         for enemy in range(5):
             agents.Infantry(self, random.choice(infantry), [35 + (10 * enemy), 25], 1)
@@ -817,7 +825,6 @@ class Level(object):
                 command = {"label": "EXPLOSION", "effect": "DUMMY_EXPLOSION", "damage": weapon.power,
                            "position": target_position, "agent": agent}
                 self.commands.append(command)
-                particles.RedBulletFlash(self, weapon.emitter)
 
             else:
                 # TODO handle vehicle vs vehicle shooting
@@ -844,7 +851,19 @@ class Level(object):
                         sector = sector[1]
                         command = {"label": "HIT", "sector": sector, "weapon": weapon, "agent": agent}
                         target.hits.append(command)
-                particles.RedBulletFlash(self, weapon.emitter)
+
+            rapid = ["QUICK", "RAPID"]
+
+            instances = 1
+            delay = 8
+            if weapon.flag in rapid:
+                if weapon.flag == "RAPID":
+                    delay = 4
+
+                instances = 3
+
+            for i in range(instances):
+                particles.RedBulletFlash(self, weapon.emitter, delay=delay * i)
 
     def shoot_artillery(self, command):
 
