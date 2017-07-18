@@ -137,7 +137,7 @@ class VehicleModel(object):
 
         if turret_size > 0:
 
-            if "AA_MOUNT" in self.stats.flags:
+            if "ANTI_AIRCRAFT" in self.stats.flags:
                 turret_number = 1
 
             elif self.stats.open_top:
@@ -145,12 +145,6 @@ class VehicleModel(object):
                     turret_number = 3
                 else:
                     turret_number = 2
-
-            elif "SLOPED" in self.stats.flags:
-                if min_armor > armor_threshold:
-                    turret_number = 9
-                else:
-                    turret_number = 8
 
             elif "SLOPED" in self.stats.flags:
                 if min_armor > armor_threshold:
@@ -171,7 +165,7 @@ class VehicleModel(object):
                     turret_number = 4
 
             antenna = 0
-            if "ANTENNA" in self.stats.flags:
+            if "DIVISIONAL_RADIO" in self.stats.flags:
                 antenna = 1
 
             turret_string = "v_turret_{}_{}_{}".format(turret_number, turret_size - 1, antenna)
@@ -186,7 +180,7 @@ class VehicleModel(object):
         else:
             self.turret_rest = None
 
-        weapon_locations =["TURRET", "FRONT", "LEFT", "RIGHT", "BACK"]
+        weapon_locations = ["TURRET", "FRONT", "LEFT", "RIGHT", "BACK"]
         weapon_dict = {weapon_location: [w for w in self.stats.weapons if w.weapon_location == weapon_location] for weapon_location in weapon_locations}
 
         self.gun_adders = {}
@@ -216,18 +210,22 @@ class VehicleModel(object):
                     self.gun_block_rest = self.gun_block.localTransform
                     self.get_adders("turret_gun", parent=ot_adder, parent_key="mount_gun")
 
-            if "SPONSON" in self.stats.flags:
+            if "GUN_SPONSON" in self.stats.flags:
                 sponson_locations = [("FRONT", "front_gun"), ("LEFT", "left_gun"), ("RIGHT", "right_gun"),
                                      ("BACK", "back_gun")]
 
-                for sponson_location in sponson_locations:
+                for s in range(len(sponson_locations)):
+                    sponson_location = sponson_locations[s]
                     adder_key = sponson_location[1]
                     weapon_key = sponson_location[0]
-                    if len(self.stats.weapons[weapon_key]) > 0:
+                    if len(weapon_dict[weapon_key]) > 0:
                         c_adder = self.gun_adders[adder_key][0]
                         mantlet_string = "v_mantlet_{}_{}".format(3, chassis_size)
                         mantlet = c_adder.scene.addObject(mantlet_string, c_adder, 0)
                         mantlet.setParent(c_adder)
+                        if s == 0:
+                            self.gun_block = mantlet
+                            self.gun_block_rest = self.gun_block.localTransform
                         self.get_adders(adder_key, parent=c_adder, parent_key="sponson_gun")
 
             if "MANTLET" in self.stats.flags and turret_size > 0:
@@ -235,6 +233,9 @@ class VehicleModel(object):
                 mantlet_string = "v_mantlet_{}_{}".format(gun_faction, turret_size - 1)
                 mantlet = t_adder.scene.addObject(mantlet_string, t_adder, 0)
                 mantlet.setParent(t_adder)
+                if not self.gun_block:
+                    self.gun_block = mantlet
+                    self.gun_block_rest = self.gun_block.localTransform
                 self.get_adders("turret_gun", parent=t_adder, parent_key="mount_gun")
 
             sections = [("FRONT", "front_gun"), ("LEFT", "left_gun"), ("RIGHT", "right_gun"), ("BACK", "back_gun"),
@@ -270,11 +271,6 @@ class VehicleModel(object):
                             gun_emitter = bgeutils.get_ob("shooter", gun.children)
                             weapon.set_emitter(gun_emitter)
                             gun.setParent(w_adder)
-
-                            # if location == "TURRET":
-                            #     gun.setParent(self.turret)
-                            # else:
-                            #     gun.setParent(self.vehicle)
                         else:
                             weapon = weapons[i]
                             weapon.set_emitter(gun_emitter)
@@ -352,9 +348,17 @@ class VehicleModel(object):
                     night_scope = hatch_adder.scene.addObject("v_night_scope", hatch_adder, 0)
                     night_scope.setParent(self.hatch)
 
+        rocket_emitters = []
+
         self.vehicle.color = color
         for ob in self.vehicle.childrenRecursive:
             ob.color = color
+            if "rocket_launch" in ob:
+                rocket_emitters.append(ob)
+
+        for weapon in self.stats.weapons:
+            if weapon.flag == "ROCKETS":
+                weapon.set_rocket_emitters(rocket_emitters)
 
         self.vehicle.localScale *= self.scale
 

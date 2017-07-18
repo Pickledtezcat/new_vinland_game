@@ -48,8 +48,8 @@ class Bullet(object):
         if occupied:
             hit_target = self.level.agents[occupied]
             if hit_target.agent_type != "INFANTRY":
-                command = {"label": "HIT", "sector": "TOP", "weapon": self.weapon, "agent": self.agent}
-                hit_target.hits.append(command)
+                hit = {"label": "HIT", "sector": "TOP", "origin": target, "weapon": self.weapon, "agent": self.agent}
+                hit_target.hits.append(hit)
 
     def update(self):
         curve_length = len(self.curve)

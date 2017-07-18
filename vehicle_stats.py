@@ -6,8 +6,11 @@ import mathutils
 
 parts_dict = vehicle_parts.get_vehicle_parts()
 
+
 class VehicleWeapon(object):
-    def __init__(self, part_key, location, weapon_location):
+    def __init__(self, stats, part_key, location, weapon_location):
+
+        self.stats = stats
 
         part = parts_dict[part_key]
         self.agent = None
@@ -22,7 +25,7 @@ class VehicleWeapon(object):
 
         self.name = self.part['name']
         self.rating = self.part['rating']
-        self.power = self.rating + 1
+        self.power = max(1.0, self.rating)
         self.penetration = self.rating
         self.effective_range = 0.0
         self.weight = self.part["x_size"] * self.part["y_size"]
@@ -73,23 +76,30 @@ class VehicleWeapon(object):
 
         if self.flag in rockets:
             self.indirect = True
-            self.penetration = int(self.penetration * 0.5)
+            self.penetration = int(self.penetration * 1.0)
             self.accuracy = 1
 
         if self.flag == "PRIMITIVE_GUN":
-            self.penetration = int(self.penetration * 0.8)
+            self.penetration = int(self.penetration * 1.4)
             self.accuracy = 8
 
         if self.flag == "IMPROVED_GUN":
-            self.penetration = int(self.penetration * 1.5)
+            self.penetration = int(self.penetration * 2.0)
             self.accuracy = 12
 
         if self.flag == "ADVANCED_GUN":
-            self.penetration = int(self.penetration * 2.0)
+            self.penetration = int(self.penetration * 3.0)
             self.accuracy = 24
 
+        else:
+            self.penetration = int(self.penetration * 1.5)
+
+        direct_power = self.power * 5.0
+        explosive_power = (self.power * self.power) * 0.5
+
+        self.power = direct_power + explosive_power
+
         self.accuracy += self.rating
-        self.power *= 10
         self.penetration *= 10
 
         self.visual = size
@@ -105,9 +115,14 @@ class VehicleWeapon(object):
 
         self.shots_per_ton = int(1.0 / self.ammo_drain)
         self.emitter = None
+        self.rocket_emitters = []
 
-    def set_rate_of_fire(self, manpower, vehicle_weight):
+    def set_rocket_emitters(self, emitters):
+        self.rocket_emitters = emitters
 
+    def set_rate_of_fire(self, manpower):
+
+        vehicle_weight = self.stats.weight
         required_manpower = self.weight + 2
         rate_of_fire = manpower / required_manpower
         rate_of_fire = min(2.0, rate_of_fire)
@@ -200,7 +215,7 @@ class VehicleWeapon(object):
             if self.agent.agent_targeter.hull_on_target > 45.0:
                 return False
 
-        armor_facing = target.get_attack_facing(self.agent)
+        armor_facing = target.get_attack_facing(self.agent.box.worldPosition.copy())
         if armor_facing:
             has_turret, facing, armor = armor_facing
 
@@ -224,7 +239,13 @@ class VehicleWeapon(object):
 
             if self.indirect:
                 if target_distance < 32.0:
-                    command = {"label": "ARTILLERY", "agent": self.agent, "weapon": self, "hook": self.emitter}
+
+                    if self.flag == "ROCKETS":
+                        hook = random.choice(self.rocket_emitters)
+                    else:
+                        hook = self.emitter
+
+                    command = {"label": "ARTILLERY", "agent": self.agent, "weapon": self, "hook": hook}
 
                     self.agent.level.commands.append(command)
 
@@ -242,7 +263,7 @@ class VehicleWeapon(object):
 
             elif target_distance < 18.0:
 
-                origin = self.emitter
+                origin = self.emitter.worldPosition.copy()
 
                 if self.rating < 3:
                     label = "SMALL_ARMS"
@@ -327,7 +348,7 @@ class VehicleStats(object):
         self.flags = []
         self.armor = dict(TURRET=0, FRONT=0, FLANKS=0)
         self.manpower = dict(TURRET=0, FRONT=0, FLANKS=0)
-        self.crits = dict(TURRET=[], FRONT=[], FLANKS=[])
+        self.crits = dict(TURRET=["EMPTY"], FRONT=["EMPTY"], FLANKS=["EMPTY"])
         self.weapons = []
         self.durability = 0
         self.armored = False
@@ -389,7 +410,7 @@ class VehicleStats(object):
 
                         cost = ((5 + item.level) * 20) * item.weight
                         self.cost += cost
-                        weapon = VehicleWeapon(item.part_key, item.location, item.weapon_location)
+                        weapon = VehicleWeapon(self, item.part_key, item.location, item.weapon_location)
                         if weapon.indirect:
                             self.artillery = True
                         self.weapons.append(weapon)
@@ -454,10 +475,7 @@ class VehicleStats(object):
 
                 self.cost += ((5 + level) * 15) * weight
 
-                spalling = ["CAST", "RIVETED", "THIN"]
-                if flag in spalling:
-                    for s in range(int(weight)):
-                        self.crits[location].append("SPALLING")
+                # TODO add spalling to damage model
 
             else:
                 self.weight += weight
@@ -474,6 +492,46 @@ class VehicleStats(object):
 
                 # TODO handle other flags, handle reliability, turret speed etc...
 
+        self.reliability = 0
+        reliability_flags = []
+
+        for flag in self.flags:
+            if flag not in reliability_flags:
+                if flag == "UNRELIABLE_PARTS":
+                    self.reliability -= 1
+                if flag == "RELIABLE":
+                    self.reliability += 1
+                if flag == "UNRELIABLE":
+                    self.reliability -= 1
+                if flag == "TRACKED":
+                    self.reliability -= 1
+                if flag == "PROTOTYPE":
+                    self.reliability -= 2
+                if flag == "FILTERS":
+                    # TODO compare local conditions with reliability parts
+                    self.reliability += 1
+                if flag == "COOLING":
+                    self.reliability += 1
+                if flag == "EXTRA_RELIABILITY":
+                    self.reliability += 1
+                if flag == "HEATER":
+                    self.reliability += 1
+                if flag == "HYDRAULIC":
+                    self.reliability -= 1
+                if flag == "MECHANIC":
+                    self.reliability += 2
+                if flag == "FLAME_THROWER":
+                    self.reliability -= 1
+                if flag == "CAST":
+                    self.reliability -= 1
+                if flag == "COMPOSITE":
+                    self.reliability -= 1
+                if flag == "RIVETED":
+                    self.reliability -= 1
+                if flag == "EXTRA_FUEL":
+                    self.reliability += 2
+
+        self.durability *= 10.0
         self.get_weapons()
 
         if self.vehicle_type == "GUN_CARRIAGE":
@@ -494,7 +552,7 @@ class VehicleStats(object):
             divided_manpower = self.manpower[location_key] / max(1.0, number)
 
             for index in location_group:
-                self.weapons[index].set_rate_of_fire(divided_manpower, self.weight)
+                self.weapons[index].set_rate_of_fire(divided_manpower)
 
     def get_carriage_movement(self):
 

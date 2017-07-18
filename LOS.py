@@ -19,7 +19,7 @@ class VisionPaint(object):
 
         self.non_brush_dict = {}
         for i in range(3, 8):
-            outer = max(19, 6 * i)
+            outer = 6
             self.non_brush_dict[i] = bgeutils.create_brush(self.brush_size, 0, [0, 0, 255], outer=outer, smooth=True)
 
         self.player_pixel = bgeutils.create_brush(1, 1, [0, 255, 0])

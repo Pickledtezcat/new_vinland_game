@@ -168,16 +168,19 @@ class StatusBar(object):
             for soldier in self.agent.soldiers:
                 health += max(0, soldier.toughness)
 
-            if initial_health > 0:
-                health_ratio = health / self.agent.initial_health
-                self.health_bar.localScale.x = health_ratio
+        else:
+            health = self.agent.health
 
-                if health_ratio < 0.1:
-                    self.health_bar.color = self.red
-                elif health_ratio < 0.5:
-                    self.health_bar.color = self.yellow
-                else:
-                    self.health_bar.color = self.green
+        if initial_health > 0:
+            health_ratio = health / self.agent.initial_health
+            self.health_bar.localScale.x = health_ratio
+
+            if health_ratio < 0.1:
+                self.health_bar.color = self.red
+            elif health_ratio < 0.5:
+                self.health_bar.color = self.yellow
+            else:
+                self.health_bar.color = self.green
 
         shock_ratio = bgeutils.map_value(0.0, 50.0, self.agent.shock)
         self.shock_bar.localScale.x = min(1.0, shock_ratio)

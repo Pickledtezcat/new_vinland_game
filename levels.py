@@ -779,11 +779,8 @@ class Level(object):
                 to_hit = (effective_range / target_distance) * 0.25
                 target_hit = to_hit > random.uniform(0.0, 1.0)
                 if target_hit:
-                    sector = target.get_attack_facing(agent)
-                    if sector:
-                        sector = sector[1]
-                        command = {"label": "HIT", "sector": sector, "weapon": weapon, "agent": agent}
-                        target.hits.append(command)
+                    hit = {"label": "HIT", "origin": origin, "sector": None, "weapon": weapon, "agent": agent}
+                    target.hits.append(hit)
 
             if agent.agent_type == "INFANTRY":
                 particles.InfantryBullet(self, target_position, weapon, origin)
@@ -846,11 +843,8 @@ class Level(object):
 
                     self.commands.append(command)
                 else:
-                    sector = target.get_attack_facing(agent)
-                    if sector:
-                        sector = sector[1]
-                        command = {"label": "HIT", "sector": sector, "weapon": weapon, "agent": agent}
-                        target.hits.append(command)
+                    hit = {"label": "HIT", "sector": None, "origin": origin, "weapon": weapon, "agent": agent}
+                    target.hits.append(hit)
 
             rapid = ["QUICK", "RAPID"]
 
@@ -884,7 +878,6 @@ class Level(object):
             accuracy = weapon.total_accuracy
             bullet = weapon.bullet
             effect = weapon.effect
-            damage = weapon.power
 
             if closest_soldier:
                 target_position = closest_soldier.box.worldPosition.copy()
@@ -962,11 +955,11 @@ class Level(object):
                         if tile:
                             occupant = tile["occupied"]
                             if occupant:
-                                agent = self.agents.get(occupant)
+                                target_agent = self.agents.get(occupant)
 
-                                if agent:
-                                    if agent.agent_type == "INFANTRY":
-                                        soldier_list = [soldier for soldier in agent.soldiers if soldier.location == explosion_key]
+                                if target_agent:
+                                    if target_agent.agent_type == "INFANTRY":
+                                        soldier_list = [soldier for soldier in target_agent.soldiers if soldier.location == explosion_key]
                                         if soldier_list:
                                             soldier = soldier_list[0]
                                             if soldier.behavior.prone:
@@ -978,11 +971,11 @@ class Level(object):
                                                 effective_damage = int(effective_damage * 0.5)
 
                                             soldier.toughness -= effective_damage
-                                            agent.shock += shock
+                                            target_agent.shock += shock
                                     else:
-                                        command = {"label": "SPLASH_DAMAGE", "origin": position, "damage": effective_damage,
-                                                   "agent": agent}
-                                        agent.hits.append(command)
+                                        hit = {"label": "SPLASH_DAMAGE", "sector": None, "damage": effective_damage,
+                                                   "origin": position, "agent": agent}
+                                        target_agent.hits.append(hit)
                                     # TODO handle vehicles using effective damage
 
     def process_commands(self):
@@ -1053,34 +1046,46 @@ class Level(object):
                                 enemy = self.agents[enemy_key]
 
                                 if enemy.team != 0:
-                                    if enemy_key not in seen_agents:
+                                    if not knocked_out:
+                                        if enemy_key not in seen_agents:
+                                            closest_soldier, target_vector = enemy.get_target(agent)
+                                            enemy_distance = target_vector.length
 
-                                        closest_soldier, target_vector = enemy.get_target(agent)
-                                        enemy_distance = target_vector.length
+                                            if enemy_distance <= max_distance:
+                                                seen_agents.append(enemy_key)
+                                                enemy.set_seen(True)
+                                                visibility_dict[enemy_key] = {"enemy": True, "distance": 0,
+                                                                              "location": enemy.location, "knocked_out": knocked_out}
 
-                                        if enemy_distance <= max_distance:
-                                            seen_agents.append(enemy_key)
-                                            enemy.set_seen(True)
-                                            visibility_dict[enemy_key] = {"enemy": True, "distance": 0,
-                                                                          "location": enemy.location, "knocked_out": knocked_out}
-
-                                        elif enemy_distance < suspect_distance:
-                                            enemy.set_suspect(True)
+                                            elif enemy_distance < suspect_distance:
+                                                enemy.set_suspect(True)
 
                         else:
                             for player_key in self.agents:
                                 player = self.agents[player_key]
 
                                 if player.team == 0:
-                                    if player_key not in seen_agents:
-                                        closest_soldier, target_vector = player.get_target(agent)
-                                        player_distance = target_vector.length
+                                    if not knocked_out:
+                                        if player_key not in seen_agents:
+                                            closest_soldier, target_vector = player.get_target(agent)
+                                            player_distance = target_vector.length
 
-                                        if player_distance <= max_distance:
-                                            seen_agents.append(player_key)
-                                            player.set_seen(True)
-                                        elif player_distance < suspect_distance:
-                                            player.set_suspect(True)
+                                            if player_distance <= max_distance:
+                                                seen_agents.append(player_key)
+                                                player.set_seen(True)
+                                            elif player_distance < suspect_distance:
+                                                player.set_suspect(True)
+
+                    else:
+                        is_enemy = agent.team != 0
+                        if not is_enemy:
+                            visibility_distance = 3
+                            agent.get_center()
+                            position = agent.center.copy()
+                            location = bgeutils.position_to_location(position)
+
+                            visibility_dict[agent_key] = {"enemy": is_enemy, "distance": visibility_distance,
+                                                          "location": location, "knocked_out": True}
 
                 self.LOS.do_paint(visibility_dict)
 

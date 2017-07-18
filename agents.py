@@ -58,6 +58,7 @@ class Agent(object):
 
         self.dead = False
         self.knocked_out = False
+        self.on_fire = False
         self.ended = False
         self.visible = True
         self.seen = False
@@ -67,6 +68,7 @@ class Agent(object):
 
         self.stats = None
         self.health = 0
+        self.mechanical_damage = 0
         self.load_stats()
 
         self.model = None
@@ -152,6 +154,7 @@ class Agent(object):
         save_dict = {"agent_type": self.agent_type, "team": self.team, "location": self.location, "dead": self.dead,
                      "knocked_out": self.knocked_out, "rank": self.rank, "shock": self.shock, "health": self.health,
                      "direction": self.direction, "enter_building": self.enter_building,
+                     "mechanical_damage": self.mechanical_damage, "on_fire": self.on_fire,
                      "selected": self.selected, "state_name": self.state.name, "load_name": self.load_name,
                      "state_count": self.state.count, "movement_target": self.movement.target,
                      "movement_target_direction": self.movement.target_direction, "weapons": weapons,
@@ -173,9 +176,11 @@ class Agent(object):
         self.load_name = agent_dict["load_name"]
         self.dead = agent_dict["dead"]
         self.knocked_out = agent_dict["knocked_out"]
+        self.on_fire = agent_dict["on_fire"]
         self.rank = agent_dict["rank"]
         self.shock = agent_dict["shock"]
         self.health = agent_dict["health"]
+        self.mechanical_damage = agent_dict["mechanical_damage"]
         self.ammo = agent_dict["ammo"]
         self.deployed = agent_dict["deployed"]
 
@@ -327,7 +332,7 @@ class Agent(object):
         self.speed = self.max_speed * self.throttle
         self.turning_speed = self.handling * self.throttle
 
-    def get_attack_facing(self, other_agent):
+    def get_attack_facing(self, other_agent_position):
         return False
 
     def set_position(self):
@@ -647,23 +652,23 @@ class Vehicle(Agent):
         self.set_stats()
         self.set_speed()
 
-    def attack_facing(self, other_agent):
+    def attack_facing(self, other_agent_position):
 
         local_y = self.movement_hook.getAxisVect([0.0, 1.0, 0.0])
-        target_vector = self.box.worldPosition.copy() - other_agent.box.worldPosition.copy()
+        target_vector = self.box.worldPosition.copy() - other_agent_position
         if target_vector.length == 0.0:
-            target_vector = other_agent.movement_hook.getAxisVect([0.0, 1.0, 0.0])
+            target_vector = mathutils.Vector([0.0, 1.0, 0.0])
 
         angle = local_y.angle(target_vector)
         return angle
 
-    def get_attack_facing(self, other_agent):
+    def get_attack_facing(self, other_agent_position):
 
         has_turret = False
         if self.stats.turret_size > 0:
             has_turret = True
 
-        angle = self.attack_facing(other_agent)
+        angle = self.attack_facing(other_agent_position)
         facing = "FLANKS"
         if math.degrees(angle) > 90:
             facing = "FRONT"
@@ -690,6 +695,24 @@ class Vehicle(Agent):
         self.max_speed = self.stats.speed[speed_index] * 0.001
         self.handling = self.stats.handling[speed_index] * 0.001
         self.turret_speed = self.stats.turret_speed * 0.001
+
+        if self.shock > 40:
+            self.max_speed *= 0.5
+            self.handling *= 0.5
+
+        elif self.shock > 20:
+            self.max_speed *= 0.75
+            self.handling *= 0.75
+
+        if self.mechanical_damage > 0:
+            if self.mechanical_damage < self.stats.reliability:
+                for d in range(self.mechanical_damage):
+                    self.max_speed *= 0.75
+                    self.handling *= 0.75
+            else:
+                self.max_speed = 0.0
+                self.handling = 0.0
+
         self.get_best_penetration()
 
     def handle_weapons(self):
@@ -715,26 +738,36 @@ class Vehicle(Agent):
         # TODO set some stats to update on move
 
         if not self.dead:
-            if self.on_screen:
-                if self.ammo <= 0.0:
-                    self.has_ammo = -1
-                elif self.ammo < 0.25:
-                    self.has_ammo = 0
-                else:
-                    self.has_ammo = 1
-
-                self.is_sentry = False
-                if self.stats.has_commander:
-                    if self.stance == "SENTRY":
-                        self.is_sentry = True
-
-                        # is_damaged = -1
-                        # is_carrying = False
-
-                        # is_sentry = False
-                        # is_shocked = False
+            self.is_damaged = -1
+            self.has_ammo = 1
+            self.is_shocked = -1
+            self.is_sentry = False
+            self.is_carrying = False
+            # is_carrying = False
 
             if not self.knocked_out:
+                if self.on_screen:
+                    if self.ammo <= 0.0:
+                        self.has_ammo = -1
+                    elif self.ammo < 0.25:
+                        self.has_ammo = 0
+
+                    if self.shock > 40:
+                        self.is_shocked = 1
+                    elif self.shock > 20:
+                        self.is_shocked = 0
+
+                    if self.stats.has_commander:
+                        if self.stance == "SENTRY":
+                            self.is_sentry = True
+
+                    self.is_damaged = -1
+                    if self.mechanical_damage > 0:
+                        if self.mechanical_damage < self.stats.reliability:
+                            self.is_damaged = 1
+                        else:
+                            self.is_damaged = 0
+
                 self.process_commands()
                 return
 
@@ -746,7 +779,181 @@ class Vehicle(Agent):
         self.selected = False
         return
 
+    def process_hits(self):
+
+        hits = self.hits
+
+        # command = {"label": "HIT", "sector": sector, "weapon": weapon, "agent": agent}
+
+        # command = {"label": "SPLASH_DAMAGE", "sector": None, "damage": effective_damage,
+        #            "agent": agent}
+        # command = {"label": "HIT", "sector": sector, "weapon": weapon, "agent": agent}
+
+        sectors = ["BOTTOM", "TOP", "FRONT", "FLANKS", "TURRET"]
+
+        for hit in hits:
+            label = hit["label"]
+            # TODO give XP to killing agent
+
+            enemy_agent = hit["agent"]
+            sector = hit["sector"]
+            origin = hit["origin"]
+
+            if label == "SPLASH_DAMAGE":
+                damage = hit["damage"]
+                penetration = damage * 0.5
+            else:
+                weapon = hit["weapon"]
+                damage = weapon.power
+                penetration = weapon.penetration
+
+            fire_chance = 0.0
+            explosion_chance = 0.0
+            damage_chance = 0.0
+            knockout_chance = 0
+
+            hit_angle = self.attack_facing(origin)
+            facing = "FLANKS"
+            if math.degrees(hit_angle) > 90:
+                facing = "FRONT"
+
+            hit_locations = []
+            for t in range(self.stats.turret_size):
+                hit_locations.append("TURRET")
+            for c in range(self.stats.chassis_size):
+                hit_locations.append(facing)
+
+            hit_location = random.choice(hit_locations)
+
+            critical_location = random.choice(self.stats.crits[hit_location])
+            armor_value = self.stats.armor[hit_location]
+
+            if "WEAK_SPOT" in self.stats.flags:
+                if random.randint(0, 10) > 9:
+                    armor_value *= 0.5
+
+            if critical_location == "DRIVE":
+                armor_value *= 0.5
+                damage_chance -= (self.stats.reliability * 0.05)
+
+            if critical_location == "ENGINE":
+                damage_chance -= (self.stats.reliability * 0.1)
+                fire_chance -= (self.stats.reliability * 0.1)
+                explosion_chance -= (self.stats.reliability * 0.05)
+
+            if critical_location == "WEAPON":
+                if "MANTLET" not in self.stats.flags:
+                    armor_value *= 0.5
+
+                fire_chance -= (self.stats.reliability * 0.1)
+                explosion_chance -= (self.stats.reliability * 0.05)
+
+            if critical_location == "CREW":
+                knockout_chance = 1
+
+            if critical_location == "UTILITY":
+                explosion_chance += (self.ammo * 0.05)
+                if "EXTRA_FUEL" in self.stats.flags:
+                    fire_chance += 0.1
+
+            if critical_location == "ARMOR":
+                armor_value *= 2.0
+
+            if critical_location == "EMPTY":
+                armor_value *= 2.0
+
+            attack_vector = self.center.copy() - origin
+            attack_distance = attack_vector.length
+
+            penetration -= (attack_distance * 0.5)
+            penetration *= random.uniform(0.5, 1.0)
+
+            if sector == "TOP":
+                if "OPEN_TOP" in self.stats.flags:
+                    armor_value = 0.0
+                else:
+                    if self.stance == "SENTRY":
+                        if "COMMANDER" in self.stats.flags:
+                            crew_damage = int(damage * 0.1)
+                            if crew_damage > 0:
+                                if random.randint(0, crew_damage) > self.stats.crew:
+                                    self.knocked_out = True
+
+                    if "EXTRA_PLATES" in self.stats.flags:
+                        armor_value *= 0.5
+                    else:
+                        armor_value *= 0.25
+
+            if sector == "BOTTOM":
+                damage_chance += 0.2
+                if "EXTRA_PLATES" in self.stats.flags:
+                    armor_value *= 0.5
+                else:
+                    armor_value *= 0.25
+
+            penetrated = penetration > armor_value
+
+            if penetrated:
+                self.health -= damage
+                self.shock += damage
+
+                critical_hits = ["NONE", "DAMAGE", "FIRE", "EXPLOSION"]
+                critical_hit = random.choice(critical_hits)
+
+                if critical_hit != "NONE":
+                    if "EXTRA_SAFTEY" in self.stats.flags:
+                        fire_chance *= 0.5
+                        explosion_chance *= 0.5
+                        damage_chance *= 0.5
+
+                    if "DANGEROUS_DESIGN" in self.stats.flags:
+                        fire_chance *= 2.0
+                        explosion_chance *= 2.0
+                        damage_chance *= 2.0
+
+                    if critical_hit == "FIRE":
+                        if random.uniform(0.0, 1.0) < fire_chance:
+                            self.knocked_out = True
+                            self.on_fire = True
+
+                    if critical_hit == "DAMAGE":
+                        if random.uniform(0.0, 1.0) < damage_chance:
+                            self.mechanical_damage += random.randint(0, 3)
+
+                    if critical_hit == "EXPLOSION":
+                        if random.uniform(0.0, 1.0) < explosion_chance:
+                            self.vehicle_explode()
+
+                    if knockout_chance > 0:
+                        crew_damage = int(damage * 0.1)
+                        if crew_damage > 0:
+                            if random.randint(0, crew_damage) > self.stats.crew:
+                                self.knocked_out = True
+
+        if self.health < 0:
+            self.dead = True
+            if random.uniform(0.0, 6.0) < self.ammo:
+                self.vehicle_explode()
+
+        self.hits = []
+
+    def handle_on_fire(self):
+        if self.on_fire:
+            print("{} is on fire!".format(self.agent_id))
+
+    def vehicle_explode(self):
+        if not self.dead:
+
+            command = {"label": "EXPLOSION", "effect": "DUMMY_EXPLOSION", "damage": 100,
+                       "position": self.center, "agent": self}
+
+            self.level.commands.append(command)
+
+            self.dead = True
+            print("{} exploded!".format(self.agent_id))
+
     def update(self):
+
         # TODO integrate pause, dead and other behavior in to states
 
         self.debug_text = ""
@@ -770,6 +977,7 @@ class Vehicle(Agent):
                 if not self.dead:
                     self.handle_weapons()
                     self.model.game_update()
+                    self.process_hits()
 
     def get_best_penetration(self):
         best_penetration = 0
@@ -1362,6 +1570,7 @@ class SoldierGrenade(object):
         self.max_range = 8.0
         self.recharge = 0.002
         self.power = 10
+        self.penetration = 10
         self.timer = 0.0
         self.action = "FIDGET"
 
@@ -1441,6 +1650,7 @@ class SoldierWeapon(object):
         self.weapon_type = "INFANTRY_WEAPON"
         self.infantryman = infantryman
         self.power = self.infantryman.power
+        self.penetration = self.infantryman.power
         self.effect = self.infantryman.effect
         self.recharge = (self.infantryman.rof * 0.0015) * random.uniform(0.8, 1.0)
         self.flag = self.infantryman.special
@@ -1488,7 +1698,7 @@ class SoldierWeapon(object):
 
         if self.ammo > 0.0:
             if self.timer >= 1.0:
-                armor_facing = target.get_attack_facing(self.infantryman.agent)
+                armor_facing = target.get_attack_facing(self.infantryman.box.worldPosition.copy())
                 if armor_facing:
                     has_turret, facing, armor = armor_facing
 
