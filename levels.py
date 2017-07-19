@@ -1032,7 +1032,7 @@ class Level(object):
                     if not agent.dead:
                         is_enemy = agent.team != 0
                         visibility_distance = agent.get_visual_range()
-                        max_distance = visibility_distance * 6
+                        max_distance = 17
                         suspect_distance = max_distance * 2.0
 
                         if not is_enemy:
@@ -1079,12 +1079,13 @@ class Level(object):
                     else:
                         is_enemy = agent.team != 0
                         if not is_enemy:
-                            visibility_distance = 3
+                            visibility_distance = agent.vision_decay
+                            agent.vision_decay = max(0.0, agent.vision_decay - 0.1)
                             agent.get_center()
                             position = agent.center.copy()
                             location = bgeutils.position_to_location(position)
 
-                            visibility_dict[agent_key] = {"enemy": is_enemy, "distance": visibility_distance,
+                            visibility_dict[agent_key] = {"enemy": is_enemy, "distance": int(visibility_distance),
                                                           "location": location, "knocked_out": True}
 
                 self.LOS.do_paint(visibility_dict)

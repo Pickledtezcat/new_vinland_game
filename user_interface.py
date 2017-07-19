@@ -139,8 +139,11 @@ class StatusBar(object):
         self.rank_icon.visible = False
 
         self.green = [0.0, 1.0, 0.0, 1.0]
+        self.off_green = [0.0, 0.1, 0.0, 1.0]
         self.red = [1.0, 0.0, 0.0, 1.0]
+        self.off_red = [0.1, 0.0, 0.0, 1.0]
         self.yellow = [0.5, 0.5, 0.0, 1.0]
+        self.off_yellow = [0.01, 0.01, 0.0, 1.0]
         self.hud = [0.07, 0.6, 0.05, 1.0]
 
         self.health_bar.color = self.green
@@ -176,14 +179,27 @@ class StatusBar(object):
             self.health_bar.localScale.x = health_ratio
 
             if health_ratio < 0.1:
-                self.health_bar.color = self.red
+                if self.agent.selected:
+                    self.health_bar.color = self.red
+                else:
+                    self.health_bar.color = self.off_red
             elif health_ratio < 0.5:
-                self.health_bar.color = self.yellow
+                if self.agent.selected:
+                    self.health_bar.color = self.yellow
+                else:
+                    self.health_bar.color = self.off_yellow
             else:
-                self.health_bar.color = self.green
+                if self.agent.selected:
+                    self.health_bar.color = self.green
+                else:
+                    self.health_bar.color = self.off_green
 
         shock_ratio = bgeutils.map_value(0.0, 50.0, self.agent.shock)
         self.shock_bar.localScale.x = min(1.0, shock_ratio)
+        if self.agent.selected:
+            self.shock_bar.color = self.red
+        else:
+            self.shock_bar.color = self.off_red
 
     def secondary_icons(self, setting):
 
@@ -218,22 +234,32 @@ class StatusBar(object):
         # TODO do other secondary icons (status, rank)
 
     def set_status_icon(self):
-        status = self.get_status()
-        if status == "noting":
+        self.status = self.get_status()
+        if self.status == "noting":
             self.status_icon.visible = False
         else:
             self.status_icon.visible = True
 
-            if status != self.status:
-                self.status = status
-                status_color = status_dict[self.status]
-                self.status_icon.replaceMesh("status_{}".format(self.status))
-                set_color = self.green
-                if status_color == "yellow":
+            status_color = status_dict[self.status]
+            self.status_icon.replaceMesh("status_{}".format(self.status))
+
+            if status_color == "yellow":
+                if self.agent.selected:
                     set_color = self.yellow
-                if status_color == "red":
+                else:
+                    set_color = self.off_yellow
+            elif status_color == "red":
+                if self.agent.selected:
                     set_color = self.red
-                self.status_icon.color = set_color
+                else:
+                    set_color = self.off_red
+            else:
+                if self.agent.selected:
+                    set_color = self.green
+                else:
+                    set_color = self.off_green
+
+            self.status_icon.color = set_color
 
     def get_status(self):
 

@@ -32,6 +32,9 @@ class VehicleWeapon(object):
         self.flag = self.part['flag']
         self.timer = 0.0
 
+        self.recoiled = False
+        self.recoiling = 0.0
+
         # TODO set effect based on weapon caliber and type
         self.effect = "SOMETHING"
         self.sound = "MG"
@@ -115,6 +118,8 @@ class VehicleWeapon(object):
 
         self.shots_per_ton = int(1.0 / self.ammo_drain)
         self.emitter = None
+        self.gun_model = None
+        self.gun_model_rest = None
         self.rocket_emitters = []
 
     def set_rocket_emitters(self, emitters):
@@ -164,8 +169,25 @@ class VehicleWeapon(object):
 
     def set_emitter(self, emitter):
         self.emitter = emitter
+        self.gun_model = self.emitter.parent
+        self.gun_model_rest = self.gun_model.localTransform
 
     def update(self):
+
+        if self.rating > 3:
+            if self.recoiled:
+                if self.recoiling > -0.3:
+                    self.recoiling -= 0.05
+                else:
+                    self.recoiled = False
+            else:
+                if self.recoiling < 0.0:
+                    self.recoiling += 0.01
+
+            if self.emitter:
+                gun_recoil = mathutils.Matrix.Translation((0.0, self.recoiling, 0.0))
+                self.gun_model.localTransform = self.gun_model_rest * gun_recoil
+
         accuracy = (self.accuracy + self.agent.accuracy) * self.agent.shooting_bonus
         recharge = self.rate_of_fire * self.agent.shooting_bonus
 
@@ -249,7 +271,7 @@ class VehicleWeapon(object):
 
                     self.agent.level.commands.append(command)
 
-                    self.timer = 0.0
+                    self.timer = random.uniform(-0.1, 0.0)
                     self.agent.ammo -= self.ammo_drain
                     recoil_vector = mathutils.Vector([0.0, -1.0, 0.0])
                     recoil_vector.length = self.recoil_amount
@@ -258,6 +280,7 @@ class VehicleWeapon(object):
                     if self.weapon_location == "TURRET":
                         recoil_vector.rotate(self.agent.model.turret.localOrientation)
                     self.agent.movement.recoil += recoil_vector
+                    self.recoiled = True
 
                     return True
 
@@ -275,16 +298,15 @@ class VehicleWeapon(object):
 
                 self.agent.level.commands.append(command)
 
-                self.timer = 0.0
+                self.timer = random.uniform(-0.1, 0.0)
                 self.agent.ammo -= self.ammo_drain
                 recoil_vector = mathutils.Vector([0.0, -1.0, 0.0])
                 recoil_vector.length = self.recoil_amount
 
-                print(round(self.recoil_amount, 4), self.name)
-
                 if self.weapon_location == "TURRET":
                     recoil_vector.rotate(self.agent.model.turret.localOrientation)
                 self.agent.movement.recoil += recoil_vector
+                self.recoiled = True
 
                 return True
 

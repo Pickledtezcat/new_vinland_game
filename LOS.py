@@ -3,6 +3,7 @@ import bge
 import mathutils
 import math
 
+
 class VisionPaint(object):
     def __init__(self, level):
         self.level = level
@@ -18,8 +19,8 @@ class VisionPaint(object):
             self.brush_dict[i] = bgeutils.create_brush(self.brush_size, inner, [0, 0, 255], outer=outer, smooth=True)
 
         self.non_brush_dict = {}
-        for i in range(3, 8):
-            outer = 6
+        for i in range(0, 19):
+            outer = i
             self.non_brush_dict[i] = bgeutils.create_brush(self.brush_size, 0, [0, 0, 255], outer=outer, smooth=True)
 
         self.player_pixel = bgeutils.create_brush(1, 1, [0, 255, 0])

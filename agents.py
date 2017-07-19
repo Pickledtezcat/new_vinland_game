@@ -57,6 +57,7 @@ class Agent(object):
         self.faction = self.level.factions[self.team]
 
         self.dead = False
+        self.vision_decay = 18.0
         self.knocked_out = False
         self.on_fire = False
         self.ended = False
@@ -96,6 +97,7 @@ class Agent(object):
         self.selected = False
         self.waiting = False
         self.deployed = 0.0
+        self.angled = 0.0
         self.shooting_bonus = 0.0
 
         self.movement = agent_actions.AgentMovement(self)
@@ -153,9 +155,10 @@ class Agent(object):
 
         save_dict = {"agent_type": self.agent_type, "team": self.team, "location": self.location, "dead": self.dead,
                      "knocked_out": self.knocked_out, "rank": self.rank, "shock": self.shock, "health": self.health,
-                     "direction": self.direction, "enter_building": self.enter_building,
-                     "mechanical_damage": self.mechanical_damage, "on_fire": self.on_fire,
-                     "selected": self.selected, "state_name": self.state.name, "load_name": self.load_name,
+                     "direction": self.direction, "enter_building": self.enter_building, "angled": self.angled,
+                     "vision_decay": self.vision_decay, "mechanical_damage": self.mechanical_damage,
+                     "on_fire": self.on_fire, "selected": self.selected, "state_name": self.state.name,
+                     "load_name": self.load_name, "ammo": self.ammo, "stance": self.stance,
                      "state_count": self.state.count, "movement_target": self.movement.target,
                      "movement_target_direction": self.movement.target_direction, "weapons": weapons,
                      "movement_timer": self.movement.timer, "initial_health": self.initial_health,
@@ -163,7 +166,6 @@ class Agent(object):
                      "navigation_history": self.navigation.history, "destinations": self.destinations,
                      "reverse": self.reverse, "throttle": self.throttle, "occupied": self.occupied, "aim": self.aim,
                      "selection_group": self.selection_group, "turret_angle": self.agent_targeter.turret_angle,
-                     "ammo": self.ammo, "stance": self.stance,
                      "soldiers": [solider.save() for solider in self.soldiers]}
 
         self.clear_occupied()
@@ -183,6 +185,8 @@ class Agent(object):
         self.mechanical_damage = agent_dict["mechanical_damage"]
         self.ammo = agent_dict["ammo"]
         self.deployed = agent_dict["deployed"]
+        self.angled = agent_dict["angled"]
+        self.vision_decay = agent_dict["vision_decay"]
 
         self.movement.load_movement(agent_dict["movement_target"], agent_dict["movement_target_direction"],
                                     agent_dict["movement_timer"])
@@ -604,6 +608,14 @@ class Vehicle(Agent):
 
         # TODO handle rotating gun on anti-tank artillery
 
+        angle_target = self.agent_targeter.hull_angle
+        angle_target = min(0.4, max(-0.4, angle_target))
+
+        if self.angled > angle_target + 0.01:
+            self.angled -= 0.01
+        elif self.angled < angle_target - 0.01:
+            self.angled += 0.01
+
         moving = not self.movement.done
 
         if self.stats.artillery:
@@ -734,8 +746,8 @@ class Vehicle(Agent):
             shooting = weapon.shoot()
 
     def check_status(self):
-        # TODO set other status flags
         # TODO set some stats to update on move
+        # TODO handle most of this in agent states
 
         if not self.dead:
             self.is_damaged = -1
@@ -768,6 +780,7 @@ class Vehicle(Agent):
                         else:
                             self.is_damaged = 0
 
+                self.handle_weapons()
                 self.process_commands()
                 return
 
@@ -778,6 +791,104 @@ class Vehicle(Agent):
 
         self.selected = False
         return
+
+    def handle_on_fire(self):
+        if self.on_fire:
+            print("{} is on fire!".format(self.agent_id))
+
+    def vehicle_explode(self):
+        if not self.dead:
+
+            command = {"label": "EXPLOSION", "effect": "DUMMY_EXPLOSION", "damage": 100,
+                       "position": self.center, "agent": self}
+
+            self.level.commands.append(command)
+
+            self.dead = True
+            print("{} exploded!".format(self.agent_id))
+
+    def update(self):
+
+        # TODO integrate pause, dead and other behavior in to states
+
+        self.debug_text = "{}".format(round(self.angled, 3))
+
+        # self.debug_text = "{}\n{}".format(self.movement.tilt, str(list(self.movement.recoil.copy())))
+
+        # self.debug_text = "{}\n{}\n{}".format(str(self.agent_id), target, self.seen)
+
+        self.check_on_screen()
+        self.check_status()
+
+        if not self.ended:
+            if not self.level.paused:
+                self.state_machine()
+
+                if not self.dead:
+                    self.model.game_update()
+                    self.process_hits()
+
+    def get_best_penetration(self):
+        best_penetration = 0
+
+        for weapon in self.weapons:
+            if weapon.penetration > best_penetration:
+                best_penetration = weapon.penetration
+
+        self.best_penetration = best_penetration
+
+    def set_formation(self):
+
+        hatch_open = False
+
+        if self.stance == "AGGRESSIVE":
+            self.stance_speed = 0.75
+            self.shooting_bonus = 0.75
+
+        if self.stance == "SENTRY":
+            self.stance_speed = 0.5
+            self.shooting_bonus = 0.75
+            hatch_open = True
+
+        if self.stance == "DEFEND":
+            self.stance_speed = 0.5
+            self.shooting_bonus = 1.0
+
+        if self.stance == "FLANK":
+            self.stance_speed = 1.0
+            self.shooting_bonus = 0.5
+
+        self.model.set_open_hatch(hatch_open)
+
+    def set_speed(self):
+
+        if self.movement.target:
+            if self.movement.target_direction:
+                self.throttle_target = self.stance_speed * 0.75
+            elif self.movement.target == self.navigation.destination:
+                self.throttle_target = self.stance_speed * 0.3
+            else:
+                self.throttle_target = self.stance_speed
+
+        elif self.movement.target_direction:
+            self.throttle_target = self.stance_speed * 0.75
+        else:
+            self.throttle_target = 0.0
+
+        self.throttle = bgeutils.interpolate_float(self.throttle, self.throttle_target, self.handling)
+        speed_mod = self.throttle * self.stance_speed
+        display_mod = self.throttle_target * self.stance_speed
+
+        self.speed = self.max_speed * speed_mod
+        self.turning_speed = self.handling * speed_mod
+
+        self.display_speed = (self.max_speed * display_mod) * 5.0
+        if self.reverse:
+            self.display_speed *= -1
+
+    def add_box(self):
+        super().add_box()
+        self.model = model_display.VehicleModel(self.tilt_hook, self, scale=0.5)
 
     def process_hits(self):
 
@@ -936,110 +1047,6 @@ class Vehicle(Agent):
                 self.vehicle_explode()
 
         self.hits = []
-
-    def handle_on_fire(self):
-        if self.on_fire:
-            print("{} is on fire!".format(self.agent_id))
-
-    def vehicle_explode(self):
-        if not self.dead:
-
-            command = {"label": "EXPLOSION", "effect": "DUMMY_EXPLOSION", "damage": 100,
-                       "position": self.center, "agent": self}
-
-            self.level.commands.append(command)
-
-            self.dead = True
-            print("{} exploded!".format(self.agent_id))
-
-    def update(self):
-
-        # TODO integrate pause, dead and other behavior in to states
-
-        self.debug_text = ""
-
-        # self.debug_text = "{}\n{}".format(self.movement.tilt, str(list(self.movement.recoil.copy())))
-
-        # if self.agent_targeter.enemy_target:
-        #     target = self.agent_targeter.enemy_target.agent_id
-        # else:
-        #     target = "None"
-        #
-        # self.debug_text = "{}\n{}\n{}".format(str(self.agent_id), target, self.seen)
-
-        self.check_status()
-        self.check_on_screen()
-
-        if not self.ended:
-            if not self.level.paused:
-                self.state_machine()
-
-                if not self.dead:
-                    self.handle_weapons()
-                    self.model.game_update()
-                    self.process_hits()
-
-    def get_best_penetration(self):
-        best_penetration = 0
-
-        for weapon in self.weapons:
-            if weapon.penetration > best_penetration:
-                best_penetration = weapon.penetration
-
-        self.best_penetration = best_penetration
-
-    def set_formation(self):
-
-        hatch_open = False
-
-        if self.stance == "AGGRESSIVE":
-            self.stance_speed = 0.75
-            self.shooting_bonus = 0.75
-
-        if self.stance == "SENTRY":
-            self.stance_speed = 0.5
-            self.shooting_bonus = 0.75
-            hatch_open = True
-
-        if self.stance == "DEFEND":
-            self.stance_speed = 0.5
-            self.shooting_bonus = 1.0
-
-        if self.stance == "FLANK":
-            self.stance_speed = 1.0
-            self.shooting_bonus = 0.5
-
-        self.model.set_open_hatch(hatch_open)
-
-    def set_speed(self):
-
-        if self.movement.target:
-            if self.movement.target_direction:
-                self.throttle_target = self.stance_speed * 0.75
-            elif self.movement.target == self.navigation.destination:
-                self.throttle_target = self.stance_speed * 0.3
-            else:
-                self.throttle_target = self.stance_speed
-
-        elif self.movement.target_direction:
-            self.throttle_target = self.stance_speed * 0.75
-        else:
-            self.throttle_target = 0.0
-
-        self.throttle = bgeutils.interpolate_float(self.throttle, self.throttle_target, self.handling)
-        speed_mod = self.throttle * self.stance_speed
-        display_mod = self.throttle_target * self.stance_speed
-
-        self.speed = self.max_speed * speed_mod
-        self.turning_speed = self.handling * speed_mod
-
-        self.display_speed = (self.max_speed * display_mod) * 5.0
-        if self.reverse:
-            self.display_speed *= -1
-
-    def add_box(self):
-        super().add_box()
-        self.model = model_display.VehicleModel(self.tilt_hook, self, scale=0.5)
 
 
 class Infantry(Agent):

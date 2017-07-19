@@ -29,6 +29,9 @@ class VehicleModel(object):
         self.gun_block = None
         self.gun_block_rest = None
 
+        self.turret_gun_block = None
+        self.turret_gun_block_rest = None
+
         self.hatch = None
         self.hatch_open = True
         self.closed_hatch = None
@@ -233,9 +236,9 @@ class VehicleModel(object):
                 mantlet_string = "v_mantlet_{}_{}".format(gun_faction, turret_size - 1)
                 mantlet = t_adder.scene.addObject(mantlet_string, t_adder, 0)
                 mantlet.setParent(t_adder)
-                if not self.gun_block:
-                    self.gun_block = mantlet
-                    self.gun_block_rest = self.gun_block.localTransform
+                if not self.turret_gun_block:
+                    self.turret_gun_block = mantlet
+                    self.turret_gun_block_rest = self.turret_gun_block.localTransform
                 self.get_adders("turret_gun", parent=t_adder, parent_key="mount_gun")
 
             sections = [("FRONT", "front_gun"), ("LEFT", "left_gun"), ("RIGHT", "right_gun"), ("BACK", "back_gun"),
@@ -269,8 +272,8 @@ class VehicleModel(object):
 
                             gun = w_adder.scene.addObject(gun_string, w_adder, 0)
                             gun_emitter = bgeutils.get_ob("shooter", gun.children)
-                            weapon.set_emitter(gun_emitter)
                             gun.setParent(w_adder)
+                            weapon.set_emitter(gun_emitter)
                         else:
                             weapon = weapons[i]
                             weapon.set_emitter(gun_emitter)
@@ -446,10 +449,19 @@ class VehicleModel(object):
 
     def deploy(self):
 
+        x_rot_mat = mathutils.Matrix.Rotation(self.owner.deployed, 4, "X")
+
         if self.gun_block:
-            rot_mat = mathutils.Matrix.Rotation(self.owner.deployed, 4, "X")
-            gun_target = self.gun_block_rest * rot_mat
+            z_rot_mat = mathutils.Matrix.Rotation(self.owner.angled, 4, "Z")
+
+            total_rot = x_rot_mat * z_rot_mat
+
+            gun_target = self.gun_block_rest * total_rot
             self.gun_block.localTransform = gun_target
+
+        if self.turret_gun_block:
+            turret_gun_target = self.turret_gun_block_rest * x_rot_mat
+            self.turret_gun_block.localTransform = turret_gun_target
 
     def game_update(self):
 
