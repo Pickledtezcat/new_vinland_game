@@ -811,7 +811,7 @@ class Vehicle(Agent):
 
         # TODO integrate pause, dead and other behavior in to states
 
-        self.debug_text = "{}".format(round(self.angled, 3))
+        self.debug_text = ""
 
         # self.debug_text = "{}\n{}".format(self.movement.tilt, str(list(self.movement.recoil.copy())))
 
@@ -903,6 +903,7 @@ class Vehicle(Agent):
         sectors = ["BOTTOM", "TOP", "FRONT", "FLANKS", "TURRET"]
 
         for hit in hits:
+
             label = hit["label"]
             # TODO give XP to killing agent
 
@@ -976,7 +977,7 @@ class Vehicle(Agent):
             attack_vector = self.center.copy() - origin
             attack_distance = attack_vector.length
 
-            penetration -= (attack_distance * 0.5)
+            penetration -= (attack_distance * 0.25)
             penetration *= random.uniform(0.5, 1.0)
 
             if sector == "TOP":
@@ -985,10 +986,9 @@ class Vehicle(Agent):
                 else:
                     if self.stance == "SENTRY":
                         if "COMMANDER" in self.stats.flags:
-                            crew_damage = int(damage * 0.1)
-                            if crew_damage > 0:
-                                if random.randint(0, crew_damage) > self.stats.crew:
-                                    self.knocked_out = True
+                            if random.randint(0, 6) < 1:
+                                knockout_chance = 1
+                                armor_value = 0.0
 
                     if "EXTRA_PLATES" in self.stats.flags:
                         armor_value *= 0.5
@@ -1705,6 +1705,10 @@ class SoldierWeapon(object):
 
         if self.ammo > 0.0:
             if self.timer >= 1.0:
+
+                penetration = self.power
+
+                target_distance = self.infantryman.agent.agent_targeter.target_distance
                 armor_facing = target.get_attack_facing(self.infantryman.box.worldPosition.copy())
                 if armor_facing:
                     has_turret, facing, armor = armor_facing
@@ -1715,7 +1719,9 @@ class SoldierWeapon(object):
                         if armor["TURRET"] < lowest_armor:
                             lowest_armor = armor["TURRET"]
 
-                    if self.power < lowest_armor:
+                    penetration -= (target_distance * 0.25)
+
+                    if penetration < lowest_armor:
                         return False
 
                 return True

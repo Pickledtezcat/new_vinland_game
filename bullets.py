@@ -2,6 +2,7 @@ import bge
 import bgeutils
 import mathutils
 import particles
+import random
 
 
 class Bullet(object):
@@ -48,8 +49,12 @@ class Bullet(object):
         if occupied:
             hit_target = self.level.agents[occupied]
             if hit_target.agent_type != "INFANTRY":
-                hit = {"label": "HIT", "sector": "TOP", "origin": target, "weapon": self.weapon, "agent": self.agent}
-                hit_target.hits.append(hit)
+                hit_chance = hit_target.stats.chassis_size
+                if random.randint(0, 12) > hit_chance:
+                    self.detonate()
+                else:
+                    hit = {"label": "ARTILLERY_HIT", "sector": "TOP", "origin": target, "weapon": self.weapon, "agent": self.agent}
+                    hit_target.hits.append(hit)
 
     def update(self):
         curve_length = len(self.curve)

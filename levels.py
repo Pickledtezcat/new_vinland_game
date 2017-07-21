@@ -721,46 +721,54 @@ class Level(object):
             if target.agent_type == "INFANTRY":
                 closest_soldier = agent.agent_targeter.closest_soldier
                 power = weapon.power * random.uniform(0.0, 1.0)
-                if agent.agent_type != "INFANTRY":
-                    if not agent.movement.done:
-                        effective_range *= 0.5
-
                 shock = power
-                building = self.buildings.get(closest_soldier.in_building)
+                if closest_soldier:
 
-                if building:
-                    power *= building.damage_reduction
-                    target_position = building.get_closest_window(origin)
-                    shock *= building.damage_reduction
+                    if agent.agent_type != "INFANTRY":
+                        if not agent.movement.done:
+                            effective_range *= 0.5
 
-                else:
-                    target_position = closest_soldier.box.worldPosition.copy()
-                    target_position.z += 0.5
+                    building = self.buildings.get(closest_soldier.in_building)
 
-                if closest_soldier.behavior.prone:
+                    if building:
+                        power *= building.damage_reduction
+                        target_position = building.get_closest_window(origin)
+                        shock *= building.damage_reduction
 
-                    if target_distance > 10:
+                    else:
+                        target_position = closest_soldier.box.worldPosition.copy()
+                        target_position.z += 0.5
+
+                    if closest_soldier.behavior.prone:
+
+                        if target_distance > 10:
+                            shock *= 0.5
+                            effective_range *= 0.5
+
+                    to_hit = (effective_range / target_distance) * 0.25
+                    target_hit = to_hit > random.uniform(0.0, 1.0)
+
+                    if target_hit:
+
+                        damage = int(power)
+                        if power < closest_soldier.toughness:
+                            damage *= 0.5
+
+                        closest_soldier.toughness -= max(1, int(damage))
+
+                    else:
                         shock *= 0.5
-                        effective_range *= 0.5
-
-                to_hit = (effective_range / target_distance) * 0.25
-                target_hit = to_hit > random.uniform(0.0, 1.0)
-
-                if target_hit:
-
-                    damage = int(power)
-                    if power < closest_soldier.toughness:
-                        damage *= 0.5
-
-                    closest_soldier.toughness -= max(1, int(damage))
-
-                else:
-                    shock *= 0.5
-                    if closest_soldier:
                         base_location = closest_soldier.box.worldPosition.copy()
                         random_vector = mathutils.Vector(
                             [random.uniform(-3.0, 3.0), random.uniform(-3.0, 3.0), 0.0])
                         target_position = base_location + random_vector
+
+                else:
+                    shock *= 0.5
+                    base_location = target.box.worldPosition.copy()
+                    random_vector = mathutils.Vector(
+                        [random.uniform(-3.0, 3.0), random.uniform(-3.0, 3.0), 0.0])
+                    target_position = base_location + random_vector
 
                 target.shock += shock
 
@@ -777,8 +785,7 @@ class Level(object):
                 effective_range -= target_speed
 
                 to_hit = (effective_range / target_distance) * 0.25
-                target_hit = to_hit > random.uniform(0.0, 1.0)
-                if target_hit:
+                if to_hit > random.uniform(0.0, 1.0):
                     hit = {"label": "HIT", "origin": origin, "sector": None, "weapon": weapon, "agent": agent}
                     target.hits.append(hit)
 
@@ -796,7 +803,7 @@ class Level(object):
                     instances = 3
 
                 for i in range(instances):
-                    particles.YellowBulletFlash(self, weapon.emitter, delay=delay * i)
+                    particles.BulletFlash(self, weapon, delay=delay * i)
                     particles.BulletHitGround(self, list(target_position), delay=8 * i)
 
                 # TODO handle infantry weapons vs vehicles
@@ -815,10 +822,15 @@ class Level(object):
 
             if target.agent_type == "INFANTRY":
                 closest_soldier = agent.agent_targeter.closest_soldier
+                if closest_soldier:
+                    target_position = closest_soldier.box.worldPosition.copy()
+                else:
+                    target_position = target.center.copy()
+
                 random_vector = mathutils.Vector(
                     [random.uniform(-scatter, scatter), random.uniform(-scatter, scatter), 0.0])
 
-                target_position = closest_soldier.box.worldPosition.copy() + random_vector
+                target_position += random_vector
                 command = {"label": "EXPLOSION", "effect": "DUMMY_EXPLOSION", "damage": weapon.power,
                            "position": target_position, "agent": agent}
                 self.commands.append(command)
@@ -857,7 +869,7 @@ class Level(object):
                 instances = 3
 
             for i in range(instances):
-                particles.RedBulletFlash(self, weapon.emitter, delay=delay * i)
+                particles.BulletFlash(self, weapon, delay=delay * i)
 
     def shoot_artillery(self, command):
 
@@ -884,7 +896,7 @@ class Level(object):
             else:
                 target_position = target.center.copy()
 
-            scatter = target_distance / accuracy
+            scatter = max(1.0, target_distance / accuracy)
 
             scatter_vector = mathutils.Vector([random.uniform(- scatter, scatter) for _ in range(3)])
             target_position += scatter_vector
@@ -912,7 +924,7 @@ class Level(object):
                 bullets.Shell(self, bullet_arc, agent, weapon)
 
             if effect:
-                particles.RedBulletFlash(self, hook)
+                particles.BulletFlash(self, weapon)
 
     def explosion(self, command):
 

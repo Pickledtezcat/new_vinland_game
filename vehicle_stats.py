@@ -25,7 +25,8 @@ class VehicleWeapon(object):
 
         self.name = self.part['name']
         self.rating = self.part['rating']
-        self.power = max(1.0, self.rating)
+        self.shell_size = 0
+        self.power = self.rating
         self.penetration = self.rating
         self.effective_range = 0.0
         self.weight = self.part["x_size"] * self.part["y_size"]
@@ -37,7 +38,7 @@ class VehicleWeapon(object):
 
         # TODO set effect based on weapon caliber and type
         self.effect = "SOMETHING"
-        self.sound = "MG"
+        self.sound = "I_MG"
 
         advanced = ["IMPROVED_GUN", "ADVANCED_GUN"]
         support = ["MORTAR", "SUPPORT_GUN", "PRIMITIVE_GUN"]
@@ -46,25 +47,35 @@ class VehicleWeapon(object):
 
         if self.part["rating"] > 4:
             if self.flag in support:
+                self.sound = "SHELL_4"
                 size = 4
             elif self.flag in advanced:
+                self.sound = "SHELL_5"
                 if self.part["rating"] > 7:
                     size = 5
                 else:
                     size = 3
             else:
                 if self.part["rating"] > 7:
+                    self.sound = "SHELL_5"
                     size = 6
                 else:
+                    self.sound = "SHELL_3"
                     size = 3
 
         elif self.part["rating"] > 1:
             if self.flag in support:
+                self.sound = "SHELL_3"
                 size = 2
             elif self.flag in advanced:
+                self.sound = "SHELL_2"
                 size = 3
             else:
+                self.sound = "SHELL_1"
                 size = 1
+
+        elif self.flag == "RAPID":
+            self.sound = "I_LIGHT_MG"
 
         indirect = ["SUPPORT_GUN", "ARTILLERY"]
         rockets = ["MORTAR", "ROCKETS"]
@@ -74,6 +85,7 @@ class VehicleWeapon(object):
             self.accuracy = 12
 
         if self.flag in indirect:
+            self.penetration = int(self.penetration * 0.5)
             self.indirect = True
             self.accuracy = 6
 
@@ -98,7 +110,8 @@ class VehicleWeapon(object):
             self.penetration = int(self.penetration * 1.5)
 
         direct_power = self.power * 5.0
-        explosive_power = (self.power * self.power) * 0.5
+        self.shell_size = self.rating * self.rating
+        explosive_power = self.shell_size * 0.5
 
         self.power = direct_power + explosive_power
 
@@ -128,7 +141,7 @@ class VehicleWeapon(object):
     def set_rate_of_fire(self, manpower):
 
         vehicle_weight = self.stats.weight
-        required_manpower = self.weight + 2
+        required_manpower = self.rating
         rate_of_fire = manpower / required_manpower
         rate_of_fire = min(2.0, rate_of_fire)
 
@@ -237,17 +250,22 @@ class VehicleWeapon(object):
             if self.agent.agent_targeter.hull_on_target > 45.0:
                 return False
 
-        armor_facing = target.get_attack_facing(self.agent.box.worldPosition.copy())
-        if armor_facing:
-            has_turret, facing, armor = armor_facing
+        if not self.indirect:
+            armor_facing = target.get_attack_facing(self.agent.box.worldPosition.copy())
+            if armor_facing:
+                target_distance = self.agent.agent_targeter.target_distance
+                penetration = self.penetration
+                has_turret, facing, armor = armor_facing
 
-            lowest_armor = (armor[facing] * 0.5)
-            if has_turret:
-                if armor["TURRET"] < lowest_armor:
-                    lowest_armor = armor["TURRET"]
+                lowest_armor = (armor[facing] * 0.5)
+                if has_turret:
+                    if armor["TURRET"] < lowest_armor:
+                        lowest_armor = armor["TURRET"]
 
-            if self.penetration < lowest_armor:
-                return False
+                penetration -= (target_distance * 0.25)
+
+                if penetration < lowest_armor:
+                    return False
 
         return True
 

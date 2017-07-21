@@ -41,7 +41,7 @@ class VehicleModel(object):
 
     def build_model(self):
 
-        self.cammo = self.stats.faction_number + 1
+        self.cammo = self.stats.faction_number + 3
 
         faction_icons = {1: 0,
                          2: 2,

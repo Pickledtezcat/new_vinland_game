@@ -94,22 +94,30 @@ class MovementPointIcon(Particle):
 
 
 class BulletFlash(Particle):
-    def __init__(self, level, hook, delay=0):
+    def __init__(self, level, weapon, delay=0):
+        self.weapon = weapon
+        self.hook = self.weapon.emitter
+
         super().__init__(level)
 
-        self.hook = hook
-        self.box.setParent(hook)
+        self.box.setParent(self.hook)
 
-        self.sound = "I_LIGHT_MG"
+        self.sound = self.weapon.sound
         self.color = [1.0, 1.0, 1.0]
-        self.scale = 1.0
+        self.scale = 0.5 + min(6.0, self.weapon.rating * 0.2)
         self.delay = delay
+        self.reduction = 0.23
+
+        rapid_fire = ["QUICK", "RAPID"]
+
+        if self.weapon.flag not in rapid_fire:
+            self.reduction = 0.05
+
         self.get_attributes()
         self.place_particle()
 
     def get_attributes(self):
         self.color = [1.0, 1.0, 1.0]
-        self.scale = 1.0
 
     def play_sound(self):
         if self.sound:
@@ -119,12 +127,17 @@ class BulletFlash(Particle):
             self.sound = None
 
     def add_box(self):
-        return self.level.own.scene.addObject("bullet_flash", self.level.own, 0)
+        if self.weapon.rating < 4:
+            bullet_flash = "gun_flash.{}".format(str(random.randint(1, 4)).zfill(3))
+        else:
+            bullet_flash = "after_flash.{}".format(str(random.randint(1, 4)).zfill(3))
+
+        return self.level.own.scene.addObject(bullet_flash, self.level.own, 0)
 
     def place_particle(self):
         self.box.worldPosition = self.hook.worldPosition.copy()
         self.box.worldOrientation = self.hook.worldOrientation
-        self.box.localScale.y = random.uniform(4.0, 8.0)
+        self.box.localScale.y = (random.uniform(1.0, 1.5)) * self.scale
         self.box.localScale.x = self.scale
         self.box.localScale.z = self.scale
 
@@ -136,28 +149,13 @@ class BulletFlash(Particle):
             color = 0.0
         else:
             self.play_sound()
-            self.timer += 0.2
+            self.timer += self.reduction
             color = 1.0 - self.timer
 
         self.box.color = [r * color, g * color, b * color, 1.0]
 
         if self.timer >= 1.0:
             self.ended = True
-
-
-class YellowBulletFlash(BulletFlash):
-    def get_attributes(self):
-        self.color = [1.5, 0.5, 1.0]
-
-
-class RedBulletFlash(BulletFlash):
-    def __init__(self, level, hook, delay=0):
-        super().__init__(level, hook, delay)
-        self.sound = "I_HEAVY_RIFLE"
-
-    def get_attributes(self):
-        self.color = [1.0, 0.0, 0.0]
-        self.scale = 3.0
 
 
 class InfantryBullet(Particle):
