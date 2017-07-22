@@ -123,6 +123,7 @@ class StatusBar(object):
         self.box = self.add_box()
         self.stance_icon = bgeutils.get_ob("stance_icon", self.box.children)
         self.health_bar = bgeutils.get_ob("health_bar", self.box.childrenRecursive)
+        self.reload_bar = bgeutils.get_ob("reload_bar", self.box.childrenRecursive)
         self.shock_bar = bgeutils.get_ob("shock_bar", self.box.childrenRecursive)
         self.group_number_icon = bgeutils.get_ob("group_number", self.box.children)
         self.rank_icon = bgeutils.get_ob("rank_icon", self.box.children)
@@ -139,16 +140,18 @@ class StatusBar(object):
         self.rank_icon.visible = False
 
         self.green = [0.0, 1.0, 0.0, 1.0]
-        self.off_green = [0.0, 0.1, 0.0, 1.0]
+        self.off_green = [0.0, 0.15, 0.0, 1.0]
         self.red = [1.0, 0.0, 0.0, 1.0]
-        self.off_red = [0.1, 0.0, 0.0, 1.0]
+        self.off_red = [0.15, 0.0, 0.0, 1.0]
         self.yellow = [0.5, 0.5, 0.0, 1.0]
-        self.off_yellow = [0.01, 0.01, 0.0, 1.0]
+        self.off_yellow = [0.1, 0.1, 0.0, 1.0]
         self.hud = [0.07, 0.6, 0.05, 1.0]
 
         self.health_bar.color = self.green
         self.shock_bar.color = self.red
+        self.reload_bar.color = self.yellow
         self.shock_bar.localScale.x = 0.0
+        self.reload_bar.localScale.x = 0.0
 
         self.status_icon.color = self.hud
         self.stance_icon.color = self.hud
@@ -160,6 +163,16 @@ class StatusBar(object):
 
     def add_box(self):
         return self.level.scene.addObject("status_bar_object", self.level.own, 0)
+
+    def update_reload(self):
+
+        if self.agent.best_weapon:
+            reload_ratio = self.agent.best_weapon.timer
+            self.reload_bar.localScale.x = reload_ratio
+            if self.agent.selected:
+                self.reload_bar.color = self.yellow
+            else:
+                self.reload_bar.color = self.off_yellow
 
     def update_health(self):
 
@@ -178,21 +191,10 @@ class StatusBar(object):
             health_ratio = health / self.agent.initial_health
             self.health_bar.localScale.x = health_ratio
 
-            if health_ratio < 0.1:
-                if self.agent.selected:
-                    self.health_bar.color = self.red
-                else:
-                    self.health_bar.color = self.off_red
-            elif health_ratio < 0.5:
-                if self.agent.selected:
-                    self.health_bar.color = self.yellow
-                else:
-                    self.health_bar.color = self.off_yellow
+            if self.agent.selected:
+                self.health_bar.color = self.green
             else:
-                if self.agent.selected:
-                    self.health_bar.color = self.green
-                else:
-                    self.health_bar.color = self.off_green
+                self.health_bar.color = self.off_green
 
         shock_ratio = bgeutils.map_value(0.0, 50.0, self.agent.shock)
         self.shock_bar.localScale.x = min(1.0, shock_ratio)
@@ -315,6 +317,7 @@ class StatusBar(object):
 
         if self.agent.team == 0:
             self.update_health()
+            self.update_reload()
             self.update_position()
             self.set_status_icon()
             if self.agent.selected:
@@ -326,11 +329,12 @@ class StatusBar(object):
             if not self.agent.seen:
                 self.box.localScale = [0.0, 0.0, 0.0]
             else:
-                self.update_health()
-                self.update_position()
-                self.set_status_icon()
-                self.box.localScale = [1.0, 1.0, 1.0]
-                self.secondary_icons(False)
+                if not self.agent.dead:
+                    self.update_health()
+                    self.update_position()
+                    self.set_status_icon()
+                    self.box.localScale = [1.0, 1.0, 1.0]
+                    self.secondary_icons(False)
 
 
 class HoldingInventory(object):

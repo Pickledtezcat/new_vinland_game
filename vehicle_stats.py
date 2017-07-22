@@ -122,7 +122,7 @@ class VehicleWeapon(object):
         self.bullet = None
         self.rate_of_fire = 0.0
         self.reload_time = 0.0
-        self.ammo_drain = self.rating * 0.005
+        self.ammo_drain = self.power * 0.0001
         if self.flag in rapid_fire or self.flag in indirect:
             self.ammo_drain *= 2.0
 
@@ -141,7 +141,7 @@ class VehicleWeapon(object):
     def set_rate_of_fire(self, manpower):
 
         vehicle_weight = self.stats.weight
-        required_manpower = self.rating
+        required_manpower = 2.0 + self.rating
         rate_of_fire = manpower / required_manpower
         rate_of_fire = min(2.0, rate_of_fire)
 
@@ -165,7 +165,7 @@ class VehicleWeapon(object):
         if self.flag in very_slow_firing:
             rate_of_fire *= 0.5
 
-        self.rate_of_fire = rate_of_fire * 0.005
+        self.rate_of_fire = rate_of_fire * 0.01
         if self.rate_of_fire > 0.0:
             self.reload_time = round(1.0 / (60.0 * self.rate_of_fire), 2)
         else:
@@ -395,6 +395,7 @@ class VehicleStats(object):
         self.open_top = False
         self.turret_speed = 0
         self.has_commander = False
+        self.best_weapon = None
 
         self.artillery = False
         self.invalid = []
@@ -586,6 +587,9 @@ class VehicleStats(object):
         weapon_dict = {location: [i for i in range(len(self.weapons)) if self.weapons[i].location == location] for
                        location in locations}
 
+        highest = 0
+        best = None
+
         for location_key in weapon_dict:
             location_group = weapon_dict[location_key]
             number = len(location_group)
@@ -593,6 +597,11 @@ class VehicleStats(object):
 
             for index in location_group:
                 self.weapons[index].set_rate_of_fire(divided_manpower)
+                if self.weapons[index].rating > highest:
+                    highest = self.weapons[index].rating
+                    best = self.weapons[index]
+
+        self.best_weapon = best
 
     def get_carriage_movement(self):
 

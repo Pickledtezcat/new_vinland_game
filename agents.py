@@ -39,6 +39,7 @@ class Agent(object):
     is_carrying = False
     is_sentry = False
     is_shocked = -1
+    best_weapon = None
 
     stance = "FLANK"
     agent_type = "VEHICLE"
@@ -658,6 +659,7 @@ class Vehicle(Agent):
         self.initial_health = self.health = self.stats.durability
         self.ammo = self.stats.ammo
         self.get_weapons()
+        self.best_weapon = self.stats.best_weapon
         self.set_stats()
 
     def update_stats(self):
@@ -780,7 +782,6 @@ class Vehicle(Agent):
                         else:
                             self.is_damaged = 0
 
-                self.handle_weapons()
                 self.process_commands()
                 return
 
@@ -827,6 +828,8 @@ class Vehicle(Agent):
                 if not self.dead:
                     self.model.game_update()
                     self.process_hits()
+                    if not self.knocked_out:
+                        self.handle_weapons()
 
     def get_best_penetration(self):
         best_penetration = 0
@@ -904,6 +907,11 @@ class Vehicle(Agent):
 
         for hit in hits:
 
+            fire_chance = False
+            explosion_chance = False
+            damage_chance = False
+            knockout_chance = False
+
             label = hit["label"]
             # TODO give XP to killing agent
 
@@ -912,17 +920,13 @@ class Vehicle(Agent):
             origin = hit["origin"]
 
             if label == "SPLASH_DAMAGE":
+                damage_chance = True
                 damage = hit["damage"]
                 penetration = damage * 0.5
             else:
                 weapon = hit["weapon"]
                 damage = weapon.power
                 penetration = weapon.penetration
-
-            fire_chance = 0.0
-            explosion_chance = 0.0
-            damage_chance = 0.0
-            knockout_chance = 0
 
             hit_angle = self.attack_facing(origin)
             facing = "FLANKS"
@@ -946,27 +950,27 @@ class Vehicle(Agent):
 
             if critical_location == "DRIVE":
                 armor_value *= 0.5
-                damage_chance -= (self.stats.reliability * 0.05)
+                damage_chance = True
 
             if critical_location == "ENGINE":
-                damage_chance -= (self.stats.reliability * 0.1)
-                fire_chance -= (self.stats.reliability * 0.1)
-                explosion_chance -= (self.stats.reliability * 0.05)
+                damage_chance = True
+                fire_chance = True
+                explosion_chance = True
 
             if critical_location == "WEAPON":
                 if "MANTLET" not in self.stats.flags:
                     armor_value *= 0.5
 
-                fire_chance -= (self.stats.reliability * 0.1)
-                explosion_chance -= (self.stats.reliability * 0.05)
+                fire_chance = True
+                explosion_chance = True
 
             if critical_location == "CREW":
-                knockout_chance = 1
+                knockout_chance = True
 
             if critical_location == "UTILITY":
-                explosion_chance += (self.ammo * 0.05)
+                explosion_chance = True
                 if "EXTRA_FUEL" in self.stats.flags:
-                    fire_chance += 0.1
+                    fire_chance = True
 
             if critical_location == "ARMOR":
                 armor_value *= 2.0
@@ -987,7 +991,7 @@ class Vehicle(Agent):
                     if self.stance == "SENTRY":
                         if "COMMANDER" in self.stats.flags:
                             if random.randint(0, 6) < 1:
-                                knockout_chance = 1
+                                knockout_chance = True
                                 armor_value = 0.0
 
                     if "EXTRA_PLATES" in self.stats.flags:
@@ -996,7 +1000,7 @@ class Vehicle(Agent):
                         armor_value *= 0.25
 
             if sector == "BOTTOM":
-                damage_chance += 0.2
+                damage_chance = True
                 if "EXTRA_PLATES" in self.stats.flags:
                     armor_value *= 0.5
                 else:
@@ -1008,38 +1012,32 @@ class Vehicle(Agent):
                 self.health -= damage
                 self.shock += damage
 
-                critical_hits = ["NONE", "DAMAGE", "FIRE", "EXPLOSION"]
-                critical_hit = random.choice(critical_hits)
+                max_chance = 12
 
-                if critical_hit != "NONE":
-                    if "EXTRA_SAFTEY" in self.stats.flags:
-                        fire_chance *= 0.5
-                        explosion_chance *= 0.5
-                        damage_chance *= 0.5
+                if "EXTRA_SAFETY" in self.stats.flags:
+                    max_chance = 24
 
-                    if "DANGEROUS_DESIGN" in self.stats.flags:
-                        fire_chance *= 2.0
-                        explosion_chance *= 2.0
-                        damage_chance *= 2.0
+                if "DANGEROUS_DESIGN" in self.stats.flags:
+                    max_chance = 6
 
-                    if critical_hit == "FIRE":
-                        if random.uniform(0.0, 1.0) < fire_chance:
+                if fire_chance:
+                    if random.randint(0, max_chance) == 0:
+                        self.knocked_out = True
+                        self.on_fire = True
+
+                if damage_chance:
+                    if random.randint(0, max_chance) == 0:
+                        self.mechanical_damage += random.randint(0, 3)
+
+                if explosion_chance:
+                    if random.randint(0, max_chance * 4) == 0:
+                        self.vehicle_explode()
+
+                if knockout_chance:
+                    crew_damage = int(damage * 0.1)
+                    if crew_damage > 0:
+                        if random.randint(0, crew_damage) > self.stats.crew:
                             self.knocked_out = True
-                            self.on_fire = True
-
-                    if critical_hit == "DAMAGE":
-                        if random.uniform(0.0, 1.0) < damage_chance:
-                            self.mechanical_damage += random.randint(0, 3)
-
-                    if critical_hit == "EXPLOSION":
-                        if random.uniform(0.0, 1.0) < explosion_chance:
-                            self.vehicle_explode()
-
-                    if knockout_chance > 0:
-                        crew_damage = int(damage * 0.1)
-                        if crew_damage > 0:
-                            if random.randint(0, crew_damage) > self.stats.crew:
-                                self.knocked_out = True
 
         if self.health < 0:
             self.dead = True

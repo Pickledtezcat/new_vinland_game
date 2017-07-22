@@ -81,7 +81,7 @@ def get_vehicle_parts():
                             "Can be used to store supplies of to carry extra passengers or troops."],
                      "40": ["extra ammo", "UTILITY", 1, 6, 1, 1, 1, "AMMO",
                             "Increases the number of shots available. Makes special ammo types like smoke, available."],
-                     "41": ["safety improvements", "UTILITY", 3, 6, 2, 1, 0, "EXTRA_SAFTEY",
+                     "41": ["safety improvements", "UTILITY", 3, 6, 2, 1, 0, "EXTRA_SAFETY",
                             "Improvements to engine, fuel lines, ammo storage and other areas increase survivability."],
                      "42": ["analog computer", "UTILITY", 4, 6, 2, 1, 0, "FIRE_CONTROL",
                             "A device for improving the accuracy of artillery or anti-aircraft guns."],

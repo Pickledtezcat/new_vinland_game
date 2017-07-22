@@ -12,7 +12,7 @@ def get_keyboard_inputs():
                         "control": (124, "LEFTCNTRTKEY", 0),
                         "alt": (125, "LEFTALTTKEY", 0),
                         "save": (162, "f1", 1),
-                        "pause": (112, "PKEY", 1),
+                        "pause": (32, "SPACEKEY", 1),
                         "info": (105, "i_key", 0),
                         "1": (49, "1", 1),
                         "2": (50, "2", 1),

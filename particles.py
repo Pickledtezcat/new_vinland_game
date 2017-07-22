@@ -113,11 +113,7 @@ class BulletFlash(Particle):
         if self.weapon.flag not in rapid_fire:
             self.reduction = 0.05
 
-        self.get_attributes()
         self.place_particle()
-
-    def get_attributes(self):
-        self.color = [1.0, 1.0, 1.0]
 
     def play_sound(self):
         if self.sound:
@@ -127,11 +123,7 @@ class BulletFlash(Particle):
             self.sound = None
 
     def add_box(self):
-        if self.weapon.rating < 4:
-            bullet_flash = "gun_flash.{}".format(str(random.randint(1, 4)).zfill(3))
-        else:
-            bullet_flash = "after_flash.{}".format(str(random.randint(1, 4)).zfill(3))
-
+        bullet_flash = "gun_flash.{}".format(str(random.randint(1, 4)).zfill(3))
         return self.level.own.scene.addObject(bullet_flash, self.level.own, 0)
 
     def place_particle(self):
@@ -153,6 +145,10 @@ class BulletFlash(Particle):
             color = 1.0 - self.timer
 
         self.box.color = [r * color, g * color, b * color, 1.0]
+
+        if self.timer >= 0.5:
+            bullet_flash = "after_flash.{}".format(str(random.randint(1, 4)).zfill(3))
+            self.box.replaceMesh(bullet_flash)
 
         if self.timer >= 1.0:
             self.ended = True
