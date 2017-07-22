@@ -50,11 +50,12 @@ class Bullet(object):
             hit_target = self.level.agents[occupied]
             if hit_target.agent_type != "INFANTRY":
                 hit_chance = hit_target.stats.chassis_size
-                if random.randint(0, 12) > hit_chance:
-                    self.detonate()
-                else:
+                if random.randint(0, 12) < hit_chance:
                     hit = {"label": "ARTILLERY_HIT", "sector": "TOP", "origin": target, "weapon": self.weapon, "agent": self.agent}
                     hit_target.hits.append(hit)
+                    return True
+
+        return False
 
     def update(self):
         curve_length = len(self.curve)
@@ -65,8 +66,10 @@ class Bullet(object):
             self.index += 1
 
         if self.index >= curve_length - 1:
-            self.detonate()
-            self.direct_hit()
+            if not self.direct_hit():
+                self.detonate()
+            else:
+                self.done = True
         else:
             next_point = mathutils.Vector(self.curve[self.index + 1])
             current_point = mathutils.Vector(self.curve[self.index])

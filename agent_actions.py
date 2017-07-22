@@ -6,7 +6,6 @@ import math
 
 
 class AgentMovement(object):
-
     def __init__(self, agent):
         self.agent = agent
         self.target = None
@@ -39,14 +38,17 @@ class AgentMovement(object):
         self.target_vector = self.start_vector
         self.target_normal = self.start_normal
 
-        self.current_orientation = mathutils.Vector(self.agent.direction).to_3d().to_track_quat("Y", "Z").to_matrix().to_3x3()
-        self.target_orientation = mathutils.Vector(self.agent.direction).to_3d().to_track_quat("Y", "Z").to_matrix().to_3x3()
+        self.current_orientation = mathutils.Vector(self.agent.direction).to_3d().to_track_quat("Y",
+                                                                                                "Z").to_matrix().to_3x3()
+        self.target_orientation = mathutils.Vector(self.agent.direction).to_3d().to_track_quat("Y",
+                                                                                               "Z").to_matrix().to_3x3()
 
         start_direction = mathutils.Vector(self.agent.direction)
         end_direction = start_direction
 
         if self.target_direction:
-            self.target_orientation = mathutils.Vector(self.target_direction).to_3d().to_track_quat("Y", "Z").to_matrix().to_3x3()
+            self.target_orientation = mathutils.Vector(self.target_direction).to_3d().to_track_quat("Y",
+                                                                                                    "Z").to_matrix().to_3x3()
             end_direction = mathutils.Vector(self.target_direction)
 
         elif self.target:
@@ -157,7 +159,6 @@ class AgentMovement(object):
 
 
 class InfantryAction(object):
-
     def __init__(self, infantryman):
         self.infantryman = infantryman
         self.target = None
@@ -213,7 +214,6 @@ class InfantryAction(object):
 
 
 class InfantryAnimation(object):
-
     def __init__(self, infantryman):
         self.infantryman = infantryman
         self.last_frame = -1
@@ -252,7 +252,6 @@ class InfantryAnimation(object):
                 self.frame = behavior.action_timer * 4.0
 
                 if behavior.action == "SHOOTING" and self.infantryman.special == "RAPID_FIRE":
-
                     action_time = behavior.action_timer * 12
                     remainder = action_time % 3
                     self.frame = remainder * 4.0
@@ -334,7 +333,6 @@ class InfantryAnimation(object):
 
 
 class InfantryBehavior(object):
-
     def __init__(self, infantryman):
         self.infantryman = infantryman
         self.destination = None
@@ -497,7 +495,6 @@ class InfantryBehavior(object):
 
 
 class AgentNavigation(object):
-
     def __init__(self, agent):
         self.agent = agent
         self.destination = None
@@ -596,7 +593,6 @@ class AgentNavigation(object):
 
 
 class AgentTargeter(object):
-
     """the agent targeter is controlled by set_target_id and can provide information on the current target,
     enemy distance, target_vector and so on"""
 
@@ -625,13 +621,18 @@ class AgentTargeter(object):
 
         # TODO implement a target ranking system
 
-        agents = self.agent.level.agents
+        key_list = [key for key in self.agent.level.agents]
+
+        valid_agents = [agent_key for agent_key in key_list if
+                        not self.invalid_target(self.agent.level.agents[agent_key])]
+        reasonable_targets = [valid_agent_key for valid_agent_key in valid_agents if
+                              not self.impenetrable(self.agent.level.agents[valid_agent_key])]
 
         closest = 2000
         best_target = None
 
-        for agent_key in agents:
-            enemy_agent = agents[agent_key]
+        for reasonable_agent_key in reasonable_targets:
+            enemy_agent = self.agent.level.agents[reasonable_agent_key]
 
             valid_target = self.check_target(enemy_agent)
 
@@ -640,7 +641,7 @@ class AgentTargeter(object):
 
                 if target_distance < closest:
                     closest = target_distance
-                    best_target = agent_key
+                    best_target = reasonable_agent_key
 
         if best_target:
             self.enemy_target_id = best_target
@@ -648,33 +649,52 @@ class AgentTargeter(object):
         else:
             self.reset_values()
 
-    def check_target(self, target_agent):
+    def invalid_target(self, target_agent):
 
         if not target_agent:
-            return False
+            return True
 
         if self.agent.team == target_agent.team:
-            return False
+            return True
 
         if target_agent.dead:
-            return False
+            return True
 
         if not target_agent.seen:
+            return True
+
+        if target_agent.knocked_out:
+            return True
+
+    def impenetrable(self, target_agent):
+
+        armor_facing = target_agent.get_attack_facing(self.agent.center.copy())
+        if armor_facing:
+            has_turret, facing, armor = armor_facing
+
+            lowest_armor = armor[facing]
+
+            penetration = self.agent.best_penetration
+
+            if has_turret:
+                if armor["TURRET"] < lowest_armor:
+                    lowest_armor = armor["TURRET"]
+
+            target_distance = (self.agent.center.copy() - target_agent.center.copy()).length
+            penetration -= (target_distance * 0.25)
+
+            if penetration < lowest_armor:
+                return True
+
+    def check_target(self, target_agent):
+
+        invalid_target = self.invalid_target(target_agent)
+        if invalid_target:
             return False
 
-        # TODO integrate minimum armor checks in to AI targeting
-        # armor_facing = target_agent.get_attack_facing(self.agent)
-        # if armor_facing:
-        #     has_turret, facing, armor = armor_facing
-        #
-        #     lowest_armor = armor[facing]
-        #
-        #     if has_turret:
-        #         if armor["TURRET"] < lowest_armor:
-        #             lowest_armor = armor["TURRET"]
-        #
-        #     if self.agent.best_penetration < lowest_armor:
-        #         return False
+        impenetrable = self.impenetrable(target_agent)
+        if impenetrable:
+            return False
 
         return True
 

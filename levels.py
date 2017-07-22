@@ -219,6 +219,7 @@ class MouseControl(object):
 
         elif self.mouse_over:
             if self.mouse_over["building"]:
+
                 selected_agents = [self.level.agents[agent_id] for agent_id in self.level.agents if
                                    self.level.agents[agent_id].selected]
 
@@ -237,9 +238,20 @@ class MouseControl(object):
                                     agent.commands.append(message)
 
                         else:
-                            # TODO setup if enemy occupier
+                            occupying_agent = self.level.agents[building.occupier]
+                            if occupying_agent.team != 0:
+                                enemy_occupier = building.occupier
+                                self.context = "TARGET"
+                                click = "right_button" in self.level.manager.game_input.buttons
 
-                            self.context = "NO_ENTRY"
+                                if click:
+                                    message = {"label": "TARGET_ENEMY", "target_id": enemy_occupier}
+
+                                    for agent in selected_agents:
+                                        agent.commands.append(message)
+
+                            else:
+                                self.context = "NO_ENTRY"
 
     def update(self):
 
@@ -458,7 +470,7 @@ class Level(object):
                 self.set_tile(door_loc, "building", None)
 
         self.terrain.paint_map()
-        #TODO find another way of updating terrain
+        # TODO find another way of updating terrain
         self.terrain.canvas.refresh(True)
         self.terrain.normal.refresh(True)
         self.buildings_mapped = True
@@ -588,7 +600,8 @@ class Level(object):
         camera_zoom_timer = self.camera_controller.zoom_timer
         level_id_index = self.level_id_index
 
-        level_details = {"camera_position": camera_position, "camera_zoom_in": camera_zoom_in, "camera_zoom_timer": camera_zoom_timer, "level_id_index": level_id_index}
+        level_details = {"camera_position": camera_position, "camera_zoom_in": camera_zoom_in,
+                         "camera_zoom_timer": camera_zoom_timer, "level_id_index": level_id_index}
 
         saving_agents = {}
         for agent_id in self.agents:
@@ -704,6 +717,14 @@ class Level(object):
         self.manager.debugger.printer(self.paused, "paused")
         self.user_interface.update()
 
+        if "2" in self.manager.game_input.keys:
+            for agent_key in self.agents:
+                agent = self.agents[agent_key]
+                if agent.team != 0 and not agent.enter_building:
+                    buildings = [building_key for building_key in self.buildings]
+                    building_choice = random.choice(buildings)
+                    agent.mount_building(building_choice)
+
         if "escape" in self.manager.game_input.keys:
             self.save_level()
 
@@ -806,7 +827,7 @@ class Level(object):
                     particles.BulletFlash(self, weapon, delay=delay * i)
                     particles.BulletHitGround(self, list(target_position), delay=8 * i)
 
-                # TODO handle infantry weapons vs vehicles
+                    # TODO handle infantry weapons vs vehicles
 
     def shoot_shells(self, command):
 
@@ -934,61 +955,123 @@ class Level(object):
         location = [int(position[0]), int(position[1])]
 
         effect = command["effect"]
-        damage = command["damage"] * random.uniform(0.5, 1.0)
+        damage = command["damage"]
 
-        explosion_chart = [8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096]
+        #explosion_chart = [8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096]
+        explosion_chart = [0, 16, 64, 256, 1024, 4096]
+
         max_fall_off = 0
 
         if effect:
             if effect == "DUMMY_EXPLOSION":
                 particles.DummyExplosion(self, location)
 
-        for i in range(9):
+        for i in range(5):
             fall_off = explosion_chart[i]
             if damage > fall_off:
                 max_fall_off = i
 
-        max_fall_off = min(9, max_fall_off + 2)
+        max_fall_off = min(5, max_fall_off + 2)
         x, y = location
 
         target_tile = self.get_tile([x, y])
+
+        buildings_hit = []
+        vehicles_hit = []
+
         if target_tile:
             for ex in range(-max_fall_off, max_fall_off):
                 for ey in range(-max_fall_off, max_fall_off):
                     damage_reduction = explosion_chart[abs(ex)]
                     shock_reduction = explosion_chart[max(0, abs(ex) - 1)]
 
-                    effective_damage = max(0, damage - damage_reduction) * random.uniform(0.0, 1.0)
-                    shock = max(0, damage - shock_reduction) * random.uniform(0.0, 1.0)
+                    effective_damage = max(0.0, damage - damage_reduction) * random.uniform(0.0, 1.0)
+                    shock = max(0.0, damage - shock_reduction) * random.uniform(0.0, 1.0)
 
-                    if shock > 0:
-                        explosion_key = [x+ex, y+ey]
+                    if damage > 0.0 or shock > 0.0:
+                        explosion_key = [x + ex, y + ey]
                         tile = self.get_tile(explosion_key)
                         if tile:
+                            building_id = tile["building"]
+                            if building_id:
+                                if building_id not in buildings_hit:
+                                    buildings_hit.append(building_id)
+
                             occupant = tile["occupied"]
                             if occupant:
                                 target_agent = self.agents.get(occupant)
 
                                 if target_agent:
                                     if target_agent.agent_type == "INFANTRY":
-                                        soldier_list = [soldier for soldier in target_agent.soldiers if soldier.location == explosion_key]
+                                        soldier_list = [soldier for soldier in target_agent.soldiers if
+                                                        soldier.location == explosion_key]
                                         if soldier_list:
                                             soldier = soldier_list[0]
-                                            if soldier.behavior.prone:
-                                                shock *= 0.5
-                                                effective_damage = int(effective_damage * 0.5)
+                                            personal_damage = effective_damage
+                                            if not soldier.in_building:
+                                                if soldier.behavior.prone:
+                                                    shock *= 0.5
+                                                    personal_damage *= 0.5
 
-                                            if soldier.in_building:
-                                                shock *= 0.5
-                                                effective_damage = int(effective_damage * 0.5)
+                                                if personal_damage > 0.0:
+                                                    if personal_damage < soldier.toughness:
+                                                        personal_damage *= 0.5
+                                                        shock *= 0.5
 
-                                            soldier.toughness -= effective_damage
-                                            target_agent.shock += shock
+                                                    soldier.toughness -= max(1, int(personal_damage))
+
+                                                if shock > 0.0:
+                                                    target_agent.shock += shock
                                     else:
-                                        hit = {"label": "SPLASH_DAMAGE", "sector": None, "damage": effective_damage,
-                                                   "origin": position, "agent": agent}
-                                        target_agent.hits.append(hit)
-                                    # TODO handle vehicles using effective damage
+                                        if occupant not in vehicles_hit:
+                                            vehicles_hit.append(occupant)
+
+            if vehicles_hit:
+                for vehicle_key in vehicles_hit:
+                    vehicle = self.agents[vehicle_key]
+
+                    explosive_distance = int((vehicle.center.copy() - position.copy()).length)
+                    explosive_distance = min(5, explosive_distance)
+
+                    explosive_reduction = explosion_chart[explosive_distance]
+                    effective_vehicle_damage = max(0.0, damage - explosive_reduction)
+
+                    if effective_vehicle_damage > 1.0:
+                        hit = {"label": "SPLASH_DAMAGE", "sector": None,
+                               "damage": effective_vehicle_damage,
+                               "origin": position.copy(), "agent": agent}
+                        vehicle.hits.append(hit)
+
+            if buildings_hit:
+                for building_key in buildings_hit:
+
+                    building = self.buildings[building_key]
+                    explosive_distance = int((building.box.worldPosition.copy() - position.copy()).length)
+                    explosive_distance = min(5, explosive_distance)
+
+                    explosive_reduction = explosion_chart[explosive_distance]
+
+                    in_building_damage = max(0.0, damage - explosive_reduction) * building.damage_reduction
+
+                    building_occupant = building.occupier
+
+                    if building_occupant:
+                        hit_agent = self.agents[building_occupant]
+                        if explosive_distance < 2:
+                            hit_agent.shock += in_building_damage
+
+                        if in_building_damage > 0.0:
+                            for soldier in hit_agent.soldiers:
+                                personal_damage = in_building_damage
+
+                                if soldier.in_building:
+                                    if personal_damage > 0.0:
+                                        personal_damage *= random.uniform(0.0, 1.0)
+
+                                        if personal_damage < soldier.toughness:
+                                            personal_damage *= 0.5
+
+                                        soldier.toughness -= max(1, int(personal_damage))
 
     def process_commands(self):
 
@@ -1043,7 +1126,11 @@ class Level(object):
 
                     if not agent.dead:
                         is_enemy = agent.team != 0
+
                         visibility_distance = agent.get_visual_range()
+                        if knocked_out:
+                            visibility_distance = agent.vision_decay
+
                         max_distance = 17
                         suspect_distance = max_distance * 2.0
 
@@ -1067,7 +1154,8 @@ class Level(object):
                                                 seen_agents.append(enemy_key)
                                                 enemy.set_seen(True)
                                                 visibility_dict[enemy_key] = {"enemy": True, "distance": 0,
-                                                                              "location": enemy.location, "knocked_out": knocked_out}
+                                                                              "location": enemy.location,
+                                                                              "knocked_out": knocked_out}
 
                                             elif enemy_distance < suspect_distance:
                                                 enemy.set_suspect(True)

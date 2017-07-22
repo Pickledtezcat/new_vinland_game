@@ -141,7 +141,7 @@ class VehicleWeapon(object):
     def set_rate_of_fire(self, manpower):
 
         vehicle_weight = self.stats.weight
-        required_manpower = 2.0 + self.rating
+        required_manpower = 3.0 + (self.rating * 0.5)
         rate_of_fire = manpower / required_manpower
         rate_of_fire = min(2.0, rate_of_fire)
 
@@ -165,7 +165,7 @@ class VehicleWeapon(object):
         if self.flag in very_slow_firing:
             rate_of_fire *= 0.5
 
-        self.rate_of_fire = rate_of_fire * 0.01
+        self.rate_of_fire = rate_of_fire * 0.005
         if self.rate_of_fire > 0.0:
             self.reload_time = round(1.0 / (60.0 * self.rate_of_fire), 2)
         else:

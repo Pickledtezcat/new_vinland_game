@@ -268,14 +268,14 @@ class StatusBar(object):
         if self.agent.knocked_out:
             return "knocked_out"
 
+        if self.agent.is_damaged == 1:
+            return "disabled"
+
         if self.agent.is_carrying:
             return "carrying"
 
         if self.agent.is_shocked == 1:
             return "broken"
-
-        if self.agent.is_damaged == 1:
-            return "disabled"
 
         if self.agent.has_ammo < 0:
             return "empty"

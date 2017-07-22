@@ -503,19 +503,10 @@ class Agent(object):
         self.commands = []
 
     def mount_building(self, building_id):
-        building = self.level.buildings.get(building_id)
-        if building:
-            if not building.occupier:
-                self.navigation.stop = True
-                self.enter_building = building_id
-                self.destinations = [building.location]
-                building.occupier = self.agent_id
+        pass
 
     def dismount_building(self):
-        building = self.level.buildings.get(self.enter_building)
-        if building:
-            building.occupier = None
-            self.enter_building = None
+        pass
 
     def set_starting_state(self):
         self.state = AgentStartUp(self)
@@ -706,7 +697,7 @@ class Vehicle(Agent):
         else:
             speed_index = 0
 
-        self.max_speed = self.stats.speed[speed_index] * 0.001
+        self.max_speed = self.stats.speed[speed_index] * 0.00075
         self.handling = self.stats.handling[speed_index] * 0.001
         self.turret_speed = self.stats.turret_speed * 0.001
 
@@ -867,7 +858,7 @@ class Vehicle(Agent):
 
         if self.movement.target:
             if self.movement.target_direction:
-                self.throttle_target = self.stance_speed * 0.75
+                self.throttle_target = self.stance_speed * 0.3
             elif self.movement.target == self.navigation.destination:
                 self.throttle_target = self.stance_speed * 0.3
             else:
@@ -928,6 +919,12 @@ class Vehicle(Agent):
                 damage = weapon.power
                 penetration = weapon.penetration
 
+            attack_vector = self.center.copy() - origin
+            attack_distance = attack_vector.length
+
+            penetration -= (attack_distance * 0.25)
+            penetration *= random.uniform(0.5, 1.0)
+
             hit_angle = self.attack_facing(origin)
             facing = "FLANKS"
             if math.degrees(hit_angle) > 90:
@@ -940,106 +937,118 @@ class Vehicle(Agent):
                 hit_locations.append(facing)
 
             hit_location = random.choice(hit_locations)
-
             critical_location = random.choice(self.stats.crits[hit_location])
             armor_value = self.stats.armor[hit_location]
+            max_chance = 6
 
-            if "WEAK_SPOT" in self.stats.flags:
-                if random.randint(0, 10) > 9:
+            if not label == "SPLASH_DAMAGE":
+                if "WEAK_SPOT" in self.stats.flags:
+                    if random.randint(0, 10) > 9:
+                        armor_value *= 0.5
+
+                if critical_location == "DRIVE":
                     armor_value *= 0.5
+                    damage_chance = True
 
-            if critical_location == "DRIVE":
-                armor_value *= 0.5
-                damage_chance = True
-
-            if critical_location == "ENGINE":
-                damage_chance = True
-                fire_chance = True
-                explosion_chance = True
-
-            if critical_location == "WEAPON":
-                if "MANTLET" not in self.stats.flags:
-                    armor_value *= 0.5
-
-                fire_chance = True
-                explosion_chance = True
-
-            if critical_location == "CREW":
-                knockout_chance = True
-
-            if critical_location == "UTILITY":
-                explosion_chance = True
-                if "EXTRA_FUEL" in self.stats.flags:
+                if critical_location == "ENGINE":
+                    damage_chance = True
                     fire_chance = True
+                    explosion_chance = True
 
-            if critical_location == "ARMOR":
-                armor_value *= 2.0
+                if critical_location == "WEAPON":
+                    if "MANTLET" not in self.stats.flags:
+                        armor_value *= 0.5
 
-            if critical_location == "EMPTY":
-                armor_value *= 2.0
+                    fire_chance = True
+                    explosion_chance = True
 
-            attack_vector = self.center.copy() - origin
-            attack_distance = attack_vector.length
+                if critical_location == "CREW":
+                    knockout_chance = True
 
-            penetration -= (attack_distance * 0.25)
-            penetration *= random.uniform(0.5, 1.0)
+                if critical_location == "UTILITY":
+                    explosion_chance = True
+                    if "EXTRA_FUEL" in self.stats.flags:
+                        fire_chance = True
 
-            if sector == "TOP":
-                if "OPEN_TOP" in self.stats.flags:
-                    armor_value = 0.0
-                else:
-                    if self.stance == "SENTRY":
-                        if "COMMANDER" in self.stats.flags:
-                            if random.randint(0, 6) < 1:
-                                knockout_chance = True
-                                armor_value = 0.0
+                if critical_location == "ARMOR":
+                    armor_value *= 2.0
 
+                if critical_location == "EMPTY":
+                    armor_value *= 2.0
+
+                if sector == "TOP":
+                    if "OPEN_TOP" in self.stats.flags:
+                        knockout_chance = True
+                        armor_value = 0.0
+                    elif "ANTI_AIRCRAFT" in self.stats.flags:
+                        knockout_chance = True
+                        armor_value = 0.0
+                    else:
+                        if self.stance == "SENTRY":
+                            if "COMMANDER" in self.stats.flags:
+                                if random.randint(0, max_chance) == 0:
+                                    knockout_chance = True
+                                    armor_value = 0.0
+
+                        if "EXTRA_PLATES" in self.stats.flags:
+                            armor_value *= 0.5
+                        else:
+                            armor_value *= 0.25
+
+                if sector == "BOTTOM":
+                    damage_chance = True
                     if "EXTRA_PLATES" in self.stats.flags:
                         armor_value *= 0.5
                     else:
                         armor_value *= 0.25
 
-            if sector == "BOTTOM":
-                damage_chance = True
-                if "EXTRA_PLATES" in self.stats.flags:
-                    armor_value *= 0.5
-                else:
-                    armor_value *= 0.25
+            self.level.manager.debugger.printer("{} / {}".format(round(penetration), round(armor_value)), label="p/a", decay=300)
 
             penetrated = penetration > armor_value
+            damage *= random.uniform(0.5, 1.0)
 
             if penetrated:
                 self.health -= damage
                 self.shock += damage
 
-                max_chance = 12
-
                 if "EXTRA_SAFETY" in self.stats.flags:
-                    max_chance = 24
+                    max_chance = 12
 
                 if "DANGEROUS_DESIGN" in self.stats.flags:
-                    max_chance = 6
+                    max_chance = 3
 
                 if fire_chance:
-                    if random.randint(0, max_chance) == 0:
+                    if random.randint(0, max_chance * 2) == 0:
                         self.knocked_out = True
                         self.on_fire = True
-
-                if damage_chance:
-                    if random.randint(0, max_chance) == 0:
-                        self.mechanical_damage += random.randint(0, 3)
 
                 if explosion_chance:
                     if random.randint(0, max_chance * 4) == 0:
                         self.vehicle_explode()
 
                 if knockout_chance:
-                    crew_damage = int(damage * 0.1)
-                    if crew_damage > 0:
-                        if random.randint(0, crew_damage) > self.stats.crew:
-                            self.knocked_out = True
+                    if random.randint(0, max_chance) == 0:
+                        crew_damage = int(damage * 0.1)
+                        if crew_damage > 0:
+                            if random.randint(0, crew_damage) > self.stats.crew:
+                                self.knocked_out = True
 
-        if self.health < 0:
+                if damage_chance:
+                    if random.randint(0, max_chance) == 0:
+                        mechanical_damage = random.randint(0, 4) - self.stats.reliability
+                        if mechanical_damage > 0:
+                            self.mechanical_damage += mechanical_damage
+
+            else:
+                if damage_chance:
+                    if damage > 30.0:
+                        if random.randint(0, max_chance * 2) == 0:
+                            self.shock += damage
+                            mechanical_damage = random.randint(0, 4) - self.stats.reliability
+                            if mechanical_damage > 0:
+                                self.mechanical_damage += mechanical_damage
+
+        if self.health < 0 and not self.dead:
             self.dead = True
             if random.uniform(0.0, 6.0) < self.ammo:
                 self.vehicle_explode()
@@ -1132,6 +1141,10 @@ class Infantry(Agent):
         best_penetration = 0
 
         for soldier in self.soldiers:
+            if soldier.grenade:
+                if soldier.grenade.ammo > 0:
+                    best_penetration = 50
+
             if soldier.weapon.ammo > 0.0:
                 if soldier.weapon.power > best_penetration:
                     best_penetration = soldier.weapon.power
@@ -1332,6 +1345,21 @@ class Infantry(Agent):
         if number > 0:
             return center / number
 
+    def mount_building(self, building_id):
+        building = self.level.buildings.get(building_id)
+        if building:
+            if not building.occupier:
+                self.navigation.stop = True
+                self.enter_building = building_id
+                self.destinations = [building.location]
+                building.occupier = self.agent_id
+
+    def dismount_building(self):
+        building = self.level.buildings.get(self.enter_building)
+        if building:
+            building.occupier = None
+            self.enter_building = None
+
 
 class InfantryMan(object):
     def __init__(self, agent, infantry_type, index, load_dict=None):
@@ -1484,7 +1512,9 @@ class InfantryMan(object):
         if self.agent.enter_building:
             building = self.agent.level.buildings.get(self.agent.enter_building)
             if building:
-                destination = building.get_closest_door(list(self.box.worldPosition.copy()))[:2]
+                closest_door = building.get_closest_door(list(self.box.worldPosition.copy()))
+                if closest_door:
+                    destination = closest_door[:2]
 
         if not destination:
             location = self.agent.box.worldPosition.copy()
@@ -1603,17 +1633,19 @@ class SoldierGrenade(object):
 
     def shoot(self):
 
-        target = self.infantryman.agent.agent_targeter.enemy_target
-        target_distance = self.infantryman.agent.agent_targeter.target_distance
-
-        in_range = self.max_range >= target_distance > 3.0
         action = None
-
-        self.total_accuracy = self.infantryman.agent.accuracy
-        if self.infantryman.agent.prone:
-            self.total_accuracy = self.infantryman.agent.accuracy * 0.5
-
+        target = self.infantryman.agent.agent_targeter.enemy_target
         if target:
+
+            target_vector = self.infantryman.box.worldPosition.copy() - target.center.copy()
+            target_distance = target_vector.length
+
+            in_range = self.max_range > target_distance
+
+            self.total_accuracy = self.infantryman.agent.accuracy
+            if self.infantryman.agent.prone:
+                self.total_accuracy = self.infantryman.agent.accuracy * 0.5
+
             if in_range and self.get_ready():
 
                 command = {"label": "ARTILLERY", "agent": self.infantryman.agent, "weapon": self,
@@ -1703,7 +1735,6 @@ class SoldierWeapon(object):
 
         if self.ammo > 0.0:
             if self.timer >= 1.0:
-
                 penetration = self.power
 
                 target_distance = self.infantryman.agent.agent_targeter.target_distance
