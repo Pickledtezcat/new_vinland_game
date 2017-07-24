@@ -12,6 +12,7 @@ import LOS
 import map_generation
 import bullets
 import builder_tools
+import static_dicts
 
 
 class MovementMarker(object):
@@ -332,6 +333,8 @@ class Level(object):
         self.agents_added = False
         self.buildings_added = False
         self.buildings_mapped = False
+
+        self.world_dict = static_dicts.get_world("summer")
 
         self.map = {}
         self.agents = {}
@@ -1195,8 +1198,12 @@ class Level(object):
         self.game_audio.update()
         self.mouse_update()
         self.agent_update()
-        self.bullets_update()
-        self.particle_update()
+
         self.user_interface_update()
         self.process_commands()
-        self.visibility_update()
+
+        if not self.paused:
+            self.bullets_update()
+            self.particle_update()
+            self.visibility_update()
+

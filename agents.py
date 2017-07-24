@@ -71,6 +71,7 @@ class Agent(object):
         self.stats = None
         self.health = 0
         self.mechanical_damage = 0
+        self.damage_mod = 1.0
         self.load_stats()
 
         self.model = None
@@ -160,6 +161,7 @@ class Agent(object):
                      "vision_decay": self.vision_decay, "mechanical_damage": self.mechanical_damage,
                      "on_fire": self.on_fire, "selected": self.selected, "state_name": self.state.name,
                      "load_name": self.load_name, "ammo": self.ammo, "stance": self.stance,
+                     "damage_mod": self.damage_mod,
                      "state_count": self.state.count, "movement_target": self.movement.target,
                      "movement_target_direction": self.movement.target_direction, "weapons": weapons,
                      "movement_timer": self.movement.timer, "initial_health": self.initial_health,
@@ -188,6 +190,7 @@ class Agent(object):
         self.deployed = agent_dict["deployed"]
         self.angled = agent_dict["angled"]
         self.vision_decay = agent_dict["vision_decay"]
+        self.damage_mod = agent_dict["damage_mod"]
 
         self.movement.load_movement(agent_dict["movement_target"], agent_dict["movement_target_direction"],
                                     agent_dict["movement_timer"])
@@ -709,14 +712,19 @@ class Vehicle(Agent):
             self.max_speed *= 0.75
             self.handling *= 0.75
 
-        if self.mechanical_damage > 0:
-            if self.mechanical_damage < self.stats.reliability:
-                for d in range(self.mechanical_damage):
-                    self.max_speed *= 0.75
-                    self.handling *= 0.75
-            else:
-                self.max_speed = 0.0
-                self.handling = 0.0
+        if self.mechanical_damage > 0 and self.movement.done:
+            damage_mod = 1.0
+
+            if self.mechanical_damage > self.stats.reliability:
+                damage_degree = self.mechanical_damage - self.stats.reliability
+
+                for d in range(damage_degree):
+                    damage_mod *= 0.5
+
+            self.damage_mod = damage_mod
+
+        self.max_speed *= self.damage_mod
+        self.handling *= self.damage_mod
 
         self.get_best_penetration()
 
@@ -790,7 +798,6 @@ class Vehicle(Agent):
 
     def vehicle_explode(self):
         if not self.dead:
-
             command = {"label": "EXPLOSION", "effect": "DUMMY_EXPLOSION", "damage": 100,
                        "position": self.center, "agent": self}
 
@@ -1002,7 +1009,8 @@ class Vehicle(Agent):
                     else:
                         armor_value *= 0.25
 
-            self.level.manager.debugger.printer("{} / {}".format(round(penetration), round(armor_value)), label="p/a", decay=300)
+            self.level.manager.debugger.printer("{} / {}".format(round(penetration), round(armor_value)), label="p/a",
+                                                decay=300)
 
             penetrated = penetration > armor_value
             damage *= random.uniform(0.5, 1.0)

@@ -91,7 +91,11 @@ class VehicleModel(object):
 
         has_weapons = len(self.stats.weapons)
 
-        armor_amounts = [self.stats.armor[location] for location in self.stats.armor]
+        armor_locations = ["FRONT", "FLANKS", "TURRET"]
+        if self.stats.turret_size == 0:
+            armor_locations = ["FRONT", "FLANKS"]
+
+        armor_amounts = [self.stats.armor[location] for location in armor_locations]
         min_armor = int(min(armor_amounts))
 
         armor_threshold = 50

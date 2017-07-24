@@ -3,7 +3,6 @@ import mathutils
 import bgeutils
 import random
 
-
 infantry_bullet_dict = {"PISTOL": {"color": None, "instances": 1},
                         "MG": {"color": [1.0, 1.0, 1.0], "instances": 3},
                         "LIGHT_MG": {"color": [0.5, 0.5, 0.5], "instances": 3},
@@ -11,6 +10,21 @@ infantry_bullet_dict = {"PISTOL": {"color": None, "instances": 1},
                         "HEAVY_RIFLE": {"color": [1.0, 1.0, 1.0], "instances": 1},
                         "ANTI_TANK": {"color": [1.0, 0.2, 0.0], "instances": 1},
                         "SMG": {"color": None, "instances": 3}}
+
+particle_ranges = {"chunk_1": 8,
+                   "dirt_1": 8,
+                   "gun_flash": 4,
+                   "after_flash": 4,
+                   "smoke_blast": 4,
+                   "dirt_blast": 4,
+                   "sparks": 8,
+                   "explosion_1": 8,
+                   "bang_1": 8,
+                   "bang_2": 8,
+                   "bang_3": 8,
+                   "simple_dirt": 8,
+                   "round_smoke": 8,
+                   "bubble_smoke": 8}
 
 
 class Particle(object):
@@ -29,7 +43,53 @@ class Particle(object):
             self.box.endObject()
 
     def update(self):
+        self.process()
+
+    def process(self):
         pass
+
+
+class AnimatedParticle(Particle):
+
+    mesh_name = None
+
+    def __init__(self, level):
+
+        self.mesh_name = self.get_mesh_name()
+        super().__init__(level)
+
+        self.max_frame = particle_ranges[self.mesh_name]
+        self.max_sub_frame = 4
+
+        self.sub_frame = 0
+        self.frame = 1
+
+        self.switch_frame()
+
+    def get_mesh_name(self):
+        return "chunk_1"
+
+    def add_box(self):
+        return self.level.own.scene.addObject(self.mesh_name, self.level.own, 0)
+
+    def animation_update(self):
+        if self.sub_frame < self.max_sub_frame:
+            self.sub_frame += 1
+        else:
+            self.frame += 1
+            self.sub_frame = 0
+            self.switch_frame()
+
+            if self.frame == self.max_frame:
+                self.frame = 1
+
+    def switch_frame(self):
+        frame_name = "{}.{}".format(self.mesh_name, str(self.frame).zfill(3))
+        self.box.replaceMesh(frame_name)
+
+    def update(self):
+        self.animation_update()
+        self.process()
 
 
 class DebugLabel(Particle):
@@ -42,7 +102,7 @@ class DebugLabel(Particle):
     def add_box(self):
         return self.level.own.scene.addObject("debug_label", self.level.own, 0)
 
-    def update(self):
+    def process(self):
         self.box.worldPosition = self.owner.box.worldPosition.copy()
         self.text_object["Text"] = self.owner.debug_text
 
@@ -82,7 +142,7 @@ class MovementPointIcon(Particle):
             self.box.worldPosition.z += 0.5
             self.box.alignAxisToVect(normal)
 
-    def update(self):
+    def process(self):
 
         if self.released:
             if self.timer >= 1.0:
@@ -91,6 +151,36 @@ class MovementPointIcon(Particle):
                 self.timer += 0.02
                 color = bgeutils.smoothstep(1.0 - self.timer)
                 self.box.color = [color, color, color, 1.0]
+
+
+class ShootSmoke(AnimatedParticle):
+
+    def __init__(self, level, growth, position):
+        super().__init__(level)
+        self.max_sub_frame = 6
+        self.grow = 1.002 * growth
+        self.up_force = mathutils.Vector([0.0, 0.0, 0.01])
+        self.position = position
+        self.box.worldPosition = position
+
+    def get_mesh_name(self):
+        return "bubble_smoke"
+
+    def update(self):
+
+        if self.timer >= 1.0:
+            self.ended = True
+
+        else:
+            self.timer += 0.01
+            c = (1.0 - (self.timer * 0.5)) + 0.75
+            a = (1.0 - self.timer) * 0.5
+            self.box.color = [c, c, c, a]
+            up_force = self.up_force * (0.9999 * self.timer)
+            self.box.worldPosition += up_force
+            scale = (1.0 * self.grow) * self.timer
+
+            self.box.localScale = [scale, scale, scale]
 
 
 class BulletFlash(Particle):
@@ -114,6 +204,8 @@ class BulletFlash(Particle):
             self.reduction = 0.05
 
         self.place_particle()
+        if self.weapon.rating > 0:
+            ShootSmoke(self.level, self.scale, self.box.worldPosition.copy())
 
     def play_sound(self):
         if self.sound:
@@ -133,7 +225,7 @@ class BulletFlash(Particle):
         self.box.localScale.x = self.scale
         self.box.localScale.z = self.scale
 
-    def update(self):
+    def process(self):
         r, g, b = self.color
 
         if self.delay > 0:
@@ -212,7 +304,7 @@ class InfantryBulletStreak(Particle):
             self.box.worldOrientation = target_vector.to_track_quat("Y", "Z").to_matrix().to_3x3()
             self.box.localScale.y = target_vector.length
 
-    def update(self):
+    def process(self):
 
         if self.delay > 0:
             self.delay -= 1
@@ -242,7 +334,8 @@ class BulletHitGround(Particle):
         if tile:
             height = tile["height"]
             variance = 0.5
-            random_vector = mathutils.Vector([random.uniform(-variance, variance), random.uniform(-variance, variance), 0.0])
+            random_vector = mathutils.Vector(
+                [random.uniform(-variance, variance), random.uniform(-variance, variance), 0.0])
             self.box.worldPosition = self.location
             self.box.worldPosition.z = height
             self.box.worldPosition += random_vector
@@ -252,7 +345,7 @@ class BulletHitGround(Particle):
     def add_box(self):
         return self.level.own.scene.addObject("bullet_hit_ground", self.level.own, 0)
 
-    def update(self):
+    def process(self):
 
         if self.delay > 0:
             self.box.visible = False
@@ -290,7 +383,7 @@ class DummyExplosion(Particle):
     def add_box(self):
         return self.level.own.scene.addObject("dummy_explosion", self.level.own, 0)
 
-    def update(self):
+    def process(self):
 
         if self.timer >= 1.0:
             self.ended = True

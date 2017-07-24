@@ -75,3 +75,24 @@ def soldiers():
         soldier_dict[soldier_key] = new_entry
 
     return soldier_dict
+
+
+def get_world(world_type):
+
+    worlds = {"summer": [[0.42, 0.37, 0.28, 1.0], [1.0, 0.94, 0.743], [0.51, 0.6, 1.0], 1, 0, 0, "summer"],
+              "winter": [[0.42, 0.37, 0.28, 1.0], [1.0, 0.94, 0.743], [0.51, 0.6, 1.0], 0, 2, 0, "winter"],
+              "spring": [[0.42, 0.37, 0.28, 1.0], [1.0, 0.94, 0.743], [0.51, 0.6, 1.0], 0, 0, 0, "summer"],
+              "fall": [[0.42, 0.37, 0.28, 1.0], [1.0, 0.94, 0.743], [0.51, 0.6, 1.0], 0, 1, 1, "fall"],
+              "desert": [[0.42, 0.37, 0.28, 1.0], [1.0, 0.94, 0.743], [0.51, 0.6, 1.0], 1, 0, 1, "desert"],
+              "jungle": [[0.42, 0.37, 0.28, 1.0], [1.0, 0.94, 0.743], [0.51, 0.6, 1.0], 2, 0, 0, "jungle"]}
+
+    labels = ["dirt_color",	"main_light", "ambient", "is_hot", "is_cold", "is_dusty", "string_base"]
+
+    world_dict = {}
+    entry = worlds[world_type]
+    for i in range(len(labels)):
+        label = labels[i]
+        data = entry[i]
+        world_dict[label] = data
+
+    return world_dict
