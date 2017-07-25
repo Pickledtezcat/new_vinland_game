@@ -31,7 +31,7 @@ class VehicleWeapon(object):
         self.effective_range = 0.0
         self.weight = self.part["x_size"] * self.part["y_size"]
         self.flag = self.part['flag']
-        self.timer = 0.0
+        self.timer = 0.8
 
         self.recoiled = False
         self.recoiling = 0.0
@@ -141,7 +141,7 @@ class VehicleWeapon(object):
     def set_rate_of_fire(self, manpower):
 
         vehicle_weight = self.stats.weight
-        required_manpower = 3.0 + (self.rating * 0.5)
+        required_manpower = 10.0 + self.rating
         rate_of_fire = manpower / required_manpower
         rate_of_fire = min(2.0, rate_of_fire)
 
@@ -165,7 +165,7 @@ class VehicleWeapon(object):
         if self.flag in very_slow_firing:
             rate_of_fire *= 0.5
 
-        self.rate_of_fire = rate_of_fire * 0.005
+        self.rate_of_fire = rate_of_fire * 0.015
         if self.rate_of_fire > 0.0:
             self.reload_time = round(1.0 / (60.0 * self.rate_of_fire), 2)
         else:
@@ -236,7 +236,11 @@ class VehicleWeapon(object):
         moving = not self.agent.movement.done
         if self.rating > 2:
             if moving:
-                return False
+                if self.indirect:
+                    return False
+
+                if not self.agent.stance == "AGGRESSIVE":
+                    return False
 
         target = self.agent.agent_targeter.enemy_target
         if not target:
@@ -574,6 +578,9 @@ class VehicleStats(object):
 
         self.durability *= 10.0
         self.get_weapons()
+
+        if "OPEN_TOP" in self.flags:
+            self.open_top = True
 
         if self.vehicle_type == "GUN_CARRIAGE":
             self.get_carriage_movement()

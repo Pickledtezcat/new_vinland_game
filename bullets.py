@@ -88,7 +88,7 @@ class Grenade(Bullet):
     bullet_type = "GRENADE"
 
     def detonate(self):
-        command = {"label": "EXPLOSION", "effect": "DUMMY_EXPLOSION", "damage": self.damage, "position": self.box.worldPosition.copy(), "agent": self.agent}
+        command = {"label": "EXPLOSION", "effect": "SMALL_EXPLOSION", "damage": self.damage, "position": self.box.worldPosition.copy(), "agent": self.agent}
         self.level.commands.append(command)
         self.done = True
 
@@ -97,7 +97,7 @@ class Rocket(Bullet):
     bullet_type = "ROCKET"
 
     def detonate(self):
-        command = {"label": "EXPLOSION", "effect": "DUMMY_EXPLOSION", "damage": self.damage, "position": self.box.worldPosition.copy(), "agent": self.agent}
+        command = {"label": "EXPLOSION", "effect": "SMALL_EXPLOSION", "damage": self.damage, "position": self.box.worldPosition.copy(), "agent": self.agent}
         self.level.commands.append(command)
         self.done = True
 
@@ -106,6 +106,6 @@ class Shell(Bullet):
     bullet_type = "SHELL"
 
     def detonate(self):
-        command = {"label": "EXPLOSION", "effect": "DUMMY_EXPLOSION", "damage": self.damage, "position": self.box.worldPosition.copy(), "agent": self.agent}
+        command = {"label": "EXPLOSION", "effect": "SMALL_EXPLOSION", "damage": self.damage, "position": self.box.worldPosition.copy(), "agent": self.agent}
         self.level.commands.append(command)
         self.done = True

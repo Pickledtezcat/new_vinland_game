@@ -60,26 +60,26 @@ class VisionPaint(object):
             agent = paint_dict[paint_key]
             enemy = agent["enemy"]
             distance = agent["distance"]
-            knocked_out = agent["knocked_out"]
             x, y = agent["location"]
+            decayed = agent["decayed"]
 
             bx = x - int(self.brush_size * 0.5)
             by = y - int(self.brush_size * 0.5)
 
-            if enemy:
-                agent_brush = self.enemy_pixel
-            else:
-                agent_brush = self.player_pixel
-
-            if distance > 0:
-                # TODO can set non visibility for player agents, for example knocked out tanks
-
-                if not knocked_out:
-                    vision_brush = self.brush_dict[distance]
-                else:
-                    vision_brush = self.non_brush_dict[distance]
+            if decayed:
+                vision_brush = self.non_brush_dict[distance]
                 self.canvas.source.plot(vision_brush, self.brush_size, self.brush_size, bx, by,
                                         bge.texture.IMB_BLEND_LIGHTEN)
-            self.canvas.source.plot(agent_brush, 1, 1, x, y, bge.texture.IMB_BLEND_LIGHTEN)
+            else:
+                if enemy:
+                    agent_brush = self.enemy_pixel
+                else:
+                    agent_brush = self.player_pixel
+
+                if distance > 0:
+                    vision_brush = self.brush_dict[distance]
+                    self.canvas.source.plot(vision_brush, self.brush_size, self.brush_size, bx, by,
+                                            bge.texture.IMB_BLEND_LIGHTEN)
+                self.canvas.source.plot(agent_brush, 1, 1, x, y, bge.texture.IMB_BLEND_LIGHTEN)
 
         self.canvas.refresh(True)

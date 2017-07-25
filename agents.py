@@ -58,7 +58,6 @@ class Agent(object):
         self.faction = self.level.factions[self.team]
 
         self.dead = False
-        self.vision_decay = 18.0
         self.knocked_out = False
         self.on_fire = False
         self.ended = False
@@ -142,6 +141,12 @@ class Agent(object):
 
         return visual_range
 
+    def add_visibility_marker(self):
+        if self.team == 0:
+            command = {"label": "VISIBILITY_MARKER",
+                       "location": bgeutils.position_to_location(self.center.copy())}
+            self.level.commands.append(command)
+
     def set_visible(self, setting):
         self.visible = setting
 
@@ -158,7 +163,7 @@ class Agent(object):
         save_dict = {"agent_type": self.agent_type, "team": self.team, "location": self.location, "dead": self.dead,
                      "knocked_out": self.knocked_out, "rank": self.rank, "shock": self.shock, "health": self.health,
                      "direction": self.direction, "enter_building": self.enter_building, "angled": self.angled,
-                     "vision_decay": self.vision_decay, "mechanical_damage": self.mechanical_damage,
+                     "mechanical_damage": self.mechanical_damage,
                      "on_fire": self.on_fire, "selected": self.selected, "state_name": self.state.name,
                      "load_name": self.load_name, "ammo": self.ammo, "stance": self.stance,
                      "damage_mod": self.damage_mod,
@@ -189,7 +194,6 @@ class Agent(object):
         self.ammo = agent_dict["ammo"]
         self.deployed = agent_dict["deployed"]
         self.angled = agent_dict["angled"]
-        self.vision_decay = agent_dict["vision_decay"]
         self.damage_mod = agent_dict["damage_mod"]
 
         self.movement.load_movement(agent_dict["movement_target"], agent_dict["movement_target_direction"],
@@ -885,7 +889,8 @@ class Vehicle(Agent):
 
         self.display_speed = (self.max_speed * display_mod) * 5.0
         if self.reverse:
-            self.display_speed *= -1
+            self.speed *= 0.8
+            self.display_speed *= -0.8
 
     def add_box(self):
         super().add_box()
@@ -1034,30 +1039,28 @@ class Vehicle(Agent):
                     if random.randint(0, max_chance * 4) == 0:
                         self.vehicle_explode()
 
-                if knockout_chance:
+                if knockout_chance and not self.knocked_out:
                     if random.randint(0, max_chance) == 0:
                         crew_damage = int(damage * 0.1)
                         if crew_damage > 0:
                             if random.randint(0, crew_damage) > self.stats.crew:
+                                self.add_visibility_marker()
                                 self.knocked_out = True
 
                 if damage_chance:
                     if random.randint(0, max_chance) == 0:
-                        mechanical_damage = random.randint(0, 4) - self.stats.reliability
-                        if mechanical_damage > 0:
-                            self.mechanical_damage += mechanical_damage
+                        self.mechanical_damage += 1
 
             else:
                 if damage_chance:
-                    if damage > 30.0:
-                        if random.randint(0, max_chance * 2) == 0:
-                            self.shock += damage
-                            mechanical_damage = random.randint(0, 4) - self.stats.reliability
-                            if mechanical_damage > 0:
-                                self.mechanical_damage += mechanical_damage
+                    if random.randint(0, max_chance * 2) == 0:
+                        self.shock += damage
+                        self.mechanical_damage += 1
 
         if self.health < 0 and not self.dead:
             self.dead = True
+            self.add_visibility_marker()
+
             if random.uniform(0.0, 6.0) < self.ammo:
                 self.vehicle_explode()
 
@@ -1151,7 +1154,7 @@ class Infantry(Agent):
         for soldier in self.soldiers:
             if soldier.grenade:
                 if soldier.grenade.ammo > 0:
-                    best_penetration = 50
+                    best_penetration = 60
 
             if soldier.weapon.ammo > 0.0:
                 if soldier.weapon.power > best_penetration:
@@ -1211,6 +1214,7 @@ class Infantry(Agent):
                     dead = False
 
             if dead:
+                self.add_visibility_marker()
                 self.dead = True
             else:
                 if not self.knocked_out:
@@ -1607,31 +1611,31 @@ class SoldierGrenade(object):
         self.infantryman = infantryman
         self.sound = None
         self.effect = None
+        self.rating = 1
         self.ammo = ammo
         self.bullet = "GRENADE"
         self.total_accuracy = self.infantryman.agent.accuracy
         self.max_range = 8.0
         self.recharge = 0.002
-        self.power = 10
+        self.power = 20
         self.penetration = 10
         self.timer = 0.0
         self.action = "FIDGET"
 
     def update(self):
-        self.timer = min(1.0, self.timer + self.recharge)
+
+        recharge = self.recharge
+        if self.infantryman.behavior.prone:
+            recharge *= 0.5
+
+        self.timer = min(1.0, self.timer + recharge)
 
     def get_ready(self):
 
         if self.ammo <= 0:
             return False
 
-        if self.infantryman.agent.prone:
-            return False
-
         if self.infantryman.in_building:
-            return False
-
-        if self.infantryman.agent.knocked_out:
             return False
 
         if self.timer < 1.0:
@@ -1650,9 +1654,9 @@ class SoldierGrenade(object):
 
             in_range = self.max_range > target_distance
 
-            self.total_accuracy = self.infantryman.agent.accuracy
+            self.total_accuracy = self.infantryman.agent.accuracy + 5.0
             if self.infantryman.agent.prone:
-                self.total_accuracy = self.infantryman.agent.accuracy * 0.5
+                self.total_accuracy *= 0.5
 
             if in_range and self.get_ready():
 
@@ -1678,13 +1682,16 @@ class SoldierSatchelCharge(SoldierGrenade):
         super().__init__(infantryman, ammo)
         self.bullet = "GRENADE"
         self.power = 30
+        self.rating = 3
+        self.penetration = 60
 
 
 class SoldierRifleGrenade(SoldierGrenade):
     def __init__(self, infantryman, ammo):
         super().__init__(infantryman, ammo)
         self.bullet = "ROCKET"
-        self.power = 10
+        self.power = 20
+        self.rating = 1
         self.max_range = 18.0
         self.sound = "I_ANTI_TANK"
         self.action = "SHOOTING"

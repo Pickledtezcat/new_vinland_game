@@ -15,6 +15,19 @@ import builder_tools
 import static_dicts
 
 
+class VisibilityMarker(object):
+    def __init__(self, level, location):
+        self.level = level
+        self.marker_id = "visibility_marker_{}".format(self.level.get_new_id())
+        self.decay = 18.0
+        self.location = location
+
+        self.level.visibility_markers.append(self)
+
+    def update(self):
+        self.decay = max(0.0, self.decay - 0.05)
+
+
 class MovementMarker(object):
     def __init__(self, level, owner, position, offset):
         self.level = level
@@ -321,6 +334,7 @@ class Level(object):
         self.game_audio = game_audio.Audio(self)
         self.user_interface = user_interface.UserInterface(self)
         self.commands = []
+        self.visibility_markers = []
         self.mouse_control = MouseControl(self)
         self.paused = False
         self.map_size = 128
@@ -855,7 +869,7 @@ class Level(object):
                     [random.uniform(-scatter, scatter), random.uniform(-scatter, scatter), 0.0])
 
                 target_position += random_vector
-                command = {"label": "EXPLOSION", "effect": "DUMMY_EXPLOSION", "damage": weapon.power,
+                command = {"label": "EXPLOSION", "effect": "SMALL_EXPLOSION", "damage": weapon.power,
                            "position": target_position, "agent": agent}
                 self.commands.append(command)
 
@@ -874,7 +888,7 @@ class Level(object):
                         [random.uniform(-scatter, scatter), random.uniform(-scatter, scatter), 0.0])
 
                     target_position = target.box.worldPosition.copy() + random_vector
-                    command = {"label": "EXPLOSION", "effect": "DUMMY_EXPLOSION", "damage": weapon.power,
+                    command = {"label": "EXPLOSION", "effect": "SMALL_EXPLOSION", "damage": weapon.power,
                                "position": target_position, "agent": agent}
 
                     self.commands.append(command)
@@ -956,33 +970,38 @@ class Level(object):
         # TODO give xp etc... to owner passed as agent_id
         position = command["position"]
         location = [int(position[0]), int(position[1])]
-
-        effect = command["effect"]
-        damage = command["damage"]
-
-        #explosion_chart = [8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096]
-        explosion_chart = [0, 16, 64, 256, 1024, 4096]
-
-        max_fall_off = 0
-
-        if effect:
-            if effect == "DUMMY_EXPLOSION":
-                particles.DummyExplosion(self, location)
-
-        for i in range(5):
-            fall_off = explosion_chart[i]
-            if damage > fall_off:
-                max_fall_off = i
-
-        max_fall_off = min(5, max_fall_off + 2)
         x, y = location
 
         target_tile = self.get_tile([x, y])
 
-        buildings_hit = []
-        vehicles_hit = []
-
         if target_tile:
+
+            effect = command["effect"]
+            damage = command["damage"]
+
+            #explosion_chart = [8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096]
+            explosion_chart = [0, 16, 64, 256, 1024, 4096]
+
+            max_fall_off = 0
+
+            if effect:
+                explosion_position = position.copy()
+                if effect == "SMALL_EXPLOSION":
+                    particles.SmallExplosion(self, target_tile, damage * 0.5)
+                else:
+                    particles.DummyExplosion(self, location)
+
+            for i in range(5):
+                fall_off = explosion_chart[i]
+                if damage > fall_off:
+                    max_fall_off = i
+
+            max_fall_off = min(5, max_fall_off + 2)
+
+            buildings_hit = []
+            vehicles_hit = []
+
+
             for ex in range(-max_fall_off, max_fall_off):
                 for ey in range(-max_fall_off, max_fall_off):
                     damage_reduction = explosion_chart[abs(ex)]
@@ -1079,6 +1098,11 @@ class Level(object):
     def process_commands(self):
 
         for command in self.commands:
+
+            if command["label"] == "VISIBILITY_MARKER":
+                location = command["location"]
+                VisibilityMarker(self, location)
+
             if command["label"] == "SMALL_ARMS":
                 self.small_arms_shoot(command)
 
@@ -1110,11 +1134,28 @@ class Level(object):
         can be investigated by AI and suggested on screen"""
 
         if self.LOS:
+            visibility_dict = {}
+
+            next_generation = []
+
+            for marker in self.visibility_markers:
+                marker.update()
+                location = marker.location
+                decay = marker.decay
+                marker_id = marker.marker_id
+
+                visibility_dict[marker_id] = {"enemy": False, "distance": round(decay),
+                                              "location": location, "decayed": True}
+
+                if decay > 0.0:
+                    next_generation.append(marker)
+
+            self.visibility_markers = next_generation
+
             self.visibility_timer -= 1
 
             if self.visibility_timer < 0:
                 self.visibility_timer = 12
-                visibility_dict = {}
 
                 seen_agents = []
 
@@ -1127,12 +1168,10 @@ class Level(object):
                     agent = self.agents[agent_key]
                     knocked_out = agent.knocked_out
 
-                    if not agent.dead:
+                    if not agent.dead and not agent.knocked_out:
                         is_enemy = agent.team != 0
 
                         visibility_distance = agent.get_visual_range()
-                        if knocked_out:
-                            visibility_distance = agent.vision_decay
 
                         max_distance = 17
                         suspect_distance = max_distance * 2.0
@@ -1142,7 +1181,7 @@ class Level(object):
                             location = bgeutils.position_to_location(position)
 
                             visibility_dict[agent_key] = {"enemy": is_enemy, "distance": visibility_distance,
-                                                          "location": location, "knocked_out": knocked_out}
+                                                          "location": location, "decayed": False}
 
                             for enemy_key in self.agents:
                                 enemy = self.agents[enemy_key]
@@ -1158,7 +1197,7 @@ class Level(object):
                                                 enemy.set_seen(True)
                                                 visibility_dict[enemy_key] = {"enemy": True, "distance": 0,
                                                                               "location": enemy.location,
-                                                                              "knocked_out": knocked_out}
+                                                                              "decayed": False}
 
                                             elif enemy_distance < suspect_distance:
                                                 enemy.set_suspect(True)
@@ -1168,28 +1207,15 @@ class Level(object):
                                 player = self.agents[player_key]
 
                                 if player.team == 0:
-                                    if not knocked_out:
-                                        if player_key not in seen_agents:
-                                            closest_soldier, target_vector = player.get_target(agent)
-                                            player_distance = target_vector.length
+                                    if player_key not in seen_agents:
+                                        closest_soldier, target_vector = player.get_target(agent)
+                                        player_distance = target_vector.length
 
-                                            if player_distance <= max_distance:
-                                                seen_agents.append(player_key)
-                                                player.set_seen(True)
-                                            elif player_distance < suspect_distance:
-                                                player.set_suspect(True)
-
-                    else:
-                        is_enemy = agent.team != 0
-                        if not is_enemy:
-                            visibility_distance = agent.vision_decay
-                            agent.vision_decay = max(0.0, agent.vision_decay - 0.1)
-                            agent.get_center()
-                            position = agent.center.copy()
-                            location = bgeutils.position_to_location(position)
-
-                            visibility_dict[agent_key] = {"enemy": is_enemy, "distance": int(visibility_distance),
-                                                          "location": location, "knocked_out": True}
+                                        if player_distance <= max_distance:
+                                            seen_agents.append(player_key)
+                                            player.set_seen(True)
+                                        elif player_distance < suspect_distance:
+                                            player.set_suspect(True)
 
                 self.LOS.do_paint(visibility_dict)
 

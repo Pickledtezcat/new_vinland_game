@@ -668,8 +668,15 @@ class AgentTargeter(object):
 
     def impenetrable(self, target_agent):
 
+        if self.agent.agent_type == "INFANTRY":
+            return False
+
         armor_facing = target_agent.get_attack_facing(self.agent.center.copy())
         if armor_facing:
+
+            if self.agent.stats.artillery and target_agent.stats.open_top:
+                return False
+
             has_turret, facing, armor = armor_facing
 
             lowest_armor = armor[facing]
