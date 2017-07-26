@@ -155,9 +155,125 @@ class MovementPointIcon(Particle):
                 self.box.color = [color, color, color, 1.0]
 
 
-class SmallExplosion(Particle):
+class NormalHit(Particle):
 
     def __init__(self, level, tile, rating):
+        super().__init__(level)
+
+        height = tile["height"]
+        position = mathutils.Vector(tile["position"]).to_3d()
+        scatter = mathutils.Vector([random.uniform(-0.5, 0.5) for _ in range(3)])
+        position += scatter
+        position.z = height + 0.2
+        self.rating = rating
+
+        intensity = 1
+
+        if self.rating > 100:
+            intensity = 3
+        elif self.rating > 50:
+            intensity = 2
+
+        self.scale = self.rating * 0.1
+
+        ground_position = position.copy()
+        ground_position.z += 1.0
+
+        if intensity == 1:
+            for i in range(3):
+                ArmorSparks(self.level, self.scale * 0.8, ground_position.copy())
+                ArmorBlast(self.level, self.scale * 0.3, ground_position.copy())
+            SmallSmoke(self.level, self.scale * 1.5, ground_position.copy(), delay=12)
+
+        else:
+            if intensity == 2:
+                number = 4
+            else:
+                number = 8
+
+            for i in range(number):
+                ArmorSparks(self.level, self.scale * 0.4, ground_position.copy())
+                LargeSmoke(self.level, self.scale * 0.6, ground_position.copy(), delay=4)
+                ArmorBlast(self.level, self.scale * 0.2, ground_position.copy())
+
+        ExplosionSound(self.level, ground_position.copy(), intensity)
+
+        self.ended = True
+
+
+class ArmorSparks(Particle):
+
+    def __init__(self, level, growth, position):
+        super().__init__(level)
+
+        self.grow = 1.002 * growth
+        s = 0.01
+        self.up_force = mathutils.Vector([random.uniform(-s, s), random.uniform(-s, s), random.uniform(-s, s)])
+
+        self.box.worldPosition = position.copy()
+
+    def add_box(self):
+        mesh = "{}.{}".format("sparks", str(random.randint(1, 8)).zfill(3))
+        return self.level.own.scene.addObject(mesh, self.level.own, 0)
+
+    def process(self):
+
+        if self.timer >= 1.0:
+            self.ended = True
+        else:
+            self.timer += 0.01
+            c = 1.0 - self.timer
+            a = 1.0 - (self.timer * 0.5)
+
+            self.box.color = [c, c, c, a]
+
+            self.box.worldPosition += self.up_force
+            scale = (1.0 * self.grow) * self.timer
+
+            self.box.localScale = [scale, scale, scale]
+
+
+class ArmorBlast(Particle):
+
+    def __init__(self, level, growth, position):
+        super().__init__(level)
+
+        self.grow = 1.002 * growth
+
+        s = 0.05
+        self.up_force = mathutils.Vector([random.uniform(-s, s), random.uniform(-s, s), random.uniform(-s, s)])
+        self.down_force = mathutils.Vector([0.0, 0.0, -0.05])
+
+        self.box.worldPosition = position.copy()
+        self.box.color *= 0.5
+        self.box.color[3] = 1.0
+
+    def add_box(self):
+        mesh = "{}.{}".format("simple_dirt", str(random.randint(1, 8)).zfill(3))
+        return self.level.own.scene.addObject(mesh, self.level.own, 0)
+
+    def process(self):
+
+        if self.timer >= 1.0:
+            self.ended = True
+
+        else:
+            self.timer += 0.008
+            c = 1.0 - self.timer
+            a = 1.0 - (self.timer * 0.5)
+
+            self.box.color = [c, c, c, a]
+
+            up_force = self.up_force.lerp(self.down_force, self.timer)
+            self.box.worldPosition += up_force
+            scale = (1.0 * self.grow) * self.timer
+
+            self.box.localScale = [scale, scale, scale]
+
+
+class NormalExplosion(Particle):
+
+    def __init__(self, level, tile, rating, airburst=False):
         super().__init__(level)
 
         height = tile["height"]
@@ -166,17 +282,191 @@ class SmallExplosion(Particle):
         scatter = mathutils.Vector([random.uniform(-0.5, 0.5) for _ in range(3)])
         position += scatter
         position.z = height + 0.2
-
         self.rating = rating
-        self.scale = min(4.0, self.rating)
 
-        ScorchMark(self.level, position.copy(), self.scale * 0.25, normal.copy())
-        SmallBlast(self.level, self.scale * 0.4, position.copy())
-        smoke_start = 1.0
-        position.z += smoke_start
+        if airburst:
+            self.rating *= 0.5
 
-        SmallSmoke(self.level, self.scale, position, delay=12)
+        intensity = 1
+
+        if self.rating > 100.0:
+            intensity = 3
+        elif self.rating > 50.0:
+            intensity = 2
+
+        self.scale = self.rating * 0.1
+        if self.scale > 10.0:
+            difference = self.scale - 10.0
+            self.scale = 10.0 + difference * 0.25
+
+        self.level.manager.debugger.printer(self.scale, label="scale", decay=300)
+
+        ground_position = position.copy()
+        smoke_position = position.copy()
+        smoke_position.z += 0.5
+
+        if airburst:
+            position.z += 0.5
+        else:
+            ScorchMark(self.level, ground_position, self.scale * 0.2, normal.copy())
+
+        if intensity == 1:
+            for i in range(3):
+                SmallBlast(self.level, self.scale * 0.8, ground_position.copy())
+            SmallSmoke(self.level, self.scale * 1.5, smoke_position.copy(), delay=12)
+
+        else:
+            if intensity == 2:
+                number = 4
+                scale_mod = 0.5
+            else:
+                number = 8
+                scale_mod = 0.25
+
+            for i in range(number):
+                LargeBlast(self.level, self.scale * scale_mod, ground_position.copy())
+                LargeSmoke(self.level, self.scale * scale_mod, smoke_position.copy(), delay=4)
+                DirtBlast(self.level, self.scale * scale_mod, ground_position.copy())
+
+        ExplosionSound(self.level, ground_position.copy(), intensity)
+
         self.ended = True
+
+
+class ExplosionSound(Particle):
+
+    def __init__(self, level, position, intensity):
+        super().__init__(level)
+        self.box.worldPosition = position.copy()
+        sound_command = {"label": "SOUND_EFFECT", "content": ("EXPLODE_{}".format(intensity), self.box, 0.5, 1.0)}
+        self.level.commands.append(sound_command)
+
+    def add_box(self):
+        return self.level.own.scene.addObject("sound_hook", self.level.own, 0)
+
+    def process(self):
+        if self.timer > 1.0:
+            self.ended = True
+        else:
+            self.timer += 0.001
+
+
+class LargeBlast(AnimatedParticle):
+
+    def __init__(self, level, growth, position):
+        super().__init__(level)
+        self.max_sub_frame = 4
+
+        self.grow = 1.002 * growth
+        s = 0.013
+
+        self.up_force = mathutils.Vector([random.uniform(-s, s), random.uniform(-s, s), s * 3.0])
+        self.down_force = mathutils.Vector([0.0, 0.0, -0.01])
+
+        self.box.worldPosition = position.copy()
+
+    def get_mesh_name(self):
+
+        meshes = ["bang_1", "bang_3", "explosion_1"]
+        return random.choice(meshes)
+
+    def process(self):
+
+        if self.timer >= 1.0:
+            self.ended = True
+
+        else:
+            self.timer += 0.01
+            c = 1.0 - self.timer
+            c = c * c
+
+            a = 1.0
+            self.box.color = [c, c, c, a]
+
+            up_force = self.up_force.lerp(self.down_force, self.timer)
+
+            self.box.worldPosition += up_force
+            scale = (1.0 * self.grow) * self.timer
+
+            self.box.localScale = [scale, scale, scale]
+
+
+class DirtBlast(Particle):
+
+    def __init__(self, level, growth, position):
+        super().__init__(level)
+
+        self.grow = 1.002 * growth
+
+        s = 0.05
+        self.up_force = mathutils.Vector([random.uniform(-s, s), random.uniform(-s, s), s * 1.0])
+        self.down_force = mathutils.Vector([0.0, 0.0, -0.05])
+
+        self.box.worldPosition = position.copy()
+        self.box.color = mathutils.Vector(self.level.world_dict["dirt_color"]) * 0.5
+
+    def add_box(self):
+        mesh = "{}.{}".format("dirt_1", str(random.randint(1, 8)).zfill(3))
+        return self.level.own.scene.addObject(mesh, self.level.own, 0)
+
+    def process(self):
+
+        if self.timer >= 1.0:
+            self.ended = True
+
+        else:
+            self.timer += 0.008
+            self.box.color[3] = 1.0 - (self.timer * 0.5)
+
+            up_force = self.up_force.lerp(self.down_force, self.timer)
+            self.box.worldPosition += up_force
+            scale = (1.0 * self.grow) * self.timer
+
+            self.box.localScale = [scale, scale, scale]
+
+
+class LargeSmoke(AnimatedParticle):
+
+    def __init__(self, level, growth, position, delay=0):
+        super().__init__(level)
+        self.max_sub_frame = 24
+
+        self.grow = 1.002 * growth
+        s = 0.013
+
+        self.up_force = mathutils.Vector([random.uniform(-s, s), random.uniform(-s, s), s * 3.0])
+        self.down_force = mathutils.Vector([0.0, 0.0, -0.01])
+
+        self.box.worldPosition = position.copy()
+        self.delay = delay
+
+    def get_mesh_name(self):
+        return "bubble_smoke"
+
+    def process(self):
+
+        if self.delay > 0:
+            self.box.color = [0.0, 0.0, 0.0, 0.0]
+            self.delay -= 1
+
+        else:
+            if self.timer >= 1.0:
+                self.ended = True
+
+            else:
+                self.timer += 0.008
+                c = 1.0 - self.timer
+                a = 1.0 - self.timer
+                a = a * a
+
+                self.box.color = [c, c, c, a]
+
+                up_force = self.up_force.lerp(self.down_force, self.timer)
+
+                self.box.worldPosition += up_force
+                scale = (1.0 * self.grow) * self.timer
+
+                self.box.localScale = [scale, scale, scale]
 
 
 class SmallBlast(AnimatedParticle):
@@ -185,7 +475,8 @@ class SmallBlast(AnimatedParticle):
         super().__init__(level)
         self.max_sub_frame = 4
         self.grow = 1.002 * growth
-        self.up_force = mathutils.Vector([0.0, 0.0, 0.04])
+        s = 0.013
+        self.up_force = mathutils.Vector([random.uniform(-s, s), random.uniform(-s, s), s * 3.0])
         self.position = position
         self.box.worldPosition = position.copy()
 
@@ -201,7 +492,10 @@ class SmallBlast(AnimatedParticle):
             self.timer += 0.02
             c = 1.0 - self.timer
             a = 1.0
+            a = a * a
+
             self.box.color = [c, c, c, a]
+
             up_force = self.up_force * (0.9999 * self.timer)
             self.box.worldPosition += up_force
             scale = (1.0 * self.grow) * self.timer
@@ -300,7 +594,7 @@ class BulletFlash(Particle):
     def play_sound(self):
         if self.sound:
             sound_command = {"label": "SOUND_EFFECT",
-                             "content": (self.sound, self.box, 0.5, 1.0)}
+                             "content": (self.sound, self.box, 1.0, 1.0)}
             self.level.commands.append(sound_command)
             self.sound = None
 

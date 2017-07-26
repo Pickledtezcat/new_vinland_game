@@ -869,7 +869,7 @@ class Level(object):
                     [random.uniform(-scatter, scatter), random.uniform(-scatter, scatter), 0.0])
 
                 target_position += random_vector
-                command = {"label": "EXPLOSION", "effect": "SMALL_EXPLOSION", "damage": weapon.power,
+                command = {"label": "EXPLOSION", "effect": "EXPLOSION", "damage": weapon.power,
                            "position": target_position, "agent": agent}
                 self.commands.append(command)
 
@@ -888,7 +888,7 @@ class Level(object):
                         [random.uniform(-scatter, scatter), random.uniform(-scatter, scatter), 0.0])
 
                     target_position = target.box.worldPosition.copy() + random_vector
-                    command = {"label": "EXPLOSION", "effect": "SMALL_EXPLOSION", "damage": weapon.power,
+                    command = {"label": "EXPLOSION", "effect": "EXPLOSION", "damage": weapon.power,
                                "position": target_position, "agent": agent}
 
                     self.commands.append(command)
@@ -975,7 +975,6 @@ class Level(object):
         target_tile = self.get_tile([x, y])
 
         if target_tile:
-
             effect = command["effect"]
             damage = command["damage"]
 
@@ -984,10 +983,20 @@ class Level(object):
 
             max_fall_off = 0
 
+            airburst = False
+            occupier = target_tile["occupied"]
+            if occupier:
+                occupying_agent = self.agents[occupier]
+                if occupying_agent.agent_type != "INFANTRY":
+                    airburst = True
+
+            building = target_tile["building"]
+            if building:
+                airburst = True
+
             if effect:
-                explosion_position = position.copy()
-                if effect == "SMALL_EXPLOSION":
-                    particles.SmallExplosion(self, target_tile, damage * 0.5)
+                if effect == "EXPLOSION":
+                    particles.NormalExplosion(self, target_tile, damage, airburst=airburst)
                 else:
                     particles.DummyExplosion(self, location)
 
@@ -1000,7 +1009,6 @@ class Level(object):
 
             buildings_hit = []
             vehicles_hit = []
-
 
             for ex in range(-max_fall_off, max_fall_off):
                 for ey in range(-max_fall_off, max_fall_off):
@@ -1120,7 +1128,8 @@ class Level(object):
                 if not owner:
                     owner = self.listener
 
-                self.game_audio.sound_effect(sound, owner, attenuation=attenuation, volume_scale=volume_scale)
+                sound = self.game_audio.sound_effect(sound, owner, attenuation=attenuation, volume_scale=volume_scale)
+                sound.pitch = random.uniform(0.9, 1.1)
 
         self.commands = []
 

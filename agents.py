@@ -922,7 +922,9 @@ class Vehicle(Agent):
             sector = hit["sector"]
             origin = hit["origin"]
 
-            if label == "SPLASH_DAMAGE":
+            splash_damage = label == "SPLASH_DAMAGE"
+
+            if splash_damage:
                 damage_chance = True
                 damage = hit["damage"]
                 penetration = damage * 0.5
@@ -953,7 +955,7 @@ class Vehicle(Agent):
             armor_value = self.stats.armor[hit_location]
             max_chance = 6
 
-            if not label == "SPLASH_DAMAGE":
+            if not splash_damage:
                 if "WEAK_SPOT" in self.stats.flags:
                     if random.randint(0, 10) > 9:
                         armor_value *= 0.5
@@ -1021,6 +1023,7 @@ class Vehicle(Agent):
             damage *= random.uniform(0.5, 1.0)
 
             if penetrated:
+
                 self.health -= damage
                 self.shock += damage
 
@@ -1057,6 +1060,9 @@ class Vehicle(Agent):
                         self.shock += damage
                         self.mechanical_damage += 1
 
+            if not splash_damage:
+                self.add_hit_effect(damage, penetrated)
+
         if self.health < 0 and not self.dead:
             self.dead = True
             self.add_visibility_marker()
@@ -1065,6 +1071,14 @@ class Vehicle(Agent):
                 self.vehicle_explode()
 
         self.hits = []
+
+    def add_hit_effect(self, damage_value, penetrated):
+
+        damage_value *= random.uniform(0.5, 1.0)
+
+        tile = self.level.get_tile(self.location)
+        if penetrated:
+            particles.NormalHit(self.level, tile, damage_value)
 
 
 class Infantry(Agent):
