@@ -956,13 +956,14 @@ class Level(object):
 
             if bullet == "GRENADE":
                 bullets.Grenade(self, bullet_arc, agent, weapon)
+                if effect:
+                    particles.BulletFlash(self, weapon)
             if bullet == "ROCKET":
                 bullets.Rocket(self, bullet_arc, agent, weapon)
             if bullet == "SHELL":
                 bullets.Shell(self, bullet_arc, agent, weapon)
-
-            if effect:
-                particles.BulletFlash(self, weapon)
+                if effect:
+                    particles.BulletFlash(self, weapon)
 
     def explosion(self, command):
 

@@ -178,7 +178,7 @@ class VehicleWeapon(object):
         else:
             self.bullet = "SHELL"
 
-        self.recoil_amount = min(0.025, ((self.rating * self.rating) / vehicle_weight) * 0.01)
+        self.recoil_amount = min(0.018, ((self.rating * self.rating) / vehicle_weight) * 0.005)
 
     def set_emitter(self, emitter):
         self.emitter = emitter

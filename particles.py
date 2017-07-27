@@ -277,60 +277,65 @@ class NormalExplosion(Particle):
         super().__init__(level)
 
         height = tile["height"]
-        normal = tile["normal"]
-        position = mathutils.Vector(tile["position"]).to_3d()
+        self.normal = tile["normal"]
+        self.position = mathutils.Vector(tile["position"]).to_3d()
         scatter = mathutils.Vector([random.uniform(-0.5, 0.5) for _ in range(3)])
-        position += scatter
-        position.z = height + 0.2
+        self.position += scatter
+        self.position.z = height + 0.2
         self.rating = rating
+        self.delay = 12
+        self.airburst = airburst
 
-        if airburst:
+        if self.airburst:
             self.rating *= 0.5
 
-        intensity = 1
+        self.intensity = 1
 
         if self.rating > 100.0:
-            intensity = 3
+            self.intensity = 3
         elif self.rating > 50.0:
-            intensity = 2
+            self.intensity = 2
 
         self.scale = self.rating * 0.1
-        if self.scale > 10.0:
-            difference = self.scale - 10.0
-            self.scale = 10.0 + difference * 0.25
 
-        self.level.manager.debugger.printer(self.scale, label="scale", decay=300)
+    def activate(self):
 
-        ground_position = position.copy()
-        smoke_position = position.copy()
+        ground_position = self.position.copy()
+        smoke_position = self.position.copy()
         smoke_position.z += 0.5
 
-        if airburst:
-            position.z += 0.5
+        if self.airburst:
+            self.position.z += 1.5
         else:
-            ScorchMark(self.level, ground_position, self.scale * 0.2, normal.copy())
+            ScorchMark(self.level, ground_position.copy(), self.scale * 0.2, self.normal.copy())
 
-        if intensity == 1:
+        if self.intensity == 1:
             for i in range(3):
-                SmallBlast(self.level, self.scale * 0.8, ground_position.copy())
+                SmallBlast(self.level, self.scale * 0.6, ground_position.copy())
             SmallSmoke(self.level, self.scale * 1.5, smoke_position.copy(), delay=12)
 
         else:
-            if intensity == 2:
-                number = 4
-                scale_mod = 0.5
+            if self.intensity == 2:
+                number = 6
+                scale_mod = 0.3
             else:
-                number = 8
-                scale_mod = 0.25
+                number = 12
+                scale_mod = 0.15
 
             for i in range(number):
-                LargeBlast(self.level, self.scale * scale_mod, ground_position.copy())
+                LargeBlast(self.level, self.scale * (scale_mod * 0.6), ground_position.copy())
                 LargeSmoke(self.level, self.scale * scale_mod, smoke_position.copy(), delay=4)
                 DirtBlast(self.level, self.scale * scale_mod, ground_position.copy())
 
-        ExplosionSound(self.level, ground_position.copy(), intensity)
+        ExplosionSound(self.level, ground_position.copy(), self.intensity)
 
         self.ended = True
+
+    def process(self):
+        if self.delay > 0:
+            self.delay -= 1
+        else:
+            self.activate()
 
 
 class ExplosionSound(Particle):
@@ -571,6 +576,8 @@ class SmallSmoke(AnimatedParticle):
 class BulletFlash(Particle):
     def __init__(self, level, weapon, delay=0):
         self.weapon = weapon
+
+
         self.hook = self.weapon.emitter
 
         super().__init__(level)

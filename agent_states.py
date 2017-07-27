@@ -153,3 +153,6 @@ class AgentDead(AgentState):
         # TODO set up all aspects of dying, remove visibility etc...
 
         self.agent.dismount_building()
+
+    def process(self):
+        self.agent.movement.update()

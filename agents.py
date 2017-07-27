@@ -1016,9 +1016,6 @@ class Vehicle(Agent):
                     else:
                         armor_value *= 0.25
 
-            self.level.manager.debugger.printer("{} / {}".format(round(penetration), round(armor_value)), label="p/a",
-                                                decay=300)
-
             penetrated = penetration > armor_value
             damage *= random.uniform(0.5, 1.0)
 
@@ -1062,6 +1059,13 @@ class Vehicle(Agent):
 
             if not splash_damage:
                 self.add_hit_effect(damage, penetrated)
+
+            recoil_vector = origin.copy() - self.center.copy()
+            recoil_vector.z = 0.0
+
+            recoil_length = min(0.018, ((damage * 0.5) / self.stats.weight) * 0.005)
+            recoil_vector.length = recoil_length
+            self.movement.recoil += recoil_vector
 
         if self.health < 0 and not self.dead:
             self.dead = True
