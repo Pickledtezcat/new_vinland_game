@@ -317,6 +317,8 @@ class VehicleModel(object):
                 rocket_turret = "v_turret_0_{}_{}".format(rocket_size, rocket_armor)
                 self.rocket_turret = rocket_adder.scene.addObject(rocket_turret, rocket_adder, 0)
                 self.rocket_turret.setParent(attach_point)
+                self.turret_gun_block = self.rocket_turret
+                self.turret_gun_block_rest = self.turret_gun_block.localTransform
 
         elif has_commander:
             if self.stats.turret_size > 0:

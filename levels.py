@@ -354,7 +354,8 @@ class Level(object):
         self.agents = {}
         self.buildings = {}
         self.particles = []
-        self.artillery_bullets = {}
+        self.decals = []
+        self.artillery_bullets = []
         # TODO add bullets, for artillery weapons
 
         self.factions = {0: "HRE",
@@ -603,6 +604,12 @@ class Level(object):
             building_class = buildings.Building
             building_class(self, load_name, location, direction, building_id=building_id, load_dict=loading_building)
 
+        bullet_list = load_dict["bullets"]
+        self.load_bullets(bullet_list)
+
+        decal_list = load_dict["decals"]
+        self.load_decals(decal_list)
+
         self.agents_added = True
         self.buildings_added = True
         self.buildings_mapped = True
@@ -637,13 +644,88 @@ class Level(object):
             tile["occupied"] = None
             saved_map[tile_key] = tile
 
+        bullet_list = self.save_bullets()
+        decal_list = self.save_decals()
+
         level_details = {"map": saved_map,
                          "level_details": level_details,
                          "buildings": saving_buildings,
-                         "agents": saving_agents}
+                         "agents": saving_agents,
+                         "bullets": bullet_list,
+                         "decals": decal_list}
 
         bgeutils.save_level(level_details)
         bge.logic.globalDict["next_level"] = "StartMenu"
+
+    def save_bullets(self):
+        bullet_list = []
+
+        for bullet in self.artillery_bullets:
+            agent_id = bullet.agent.agent_id
+            curve = bullet.curve
+            bullet_type = bullet.bullet_type
+            damage = bullet.damage
+            index = bullet.index
+            timer = bullet.timer
+
+            bullet_dict = {"agent_id": agent_id,
+                           "curve": curve,
+                           "bullet_type": bullet_type,
+                           "damage": damage,
+                           "index": index,
+                           "timer": timer}
+
+            bullet_list.append(bullet_dict)
+
+        print(bullet_list)
+
+        return bullet_list
+
+    def load_bullets(self, bullet_list):
+
+        for bullet in bullet_list:
+            agent_id = bullet["agent_id"]
+            curve = bullet["curve"]
+            bullet_type = bullet["bullet_type"]
+            damage = bullet["damage"]
+            index = bullet["index"]
+            timer = bullet["timer"]
+
+            if bullet_type == "GRENADE":
+                bullets.Grenade(self, curve, None, damage, timer=timer, index=index, agent_id=agent_id)
+            if bullet_type == "ROCKET":
+                bullets.Rocket(self, curve, None, damage, timer=timer, index=index, agent_id=agent_id)
+            if bullet_type == "SHELL":
+                bullets.Shell(self, curve, None, damage, timer=timer, index=index, agent_id=agent_id)
+
+    def save_decals(self):
+
+        decal_list = []
+
+        for decal in self.decals:
+            decal_object = decal["game_ob"]
+            transform = [list(row) for row in decal_object.worldTransform.row]
+            scale = decal["scale"]
+            mesh_name = decal["mesh"]
+
+            decal_dict = {"mesh": mesh_name, "scale": scale, "transform": transform}
+
+            decal_object.endObject()
+            decal_list.append(decal_dict)
+
+        return decal_list
+
+    def load_decals(self, decal_list):
+
+        for decal in decal_list:
+            decal_ob = self.scene.addObject(decal["mesh"], self.own, 0)
+            decal_ob.worldTransform = decal["transform"]
+            s = decal["scale"]
+            decal_ob.localScale = [s, s, s]
+            decal_ob.color = self.world_dict["dirt_color"]
+
+            crater_dict = {"game_ob": decal_ob, "mesh": decal["mesh"], "scale": decal["scale"]}
+            self.decals.append(crater_dict)
 
     def mouse_update(self):
         self.mouse_control.update()
@@ -955,15 +1037,14 @@ class Level(object):
             bullet_arc = [list(point) for point in curve]
 
             if bullet == "GRENADE":
-                bullets.Grenade(self, bullet_arc, agent, weapon)
-                if effect:
-                    particles.BulletFlash(self, weapon)
+                bullets.Grenade(self, bullet_arc, agent, weapon.power)
             if bullet == "ROCKET":
-                bullets.Rocket(self, bullet_arc, agent, weapon)
+                bullets.Rocket(self, bullet_arc, agent, weapon.power)
             if bullet == "SHELL":
-                bullets.Shell(self, bullet_arc, agent, weapon)
-                if effect:
-                    particles.BulletFlash(self, weapon)
+                bullets.Shell(self, bullet_arc, agent, weapon.power)
+
+            if effect:
+                particles.BulletFlash(self, weapon)
 
     def explosion(self, command):
 
