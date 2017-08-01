@@ -452,19 +452,19 @@ class Level(object):
 
                 if ray[0]:
                     tile = {"position": [x_pos, y_pos], "occupied": None, "height": ray[1][2], "normal": list(ray[2]),
-                            "building": None, "terrain": 1}
+                            "building": None, "terrain": 1, "foliage": None}
 
                     map[bgeutils.get_key((x, y))] = tile
 
         self.map = map
         self.terrain = map_generation.BaseMapGen(self)
 
-    def paint_around(self, x, y):
+    def paint_around(self, x, y, value):
         paint_array = [[1, 0], [1, 1], [0, 1], [1, -1], [-1, 0], [-1, 1], [0, -1], [-1, -1]]
 
         for p in paint_array:
             neighbor_key = (x + p[0], y + p[1])
-            self.set_tile(neighbor_key, "terrain", 255)
+            self.set_tile(neighbor_key, "terrain", value)
 
     def get_buildings(self):
 
@@ -480,18 +480,77 @@ class Level(object):
                 if ray[0]:
                     building_id = ray[0]["building_id"]
                     self.set_tile((x, y), "building", building_id)
-                    self.paint_around(x, y)
+                    self.paint_around(x, y, 255)
 
         for building_id in self.buildings:
             building = self.buildings[building_id]
             for door_loc in building.doors:
                 self.set_tile(door_loc, "building", None)
 
+        self.place_foliage()
+
         self.terrain.paint_map()
         # TODO find another way of updating terrain
         self.terrain.canvas.refresh(True)
         self.terrain.normal.refresh(True)
         self.buildings_mapped = True
+
+    def place_foliage(self):
+
+        placed = []
+        foliage_type = self.world_dict["string_base"]
+
+        grass_groups = self.get_foliage_placement(6, 12, 4)
+        bush_groups = self.get_foliage_placement(24, 6, 8)
+        tree_groups = self.get_foliage_placement(6, 6, 12)
+
+        foliage_groups = [[grass_groups, "_grass_", 0, False], [bush_groups, "_bushes_", 191, False], [tree_groups, "_b_tree_", 159, True]]
+
+        for foliage_group in foliage_groups:
+            group = foliage_group[0]
+            name = foliage_group[1]
+            terrain_value = foliage_group[2]
+            paint_around = foliage_group[3]
+
+            for location in group:
+                if location not in placed:
+                    placed.append(location)
+                    tile = self.get_tile(location)
+                    if tile:
+                        terrain = tile["terrain"]
+                        if terrain != 255:
+                            foliage_string = "{}{}{}".format(foliage_type, name, random.randint(0, 9))
+                            foliage_object = self.scene.addObject(foliage_string, self.own, 0)
+                            height = tile["height"]
+                            foliage_object.worldPosition = mathutils.Vector(location).to_3d()
+                            foliage_object.worldPosition.z = height
+                            self.set_tile(location, "foliage", foliage_string)
+
+                            if paint_around:
+                                x, y = location
+                                self.paint_around(x, y, terrain_value)
+                            else:
+                                self.set_tile(location, "terrain", terrain_value)
+
+    def get_foliage_placement(self, max_groups, max_clumps, scatter):
+
+        groups = random.randint(int(max_groups * 0.5), max_groups)
+        cores = []
+
+        for g in range(groups):
+            core_location = [random.randint(0, self.map_size), random.randint(0, self.map_size)]
+            if core_location not in cores:
+                cores.append(core_location)
+
+        clumps = []
+
+        for core in cores:
+            for c in range(random.randint(int(max_clumps * 0.5), max_clumps)):
+                clump_location = [random.randint(-scatter, scatter) + axis for axis in core]
+                if clump_location not in clumps:
+                    clumps.append(clump_location)
+
+        return clumps
 
     def terminate(self):
         self.user_interface.terminate()
@@ -616,6 +675,21 @@ class Level(object):
 
         self.terrain = map_generation.BaseMapGen(self, loaded=True)
         self.terrain.paint_map()
+
+        self.place_loaded_foliage()
+
+    def place_loaded_foliage(self):
+
+        for x in range(0, self.map_size):
+            for y in range(0, self.map_size):
+                location = [x, y]
+                tile = self.get_tile(location)
+                if tile:
+                    if tile["foliage"]:
+                        foliage_object = self.scene.addObject(tile["foliage"], self.own, 0)
+                        height = tile["height"]
+                        foliage_object.worldPosition = mathutils.Vector(location).to_3d()
+                        foliage_object.worldPosition.z = height
 
     def save_level(self):
 

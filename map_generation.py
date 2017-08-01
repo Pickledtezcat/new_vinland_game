@@ -45,7 +45,7 @@ class BaseMapGen(object):
         for x in range(self.canvas_size):
             for y in range(self.canvas_size):
                 ## eggbox
-                scale = 0.05
+                scale = 0.01
                 position = mathutils.Vector([x * scale + offset, y * scale + offset, 0.0])
 
                 #value = mathutils.noise.noise(position, mathutils.noise.types.VORONOI_F1)
@@ -55,12 +55,12 @@ class BaseMapGen(object):
 
                 h3 = mathutils.noise.hetero_terrain(position, 1.0, 1.0, 2, 1.0, 4)
 
-                s4 = 0.2
+                s4 = 0.1
                 h4p = mathutils.Vector([x * s4 + offset, y * s4 + offset, 0.0])
 
                 h4 = mathutils.noise.noise(h4p, mathutils.noise.types.VORONOI_F2F1) * -1.0
 
-                s5 = 0.7
+                s5 = 1.3
                 h5p = mathutils.Vector([x * s5 + offset, y * s5 + offset, 0.0])
                 h5 = mathutils.noise.noise(h5p, mathutils.noise.types.VORONOI_F1)
 
@@ -69,7 +69,7 @@ class BaseMapGen(object):
                 h6 = h4 * h3
 
                 ## craters
-                value = h6 - (h * 5.0) + (h7 * 3.0)
+                value = h6 - (h * 5.0) - (h7 * 3.0)
 
                 if value < lowest:
                     lowest = value
@@ -79,7 +79,7 @@ class BaseMapGen(object):
                 new_map[(x, y)] = value
 
         for map_key in new_map:
-            value = grayscale(lowest, highest, new_map[map_key])
+            value = int((grayscale(lowest, highest, new_map[map_key])) * 0.75)
             self.level.set_tile(map_key, "terrain", value)
 
     def paint_map(self):
