@@ -39,9 +39,23 @@ class VehicleModel(object):
 
         self.build_model()
 
+    def display_death(self):
+
+        cammo = 1.875
+        icon = 1.75
+
+        color = [icon, 0.0, cammo, 1.0]
+        self.set_color(color)
+
+        self.set_open_hatch(False)
+
+        for ob in self.vehicle.childrenRecursive:
+            if ob.get("crew_man_display"):
+                ob.visible = False
+
     def build_model(self):
 
-        self.cammo = self.stats.faction_number + 3
+        self.cammo = self.stats.faction_number + 6
 
         faction_icons = {1: 0,
                          2: 2,
@@ -357,11 +371,10 @@ class VehicleModel(object):
                     night_scope = hatch_adder.scene.addObject("v_night_scope", hatch_adder, 0)
                     night_scope.setParent(self.hatch)
 
-        rocket_emitters = []
+        self.set_color(color)
 
-        self.vehicle.color = color
+        rocket_emitters = []
         for ob in self.vehicle.childrenRecursive:
-            ob.color = color
             if "rocket_launch" in ob:
                 rocket_emitters.append(ob)
 
@@ -370,6 +383,12 @@ class VehicleModel(object):
                 weapon.set_rocket_emitters(rocket_emitters)
 
         self.vehicle.localScale *= self.scale
+
+    def set_color(self, color):
+
+        self.vehicle.color = color
+        for ob in self.vehicle.childrenRecursive:
+            ob.color = color
 
     def set_open_hatch(self, toggle):
 
@@ -658,11 +677,24 @@ class ArtilleryModel(object):
 
         self.tracks = []
 
+        self.set_color(color)
+
+        rocket_emitters = []
+        for ob in self.vehicle.childrenRecursive:
+            if "rocket_launch" in ob:
+                rocket_emitters.append(ob)
+
+        for weapon in self.stats.weapons:
+            if weapon.flag == "ROCKETS":
+                weapon.set_rocket_emitters(rocket_emitters)
+
+        self.vehicle.localScale *= scale
+
+    def set_color(self, color):
+
         self.vehicle.color = color
         for ob in self.vehicle.childrenRecursive:
             ob.color = color
-
-        self.vehicle.localScale *= scale
 
     def end_vehicle(self):
         self.vehicle.endObject()

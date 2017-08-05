@@ -123,11 +123,15 @@ class VehicleWeapon(object):
         self.rate_of_fire = 0.0
         self.reload_time = 0.0
         self.ammo_drain = self.power * 0.0001
+
         if self.flag in rapid_fire or self.flag in indirect:
             self.ammo_drain *= 2.0
 
-        if self.flag in rockets:
+        elif self.flag == "MORTAR":
             self.ammo_drain *= 3.0
+
+        elif self.flag == "ROCKETS":
+            self.ammo_drain *= 4.0
 
         self.shots_per_ton = int(1.0 / self.ammo_drain)
         self.emitter = None
@@ -145,15 +149,20 @@ class VehicleWeapon(object):
         rate_of_fire = manpower / required_manpower
         rate_of_fire = min(2.0, rate_of_fire)
 
-        very_fast_firing = ["ROCKETS"]
+        rockets = ["ROCKETS"]
         fast_firing = ["QUICK", "IMPROVED_GUN"]
         rapid_firing = ["RAPID", "FLAME_THROWER"]
         slow_firing = ["PRIMITIVE_GUN", "SUPPORT_GUN"]
         very_slow_firing = ["MORTAR", "ARTILLERY"]
         advanced = ["ADVANCED_GUN", "IMPROVED_GUN"]
 
-        if self.flag in very_fast_firing:
-            rate_of_fire *= 6.0
+        if self.flag in rockets:
+            self.timer = 0.0
+            if manpower > 0:
+                rate_of_fire = 8.0
+            else:
+                rate_of_fire = 0.0
+
         if self.flag in fast_firing:
             rate_of_fire *= 2.0
         if self.flag in rapid_firing:
@@ -171,14 +180,16 @@ class VehicleWeapon(object):
         else:
             self.reload_time = 1000
 
-        rockets = ["MORTAR", "ROCKETS"]
+        rocket_bullets = ["MORTAR", "ROCKETS"]
 
-        if self.flag in rockets:
+        if self.flag in rocket_bullets:
             self.bullet = "ROCKET"
         else:
             self.bullet = "SHELL"
 
         self.recoil_amount = min(0.018, ((self.rating * self.rating) / vehicle_weight) * 0.005)
+        if self.flag in rocket_bullets:
+            self.recoil_amount *= 0.1
 
     def set_emitter(self, emitter):
         self.emitter = emitter
@@ -537,11 +548,13 @@ class VehicleStats(object):
 
                 # TODO handle other flags, handle reliability, turret speed etc...
 
-        self.reliability = 0
+        self.reliability = 3
         reliability_flags = []
 
         for flag in self.flags:
             if flag not in reliability_flags:
+                reliability_flags.append(flag)
+
                 if flag == "UNRELIABLE_PARTS":
                     self.reliability -= 1
                 if flag == "RELIABLE":
@@ -575,6 +588,8 @@ class VehicleStats(object):
                     self.reliability -= 1
                 if flag == "EXTRA_FUEL":
                     self.reliability += 2
+
+        self.reliability = max(1.0, self.reliability)
 
         self.durability *= 10.0
         self.get_weapons()

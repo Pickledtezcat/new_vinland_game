@@ -15,6 +15,9 @@ class AgentState(object):
     def update(self):
         self.agent.update_stats()
         self.agent.infantry_update()
+        self.agent.update_model()
+        self.agent.process_hits()
+
         exit_check = self.exit_check()
         if exit_check:
             self.transition = exit_check
@@ -34,7 +37,14 @@ class AgentStartUp(AgentState):
         super().__init__(agent)
         self.agent.set_position()
 
-        self.transition = AgentIdle
+    def update(self):
+        exit_check = self.exit_check()
+        if exit_check:
+            self.transition = exit_check
+
+    def exit_check(self):
+        if self.agent.level.loaded:
+            return AgentIdle
 
 
 class AgentMovement(AgentState):
@@ -47,8 +57,13 @@ class AgentMovement(AgentState):
         if self.agent.dead:
             return AgentDead
 
-        if self.agent.movement.done:
+        if self.agent.knocked_out:
+            return AgentKnockedOut
 
+        if self.agent.crippled:
+            return AgentCrippled
+
+        if self.agent.movement.done:
             if not self.agent.destinations:
                 return AgentIdle
 
@@ -58,6 +73,7 @@ class AgentMovement(AgentState):
     def process(self):
         self.agent.agent_targeter.update()
         self.agent.movement.update()
+        self.agent.handle_weapons()
 
         if self.agent.movement.done:
             self.agent.navigation.update()
@@ -72,6 +88,12 @@ class AgentWaiting(AgentState):
         if self.agent.dead:
             return AgentDead
 
+        if self.agent.knocked_out:
+            return AgentKnockedOut
+
+        if self.agent.crippled:
+            return AgentCrippled
+
         if self.count > 60:
             self.agent.waiting = False
             if self.agent.navigation.destination:
@@ -81,6 +103,7 @@ class AgentWaiting(AgentState):
 
     def process(self):
         self.agent.agent_targeter.update()
+        self.agent.handle_weapons()
         self.agent.movement.update()
         self.count += 1
 
@@ -93,6 +116,12 @@ class AgentIdle(AgentState):
 
         if self.agent.dead:
             return AgentDead
+
+        if self.agent.knocked_out:
+            return AgentKnockedOut
+
+        if self.agent.crippled:
+            return AgentCrippled
 
         if self.agent.movement.done:
             if self.agent.destinations:
@@ -107,6 +136,7 @@ class AgentIdle(AgentState):
     def process(self):
 
         self.agent.agent_targeter.update()
+        self.agent.handle_weapons()
 
         if self.agent.movement.done:
             if self.agent.aim:
@@ -125,6 +155,12 @@ class AgentCombat(AgentState):
         if self.agent.dead:
             return AgentDead
 
+        if self.agent.knocked_out:
+            return AgentKnockedOut
+
+        if self.agent.crippled:
+            return AgentCrippled
+
         if self.agent.movement.done:
             if not self.agent.agent_targeter.set_target_id:
                 return AgentIdle
@@ -138,6 +174,7 @@ class AgentCombat(AgentState):
     def process(self):
 
         self.agent.agent_targeter.update()
+        self.agent.handle_weapons()
 
         if self.agent.movement.done:
             if self.agent.agent_targeter.set_target_id:
@@ -146,13 +183,74 @@ class AgentCombat(AgentState):
         self.agent.movement.update()
 
 
+class AgentCrippled(AgentState):
+    def __init__(self, agent):
+        super().__init__(agent)
+
+        self.agent.agent_targeter.reset_values()
+        self.agent.navigation.stop = True
+
+    def exit_check(self):
+
+        if self.agent.dead:
+            return AgentDead
+
+        if self.agent.knocked_out:
+            return AgentKnockedOut
+
+        if not self.agent.crippled:
+            self.agent.agent_targeter.reset_values()
+            self.agent.navigation.stop = True
+            return AgentIdle
+
+    def process(self):
+
+        self.agent.model.game_update()
+        self.agent.process_hits()
+        self.agent.movement.update()
+        self.agent.handle_weapons()
+
+        self.agent.agent_targeter.update()
+        self.agent.movement.update()
+
+
+class AgentKnockedOut(AgentState):
+    def __init__(self, agent):
+        super().__init__(agent)
+
+        self.agent.agent_targeter.reset_values()
+        self.agent.navigation.stop = True
+
+        self.agent.dismount_building()
+
+    def exit_check(self):
+
+        if self.agent.dead:
+            return AgentDead
+
+        if not self.agent.knocked_out:
+            return AgentIdle
+
+    def process(self):
+        self.agent.movement.update()
+
+
 class AgentDead(AgentState):
     def __init__(self, agent):
         super().__init__(agent)
+
+        self.agent.agent_targeter.reset_values()
+        self.agent.navigation.stop = True
+        self.agent.death_effect()
+        self.agent.add_visibility_marker()
 
         # TODO set up all aspects of dying, remove visibility etc...
 
         self.agent.dismount_building()
 
-    def process(self):
+    def update(self):
+        self.agent.update_stats()
+        self.agent.infantry_update()
+        self.agent.update_model()
         self.agent.movement.update()
+

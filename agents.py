@@ -70,7 +70,7 @@ class Agent(object):
         self.stats = None
         self.health = 0
         self.mechanical_damage = 0
-        self.damage_mod = 1.0
+        self.crippled = False
         self.load_stats()
 
         self.model = None
@@ -156,6 +156,16 @@ class Agent(object):
     def set_suspect(self, setting):
         self.suspect = setting
 
+    def update_model(self):
+        if self.model:
+            self.model.game_update()
+
+    def process_hits(self):
+        pass
+
+    def handle_weapons(self):
+        pass
+
     def save(self):
 
         weapons = [weapon.timer for weapon in self.weapons]
@@ -166,7 +176,6 @@ class Agent(object):
                      "mechanical_damage": self.mechanical_damage,
                      "on_fire": self.on_fire, "selected": self.selected, "state_name": self.state.name,
                      "load_name": self.load_name, "ammo": self.ammo, "stance": self.stance,
-                     "damage_mod": self.damage_mod,
                      "state_count": self.state.count, "movement_target": self.movement.target,
                      "movement_target_direction": self.movement.target_direction, "weapons": weapons,
                      "movement_timer": self.movement.timer, "initial_health": self.initial_health,
@@ -194,7 +203,6 @@ class Agent(object):
         self.ammo = agent_dict["ammo"]
         self.deployed = agent_dict["deployed"]
         self.angled = agent_dict["angled"]
-        self.damage_mod = agent_dict["damage_mod"]
 
         self.movement.load_movement(agent_dict["movement_target"], agent_dict["movement_target_direction"],
                                     agent_dict["movement_timer"])
@@ -581,6 +589,9 @@ class Agent(object):
         target_vector = self.center.copy() - origin.center.copy()
         return None, target_vector
 
+    def death_effect(self):
+        pass
+
 
 class Vehicle(Agent):
     def __init__(self, level, load_name, location, team, agent_id=None, load_dict=None):
@@ -716,19 +727,21 @@ class Vehicle(Agent):
             self.max_speed *= 0.75
             self.handling *= 0.75
 
-        if self.mechanical_damage > 0 and self.movement.done:
-            damage_mod = 1.0
+        # TODO find a way to show crippling damage without vehicle getting stuck
 
-            if self.mechanical_damage > self.stats.reliability:
-                damage_degree = self.mechanical_damage - self.stats.reliability
+        damage_mod = 1.0
+        damage_degree = self.mechanical_damage / self.stats.reliability
 
-                for d in range(damage_degree):
-                    damage_mod *= 0.5
+        if damage_degree > 1.0:
+            damage_mod = 0.5
 
-            self.damage_mod = damage_mod
+        if damage_degree > 2.0:
+            self.crippled = True
+        else:
+            self.crippled = False
 
-        self.max_speed *= self.damage_mod
-        self.handling *= self.damage_mod
+        self.max_speed *= damage_mod
+        self.handling *= damage_mod
 
         self.get_best_penetration()
 
@@ -780,7 +793,7 @@ class Vehicle(Agent):
 
                     self.is_damaged = -1
                     if self.mechanical_damage > 0:
-                        if self.mechanical_damage < self.stats.reliability:
+                        if self.crippled:
                             self.is_damaged = 1
                         else:
                             self.is_damaged = 0
@@ -802,13 +815,13 @@ class Vehicle(Agent):
 
     def vehicle_explode(self):
         if not self.dead:
+
             command = {"label": "EXPLOSION", "effect": "DUMMY_EXPLOSION", "damage": 100,
                        "position": self.center, "agent": self}
 
             self.level.commands.append(command)
 
             self.dead = True
-            print("{} exploded!".format(self.agent_id))
 
     def update(self):
 
@@ -817,8 +830,7 @@ class Vehicle(Agent):
         self.debug_text = ""
 
         # self.debug_text = "{}\n{}".format(self.movement.tilt, str(list(self.movement.recoil.copy())))
-
-        # self.debug_text = "{}\n{}\n{}".format(str(self.agent_id), target, self.seen)
+        self.debug_text = "{}".format(str(self.state.name))
 
         self.check_on_screen()
         self.check_status()
@@ -826,12 +838,6 @@ class Vehicle(Agent):
         if not self.ended:
             if not self.level.paused:
                 self.state_machine()
-
-                if not self.dead:
-                    self.model.game_update()
-                    self.process_hits()
-                    if not self.knocked_out:
-                        self.handle_weapons()
 
     def get_best_penetration(self):
         best_penetration = 0
@@ -1044,7 +1050,6 @@ class Vehicle(Agent):
                         crew_damage = int(damage * 0.1)
                         if crew_damage > 0:
                             if random.randint(0, crew_damage) > self.stats.crew:
-                                self.add_visibility_marker()
                                 self.knocked_out = True
 
                 if damage_chance:
@@ -1069,7 +1074,6 @@ class Vehicle(Agent):
 
         if self.health < 0 and not self.dead:
             self.dead = True
-            self.add_visibility_marker()
 
             if random.uniform(0.0, 6.0) < self.ammo:
                 self.vehicle_explode()
@@ -1083,6 +1087,14 @@ class Vehicle(Agent):
         tile = self.level.get_tile(self.location)
         if penetrated:
             particles.NormalHit(self.level, tile, damage_value)
+
+    def death_effect(self):
+
+        if self.model:
+            self.model.display_death()
+
+        tile = self.level.get_tile(self.location)
+        particles.DeathExplosion(self.level, tile, 100.0)
 
 
 class Infantry(Agent):
@@ -1232,7 +1244,6 @@ class Infantry(Agent):
                     dead = False
 
             if dead:
-                self.add_visibility_marker()
                 self.dead = True
             else:
                 if not self.knocked_out:

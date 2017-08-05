@@ -504,11 +504,16 @@ class Level(object):
         bush_groups = self.get_foliage_placement(24, 6, 8)
         tree_groups = self.get_foliage_placement(6, 6, 12)
 
-        foliage_groups = [[grass_groups, "_grass_", 0, False], [bush_groups, "_bushes_", 191, False], [tree_groups, "_b_tree_", 159, True]]
+        foliage_groups = [[grass_groups, ["_grass_"], 0, False], [bush_groups, ["_bushes_"], 191, False], [tree_groups, ["_b_tree_", "_s_tree_"], 159, True]]
 
         for foliage_group in foliage_groups:
             group = foliage_group[0]
-            name = foliage_group[1]
+            names = foliage_group[1]
+            if len(names) > 1:
+                name = random.choice(names)
+            else:
+                name = names[0]
+
             terrain_value = foliage_group[2]
             paint_around = foliage_group[3]
 
@@ -909,7 +914,7 @@ class Level(object):
 
         target = agent.agent_targeter.enemy_target
         if target:
-            target_distance = agent.agent_targeter.target_distance
+            target_distance = max(1.0, agent.agent_targeter.target_distance)
             effective_range = weapon.effective_range
 
             if target.agent_type == "INFANTRY":

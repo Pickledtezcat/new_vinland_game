@@ -727,26 +727,42 @@ class AgentTargeter(object):
             self.set_target_id = None
             self.reset_values()
         else:
-            if self.set_target_id:
-                set_target = self.agent.level.agents[self.set_target_id]
-
-                set_target_check = self.check_target(set_target)
-                if set_target_check:
-                    self.set_closest_target(self.set_target_id)
-                else:
-                    self.set_target_id = None
-                    self.reset_values()
-
-            else:
-                # if not self.check_target(self.enemy_target):
-                #     self.reset_values()
-
+            if self.agent.team != 0:
                 if self.check_timer <= 0:
                     self.check_timer = 12
                     self.get_closest_enemy()
 
                 else:
                     self.check_timer -= 1
+
+                if self.enemy_target_id:
+                    self.set_target_id = self.enemy_target_id
+                else:
+                    self.set_target_id = None
+                    self.reset_values()
+
+            else:
+                if self.set_target_id:
+
+                    set_target = self.agent.level.agents[self.set_target_id]
+
+                    set_target_check = self.check_target(set_target)
+                    if set_target_check:
+                        self.set_closest_target(self.set_target_id)
+                    else:
+                        self.set_target_id = None
+                        self.reset_values()
+
+                else:
+                    # if not self.check_target(self.enemy_target):
+                    #     self.reset_values()
+
+                    if self.check_timer <= 0:
+                        self.check_timer = 12
+                        self.get_closest_enemy()
+
+                    else:
+                        self.check_timer -= 1
 
         local_y = self.agent.movement_hook.getAxisVect([0.0, 1.0, 0.0]).to_2d()
         target_angle = 0.0

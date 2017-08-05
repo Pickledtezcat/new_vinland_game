@@ -158,6 +158,36 @@ class MovementPointIcon(Particle):
                 self.box.color = [color, color, color, 1.0]
 
 
+class DeathExplosion(Particle):
+
+    def __init__(self, level, tile, rating):
+        super().__init__(level)
+
+        height = tile["height"]
+        normal = tile["normal"]
+        position = mathutils.Vector(tile["position"]).to_3d()
+        scatter = mathutils.Vector([random.uniform(-0.5, 0.5) for _ in range(3)])
+        position += scatter
+        position.z = height + 0.2
+        self.rating = rating
+
+        self.scale = self.rating * 0.1
+
+        ground_position = position.copy()
+        VehicleRubble(self.level, ground_position.copy(), self.scale * 0.33, normal.copy())
+
+        ground_position.z += 1.0
+
+        for i in range(12):
+            ArmorSparks(self.level, self.scale * 0.4, ground_position.copy())
+            LargeSmoke(self.level, self.scale * 0.6, ground_position.copy(), delay=4)
+            ArmorBlast(self.level, self.scale * 0.2, ground_position.copy())
+
+        ExplosionSound(self.level, ground_position.copy(), 3)
+
+        self.ended = True
+
+
 class NormalHit(Particle):
 
     def __init__(self, level, tile, rating):
@@ -551,6 +581,13 @@ class BigScorchMark(ScorchMark):
 
     def add_crater(self):
         self.mesh = "{}.{}".format("big_craters", str(random.randint(1, 9)).zfill(3))
+        self.crater = self.level.own.scene.addObject(self.mesh, self.level.own, 0)
+
+
+class VehicleRubble(ScorchMark):
+
+    def add_crater(self):
+        self.mesh = "{}.{}".format("rubble", str(random.randint(1, 6)).zfill(3))
         self.crater = self.level.own.scene.addObject(self.mesh, self.level.own, 0)
 
 

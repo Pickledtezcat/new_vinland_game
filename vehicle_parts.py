@@ -121,7 +121,7 @@ def get_vehicle_parts():
                             "A bulky and slow firing machine gun from the last war."],
                      "60": ["improved machine gun", "WEAPON", 2, 6, 1, 1, 1, "RAPID",
                             "A simpler and faster firing machine gun."],
-                     "61": ["heavy machine gun", "WEAPON", 3, 6, 1, 1, 2, "",
+                     "61": ["heavy machine gun", "WEAPON", 3, 6, 1, 1, 2, "QUICK",
                             "A heavy duty machine gun good against infantry and light vehicles."],
                      "62": ["auto cannon", "WEAPON", 1, 4, 2, 1, 2, "QUICK",
                             "A up scaled machine gun that fires larger caliber shells. Increased bulk is a disadvantage."],
@@ -171,7 +171,7 @@ def get_vehicle_parts():
                             "A deadly weapon, but very short ranged."],
                      "85": ["small rockets", "WEAPON", 3, 6, 2, 1, 6, "ROCKETS",
                             "Rockets can deliver an intense barrage in a short space of time. Has a long reload time."],
-                     "86": ["large rockets", "WEAPON", 4, 6, 4, 1, 15, "ROCKETS",
+                     "86": ["large rockets", "WEAPON", 4, 6, 4, 1, 13, "ROCKETS",
                             "Larger rockets have less range but more damage potential."]}
 
     labels = ["name",
