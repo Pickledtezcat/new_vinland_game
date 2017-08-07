@@ -7,7 +7,7 @@ import time
 
 
 class VehicleModel(object):
-    def __init__(self, adder, owner, scale=1.0, cammo=0, faction_icon=None):
+    def __init__(self, adder, owner, scale=1.0, cammo=0, faction_icon=0):
 
         self.adder = adder
         self.scene = self.adder.scene
@@ -467,11 +467,6 @@ class VehicleModel(object):
             turret_matrix = mathutils.Matrix.Rotation(turret_angle, 4, 'Z').to_3x3()
             self.turret.localOrientation = turret_matrix
 
-            # turret_angle = self.owner.turret_rotation
-            # rot_mat = mathutils.Matrix.Rotation(turret_angle, 4, "Z")
-            # turret_target = self.turret_rest * rot_mat
-            # self.turret.localTransform = turret_target
-
     def deploy(self):
 
         x_rot_mat = mathutils.Matrix.Rotation(self.owner.deployed, 4, "X")
@@ -496,18 +491,38 @@ class VehicleModel(object):
 
 
 class ArtilleryModel(object):
-    def __init__(self, adder, stats, owner=None, scale=1.0, cammo=0):
+    def __init__(self, adder, owner, scale=1.0, cammo=0, faction_icon=0):
 
         self.adder = adder
         self.scene = self.adder.scene
-        self.stats = stats
         self.owner = owner
+        self.stats = self.owner.stats
+        self.cammo = cammo
+        self.faction_icon = faction_icon
         self.scale = scale
         self.parts_dict = vehicle_parts.get_vehicle_parts()
         self.gun_adders = []
+        self.vehicle = None
+        self.legs = []
+        self.gun = None
+        self.gun_block = None
+        self.gun_block_rest = None
+
+        self.crew_adders = []
 
         self.display_cycle = 0.0
         self.cycling = False
+
+        self.wheels = []
+        self.turret = None
+        self.turret_rest = None
+        self.tracks = []
+
+        self.build_model()
+
+    def build_model(self):
+
+        self.cammo = self.stats.faction_number + 6
 
         faction_icons = {1: 0,
                          2: 2,
@@ -516,7 +531,11 @@ class ArtilleryModel(object):
                          5: 5,
                          6: 4}
 
-        icon = faction_icons[self.stats.faction_number]
+        if not self.faction_icon:
+            icon = faction_icons[self.stats.faction_number + 1]
+        else:
+            icon = faction_icons[self.faction_icon + 1]
+
         chassis_size = self.stats.chassis_size
 
         faction_number = 1
@@ -527,7 +546,7 @@ class ArtilleryModel(object):
             if self.stats.faction_number in faction_list:
                 faction_number = faction_key
 
-        color = [icon * 0.25, 0.0, cammo * 0.125, 1.0]
+        color = [icon * 0.25, 0.0, self.cammo * 0.125, 1.0]
 
         all_weapons = [w for w in self.stats.weapons if w.weapon_location == "FRONT"]
 
@@ -609,7 +628,6 @@ class ArtilleryModel(object):
                 crew_man.setParent(crew_adder)
 
         legs = bgeutils.get_ob_list("leg", self.vehicle.children)
-        self.legs = []
 
         for leg in legs:
             if leg.children:
@@ -634,7 +652,7 @@ class ArtilleryModel(object):
                 for child_ob in gun.children:
                     child_ob.endObject()
 
-                gun.localPosition.z += 1.0
+                #gun.localPosition.z += 1.0
                 gun.visible = False
 
                 if weapon.visual < 1 or "primitive" in weapon.name:
@@ -643,6 +661,9 @@ class ArtilleryModel(object):
                 gun_block_string = "v_gun_block_{}_{}".format(faction_number, chassis_size)
                 gun_block = gun.scene.addObject(gun_block_string, gun, 0)
                 gun_block.setParent(gun)
+                self.gun_block = gun_block
+                self.gun_block_rest = gun_block.localTransform.copy()
+
                 adders = bgeutils.get_ob_list("mount_gun", gun_block.children)
 
                 adder_list = [[ob["mount_gun"], ob] for ob in adders]
@@ -655,17 +676,19 @@ class ArtilleryModel(object):
 
                 if gun_mount:
                     gun_size = weapon.visual
-                    if gun_size != 10:
 
-                        if weapon.flag == "HIGH_VELOCITY":
-                            brake = 0
-                        else:
-                            brake = 1
+                    high_velocity = ["IMPROVED_GUN", "ADVANCED_GUN"]
 
-                        gun_string = "v_a_gun_{}_{}".format(brake, gun_size)
-                        gun_barrel = gun_mount.scene.addObject(gun_string, gun_mount, 0)
-                        gun_barrel.setParent(gun)
-                        gun_mount.endObject()
+                    if weapon.flag in high_velocity:
+                        brake = 0
+                    else:
+                        brake = 1
+
+                    gun_string = "v_a_gun_{}_{}".format(brake, gun_size)
+                    gun_barrel = gun_mount.scene.addObject(gun_string, gun_mount, 0)
+                    gun_barrel.setParent(gun_block)
+                    gun_emitter = bgeutils.get_ob("shooter", gun_barrel.childrenRecursive)
+                    weapon.set_emitter(gun_emitter)
 
         self.wheels = bgeutils.get_ob_list("wheels", self.vehicle.children)
         self.turret = bgeutils.get_ob("turret", self.vehicle.children)
@@ -674,8 +697,6 @@ class ArtilleryModel(object):
             self.turret_rest = self.turret.localTransform
         else:
             self.turret_rest = None
-
-        self.tracks = []
 
         self.set_color(color)
 
@@ -688,7 +709,19 @@ class ArtilleryModel(object):
             if weapon.flag == "ROCKETS":
                 weapon.set_rocket_emitters(rocket_emitters)
 
-        self.vehicle.localScale *= scale
+        self.vehicle.localScale *= self.scale
+
+    def display_death(self):
+
+        cammo = 1.875
+        icon = 1.75
+
+        color = [icon, 0.0, cammo, 1.0]
+        self.set_color(color)
+
+        for ob in self.vehicle.childrenRecursive:
+            if ob.get("crew_man_display"):
+                ob.visible = False
 
     def set_color(self, color):
 
@@ -713,6 +746,18 @@ class ArtilleryModel(object):
 
     def deploy(self):
 
+        x_rot_mat = mathutils.Matrix.Rotation(self.owner.deployed, 4, "X")
+
+        if self.gun_block:
+            z_rot_mat = mathutils.Matrix.Rotation(self.owner.angled, 4, "Z")
+
+            total_rot = x_rot_mat * z_rot_mat
+
+            gun_target = self.gun_block_rest * total_rot
+            self.gun_block.localTransform = gun_target
+
+    def hitch(self):
+
         deploy_amount = self.owner.deployed
 
         for leg in self.legs:
@@ -736,15 +781,14 @@ class ArtilleryModel(object):
             turret_matrix = mathutils.Matrix.Rotation(turret_angle, 4, 'Z').to_3x3()
             self.turret.localOrientation = turret_matrix
 
-            # turret_angle = self.owner.turret_rotation
-            # rot_mat = mathutils.Matrix.Rotation(turret_angle, 4, "Z")
-            # turret_target = self.turret_rest * rot_mat
-            # self.turret.localTransform = turret_target
+    def preview_update(self):
 
-    def preview_update(self, rotation):
+        rotation_time = time.clock()
+
+        rotation = (rotation_time / 6.0) % 2
+        turret_rotation = (rotation_time / 12.0) % 2
 
         if self.vehicle:
-
             if self.cycling:
                 if self.display_cycle < 1.0:
                     self.display_cycle += 0.01
@@ -763,7 +807,8 @@ class ArtilleryModel(object):
             self.vehicle.localScale = [self.scale, self.scale, self.scale]
 
             if self.turret:
-                self.turret.applyRotation([0.0, 0.0, 0.001], 1)
+                turret_matrix = mathutils.Matrix.Rotation(math.radians(360.0 * turret_rotation), 4, "Z").to_3x3()
+                self.turret.localOrientation = turret_matrix
 
             for ob in self.wheels:
                 ob.applyRotation([-0.05, 0.0, 0.0], 1)

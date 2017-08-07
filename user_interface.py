@@ -11,11 +11,11 @@ color_dict = vehicle_parts.color_dict
 status_dict = {"ammo": "yellow",
                "empty": "red",
                "carrying": "green",
-               "disabled": "yellow",
+               "disabled": "red",
                "knocked_out": "red",
                "shocked": "yellow",
                "broken": "red",
-               "damaged": "red",
+               "damaged": "yellow",
                "sentry": "green",
                "nothing": "green"}
 
@@ -304,7 +304,8 @@ class StatusBar(object):
         else:
             position = self.agent.box.worldPosition.copy()
 
-        position.z += 2.5
+        position.z += 2.6
+        position.x += 1.0
 
         location = self.ui.camera.getScreenPosition(position)
         ray = self.ui.mouse_ray(location)

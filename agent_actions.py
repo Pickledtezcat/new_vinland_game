@@ -156,6 +156,7 @@ class AgentMovement(object):
         self.set_vectors()
         self.timer = timer
         self.set_position()
+        self.agent.get_center()
 
 
 class InfantryAction(object):

@@ -91,7 +91,7 @@ class VehicleWeapon(object):
 
         if self.flag in rockets:
             self.indirect = True
-            self.penetration = int(self.penetration * 1.0)
+            self.penetration = int(self.penetration)
             self.accuracy = 1
 
         if self.flag == "PRIMITIVE_GUN":
@@ -131,7 +131,7 @@ class VehicleWeapon(object):
             self.ammo_drain *= 3.0
 
         elif self.flag == "ROCKETS":
-            self.ammo_drain *= 4.0
+            self.ammo_drain *= 20.0
 
         self.shots_per_ton = int(1.0 / self.ammo_drain)
         self.emitter = None
@@ -157,12 +157,7 @@ class VehicleWeapon(object):
         advanced = ["ADVANCED_GUN", "IMPROVED_GUN"]
 
         if self.flag in rockets:
-            self.timer = 0.0
-            if manpower > 0:
-                rate_of_fire = 8.0
-            else:
-                rate_of_fire = 0.0
-
+            rate_of_fire *= 0.5
         if self.flag in fast_firing:
             rate_of_fire *= 2.0
         if self.flag in rapid_firing:
@@ -304,7 +299,7 @@ class VehicleWeapon(object):
 
                     self.agent.level.commands.append(command)
 
-                    self.timer = random.uniform(-0.1, 0.0)
+                    self.timer = 0.0
                     self.agent.ammo -= self.ammo_drain
                     recoil_vector = mathutils.Vector([0.0, -1.0, 0.0])
                     recoil_vector.length = self.recoil_amount
@@ -331,7 +326,7 @@ class VehicleWeapon(object):
 
                 self.agent.level.commands.append(command)
 
-                self.timer = random.uniform(-0.1, 0.0)
+                self.timer = 0.0
                 self.agent.ammo -= self.ammo_drain
                 recoil_vector = mathutils.Vector([0.0, -1.0, 0.0])
                 recoil_vector.length = self.recoil_amount
@@ -364,7 +359,7 @@ class VehicleStats(object):
 
         self.faction_number = 2
         # TODO handle getting factions
-        self.vehicle_type = "TANK"
+        self.vehicle_type = None
         self.options = vehicle["options"]
         self.turret_size = vehicle["turret"]
         self.chassis_size = vehicle["chassis"]
@@ -427,20 +422,22 @@ class VehicleStats(object):
             setting = option_set[1]
 
             if setting:
-                if option["flag"] == "GUN_CARRIAGE":
-                    self.vehicle_type = "GUN_CARRIAGE"
+                if not self.vehicle_type:
 
-                elif option["option_type"] == "DRIVE":
-                    flag = option["flag"]
-                    if flag == "WHEELED":
-                        self.vehicle_type = "CAR"
-                    elif flag == "HALFTRACK":
-                        self.vehicle_type = "HALFTRACK"
-                    else:
-                        self.vehicle_type = "TANK"
+                    if option["flag"] == "GUN_CARRIAGE":
+                        self.vehicle_type = "GUN_CARRIAGE"
 
-                    self.drive_type = option["flag"]
-                    self.drive_dict = vehicle_parts.drive_dict[self.drive_type]
+                    elif option["option_type"] == "DRIVE":
+                        flag = option["flag"]
+                        if flag == "WHEELED":
+                            self.vehicle_type = "CAR"
+                        elif flag == "HALFTRACK":
+                            self.vehicle_type = "HALFTRACK"
+                        else:
+                            self.vehicle_type = "TANK"
+
+                        self.drive_type = option["flag"]
+                        self.drive_dict = vehicle_parts.drive_dict[self.drive_type]
 
                 self.flags.append(option["flag"])
 
@@ -491,7 +488,8 @@ class VehicleStats(object):
             if item_type == "CREW":
                 self.crew += 1
                 self.manpower[location] += rating
-                self.weight += 0.5
+                if "GUN_CARRIAGE" not in self.flags:
+                    self.weight += 0.5
                 self.cost += ((5 + level) * 20) * weight
 
             elif item_type == "ENGINE":
@@ -628,8 +626,10 @@ class VehicleStats(object):
     def get_carriage_movement(self):
 
         self.stability = 6
+        weight = max(0.5, self.weight)
 
-        on_road_handling = max(1, int(self.weight / max(1, self.crew)))
+        manpower = self.crew / weight
+        on_road_handling = min(12.0, manpower * 5.0)
         off_road_handling = int(on_road_handling * 0.5)
 
         self.handling = [on_road_handling, off_road_handling]

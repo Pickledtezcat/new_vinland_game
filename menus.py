@@ -1020,7 +1020,11 @@ class StatDisplayWidget(Widget):
         self.header_text = stats
 
         super().__init__(menu, adder)
-        self.model = model_display.VehicleModel(self.menu.adders[7], self, 0.5)
+
+        if self.stats.vehicle_type == "GUN_CARRIAGE":
+            self.model = model_display.ArtilleryModel(self.menu.adders[7], self, 0.5)
+        else:
+            self.model = model_display.VehicleModel(self.menu.adders[7], self, 0.5)
 
     def end_widget(self):
         for button in self.buttons:

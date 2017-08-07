@@ -597,20 +597,31 @@ class Level(object):
         #     agents.Vehicle(self, None, [35 + (10 * enemy), 35], 1)
 
         if vehicle_testing:
-            vehicles = builder_tools.load_testing_vehicles()
-            bge.logic.globalDict["profiles"][bge.logic.globalDict["active_profile"]]["vehicles"] = vehicles
-            vehicle_keys = [v_key for v_key in vehicles]
-            for v in range(len(vehicle_keys)):
-                # TODO set agent type based on vehicle
-                vehicle = vehicles[vehicle_keys[v]]
+            for t in range(2):
 
-                team = random.choice([0, 1])
-                if team == 0:
-                    y = 50
-                else:
-                    y = 15
+                vehicles = builder_tools.load_testing_vehicles()
+                bge.logic.globalDict["profiles"][bge.logic.globalDict["active_profile"]]["vehicles"] = vehicles
+                vehicle_keys = [v_key for v_key in vehicles]
+                for v in range(len(vehicle_keys)):
+                    # TODO set agent type based on vehicle
+                    vehicle = vehicles[vehicle_keys[v]]
+                    artillery = False
 
-                agents.Vehicle(self, vehicle_keys[v], [35 + (10 * v), y], team)
+                    for option in vehicle["options"]:
+                        if option[1]:
+                            if option[0] == "1":
+                                artillery = True
+
+                    team = t
+                    if team == 0:
+                        y = 50
+                    else:
+                        y = 15
+
+                    if artillery:
+                        agents.Artillery(self, vehicle_keys[v], [35 + (10 * v), y], team)
+                    else:
+                        agents.Vehicle(self, vehicle_keys[v], [35 + (10 * v), y], team)
 
         for enemy in range(5):
             agents.Infantry(self, random.choice(infantry), [35 + (10 * enemy), 25], 1)
@@ -651,6 +662,9 @@ class Level(object):
 
             elif agent_type == "INFANTRY":
                 agent_class = agents.Infantry
+
+            elif agent_type == "ARTILLERY":
+                agent_class = agents.Artillery
 
             agent_class(self, load_name, location, team, agent_id=agent_id, load_dict=loading_agent)
 
@@ -755,8 +769,6 @@ class Level(object):
                            "timer": timer}
 
             bullet_list.append(bullet_dict)
-
-        print(bullet_list)
 
         return bullet_list
 

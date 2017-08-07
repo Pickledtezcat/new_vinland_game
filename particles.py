@@ -631,7 +631,7 @@ class BulletFlash(Particle):
     def __init__(self, level, weapon, delay=0):
         self.weapon = weapon
 
-        if weapon.bullet == "ROCKET":
+        if self.weapon.rocket_emitters:
             self.hook = random.choice(self.weapon.rocket_emitters)
         else:
             self.hook = self.weapon.emitter

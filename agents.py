@@ -42,10 +42,9 @@ class Agent(object):
     best_weapon = None
 
     stance = "FLANK"
-    agent_type = "VEHICLE"
 
     def __init__(self, level, load_name, location, team, agent_id=None, load_dict=None):
-
+        self.agent_type = self.get_agent_type()
         self.level = level
 
         if not agent_id:
@@ -76,7 +75,6 @@ class Agent(object):
         self.model = None
         self.movement_hook = None
         self.tilt_hook = None
-        self.mesh = None
         self.box = None
         self.add_box()
 
@@ -114,6 +112,9 @@ class Agent(object):
 
         if load_dict:
             self.reload(load_dict)
+
+    def get_agent_type(self):
+        return "VEHICLE"
 
     def get_center(self):
         self.center = self.box.worldPosition.copy()
@@ -299,7 +300,6 @@ class Agent(object):
         self.box = box
         self.movement_hook = bgeutils.get_ob("hook", self.box.childrenRecursive)
         self.tilt_hook = bgeutils.get_ob("tilt", self.box.childrenRecursive)
-        self.mesh = bgeutils.get_ob("mesh", self.box.childrenRecursive)
 
     def terminate(self):
         self.box.endObject()
@@ -762,6 +762,8 @@ class Vehicle(Agent):
     def shoot_weapons(self):
         for weapon in self.weapons:
             shooting = weapon.shoot()
+            if shooting:
+                return
 
     def check_status(self):
         # TODO set some stats to update on move
@@ -830,7 +832,7 @@ class Vehicle(Agent):
         self.debug_text = ""
 
         # self.debug_text = "{}\n{}".format(self.movement.tilt, str(list(self.movement.recoil.copy())))
-        self.debug_text = "{}".format(str(self.state.name))
+        # self.debug_text = "{}".format(str(self.state.name))
 
         self.check_on_screen()
         self.check_status()
@@ -1097,9 +1099,107 @@ class Vehicle(Agent):
         particles.DeathExplosion(self.level, tile, 100.0)
 
 
+class Artillery(Vehicle):
+    def __init__(self, level, load_name, location, team, agent_id=None, load_dict=None):
+
+        self.avoid_radius = 4
+        self.spacing = 1.5
+        self.prone = False
+        self.size = 0
+        self.stance_speed = 1.0
+        self.wait_for_infantry = True
+        self.aligning = False
+        self.gun_timer = 0.0
+        self.walk_mod = 1.0
+
+        super().__init__(level, load_name, location, team, agent_id, load_dict)
+        self.formation = []
+        self.add_squad(load_dict)
+
+        self.set_formation()
+
+    def get_agent_type(self):
+        return "ARTILLERY"
+
+    def infantry_update(self):
+        for soldier in self.soldiers:
+            soldier.update()
+            soldier.visible = True
+
+    def add_box(self):
+        box = self.level.own.scene.addObject("agent", self.level.own, 0)
+
+        self.box = box
+        self.movement_hook = bgeutils.get_ob("hook", self.box.childrenRecursive)
+        self.tilt_hook = bgeutils.get_ob("tilt", self.box.childrenRecursive)
+        self.model = model_display.ArtilleryModel(self.tilt_hook, self, scale=0.5)
+
+    def set_starting_formation(self):
+
+        points = self.model.crew_adders
+
+        for point in points:
+            position = (point.worldPosition - self.box.worldPosition).to_3d()
+            self.formation.append(position)
+
+    def add_squad(self, load_dict):
+        self.set_starting_formation()
+        self.set_formation()
+
+        points = self.model.crew_adders[:self.stats.crew]
+        soldier = "GUN CREW"
+
+        if load_dict:
+            for soldier_details in load_dict["soldiers"]:
+                solider = soldier_details["infantry_type"]
+                self.soldiers.append(ArtilleryMan(self, solider, 0, load_dict=soldier_details))
+        else:
+            for i in range(len(points)):
+                self.soldiers.append(ArtilleryMan(self, soldier, i))
+
+    def set_formation(self):
+
+        if self.stance == "AGGRESSIVE":
+            self.prone = False
+            self.stance_speed = 0.75
+            self.shooting_bonus = 0.75
+
+        if self.stance == "SENTRY":
+            self.prone = False
+            self.stance_speed = 0.5
+            self.shooting_bonus = 0.75
+
+        if self.stance == "DEFEND":
+            self.prone = True
+            self.stance_speed = 0.5
+            self.shooting_bonus = 1.0
+
+        if self.stance == "FLANK":
+            self.prone = False
+            self.stance_speed = 1.0
+            self.shooting_bonus = 0.5
+
+    def get_closest_soldier(self, origin):
+
+        closest = 2000
+        closest_soldier = None
+        best_vector = None
+
+        for soldier in self.soldiers:
+            if not soldier.dead:
+                target_vector = soldier.box.worldPosition.copy() - origin.box.worldPosition.copy()
+                distance = target_vector.length
+
+                if distance < closest:
+                    closest = distance
+                    best_vector = target_vector
+                    closest_soldier = soldier
+
+        return closest_soldier, best_vector
+
+
 class Infantry(Agent):
     def __init__(self, level, load_name, location, team, agent_id=None, load_dict=None):
-        self.agent_type = "INFANTRY"
         self.avoid_radius = 4
         self.spacing = 1.5
         self.prone = False
@@ -1118,6 +1218,9 @@ class Infantry(Agent):
 
         infantry_speed = [soldier.speed for soldier in self.soldiers]
         self.speed = min(infantry_speed)
+
+    def get_agent_type(self):
+        return "INFANTRY"
 
     def get_center(self):
 
@@ -1368,7 +1471,6 @@ class Infantry(Agent):
         self.box = box
         self.movement_hook = bgeutils.get_ob("hook", self.box.childrenRecursive)
         self.tilt_hook = bgeutils.get_ob("tilt", self.box.childrenRecursive)
-        self.mesh = bgeutils.get_ob("mesh", self.box.childrenRecursive)
 
     def infantry_update(self):
         for soldier in self.soldiers:
@@ -1632,6 +1734,44 @@ class InfantryMan(object):
 
         self.behavior.update()
         self.animation.update()
+
+
+class ArtilleryMan(InfantryMan):
+    def __init__(self, agent, infantry_type, index, load_dict=None):
+        self.agent = agent
+        self.agent_type = "ARTILLERYMAN"
+
+        super().__init__(agent, infantry_type, index, load_dict)
+
+    def check_too_close(self, target_tile):
+        return False
+
+    def update(self):
+        self.behavior.update()
+        self.animation.update()
+        self.movement.update()
+
+    def set_occupied(self, target_tile):
+        pass
+
+    def clear_occupied(self):
+        pass
+
+    def check_occupied(self, target_tile):
+        return None
+
+    def get_destination(self):
+        self.set_speed()
+
+        location = self.agent.box.worldPosition.copy()
+        location.z = 0.0
+
+        offset = mathutils.Vector(self.agent.formation[self.index]).to_3d()
+        offset.rotate(self.agent.movement_hook.worldOrientation.copy())
+
+        destination = (location + offset).to_2d()
+
+        return [round(axis) for axis in destination]
 
 
 class SoldierGrenade(object):
