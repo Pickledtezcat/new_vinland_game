@@ -744,21 +744,7 @@ class ArtilleryModel(object):
             transform = mathutils.Matrix.Translation((speed * 0.01, 0.0, 0.0))
             mesh.transformUV(0, transform)
 
-    def deploy(self):
-
-        x_rot_mat = mathutils.Matrix.Rotation(self.owner.deployed, 4, "X")
-
-        if self.gun_block:
-            z_rot_mat = mathutils.Matrix.Rotation(self.owner.angled, 4, "Z")
-
-            total_rot = x_rot_mat * z_rot_mat
-
-            gun_target = self.gun_block_rest * total_rot
-            self.gun_block.localTransform = gun_target
-
-    def hitch(self):
-
-        deploy_amount = self.owner.deployed
+        deploy_amount = bgeutils.smoothstep(self.owner.stowed)
 
         for leg in self.legs:
             leg_model = leg["leg"]
@@ -773,6 +759,18 @@ class ArtilleryModel(object):
             start = gun["start"]
             end = gun["end"]
             gun_model.localTransform = start.lerp(end, deploy_amount)
+
+    def deploy(self):
+
+        x_rot_mat = mathutils.Matrix.Rotation(self.owner.deployed, 4, "X")
+
+        if self.gun_block:
+            z_rot_mat = mathutils.Matrix.Rotation(self.owner.angled, 4, "Z")
+
+            total_rot = x_rot_mat * z_rot_mat
+
+            gun_target = self.gun_block_rest * total_rot
+            self.gun_block.localTransform = gun_target
 
     def turret_turn(self):
 

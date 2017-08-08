@@ -86,7 +86,7 @@ class Agent(object):
         self.soldiers = []
 
         self.location = location
-        self.direction = [1, 0]
+        self.direction = [0, -1]
         self.destinations = []
         self.enter_building = None
         self.aim = None
@@ -96,6 +96,7 @@ class Agent(object):
         self.selected = False
         self.waiting = False
         self.deployed = 0.0
+        self.stowed = 0.0
         self.angled = 0.0
         self.shooting_bonus = 0.0
 
@@ -876,6 +877,7 @@ class Vehicle(Agent):
     def set_speed(self):
 
         if self.movement.target:
+            stowing_target = 0.0
             if self.movement.target_direction:
                 self.throttle_target = self.stance_speed * 0.3
             elif self.movement.target == self.navigation.destination:
@@ -884,9 +886,13 @@ class Vehicle(Agent):
                 self.throttle_target = self.stance_speed
 
         elif self.movement.target_direction:
+            stowing_target = 0.0
             self.throttle_target = self.stance_speed * 0.75
         else:
+            stowing_target = 1.0
             self.throttle_target = 0.0
+
+        self.stowed = bgeutils.interpolate_float(self.stowed, stowing_target, 0.02)
 
         self.throttle = bgeutils.interpolate_float(self.throttle, self.throttle_target, self.handling)
         speed_mod = self.throttle * self.stance_speed
@@ -1139,7 +1145,11 @@ class Artillery(Vehicle):
         points = self.model.crew_adders
 
         for point in points:
-            position = (point.worldPosition - self.box.worldPosition).to_3d()
+            position = point.worldPosition.copy() - self.movement_hook.worldPosition.copy()
+            position.rotate(self.movement_hook.worldOrientation.copy())
+
+            print(position.to_tuple(3))
+
             self.formation.append(position)
 
     def add_squad(self, load_dict):
@@ -1178,24 +1188,6 @@ class Artillery(Vehicle):
             self.prone = False
             self.stance_speed = 1.0
             self.shooting_bonus = 0.5
-
-    def get_closest_soldier(self, origin):
-
-        closest = 2000
-        closest_soldier = None
-        best_vector = None
-
-        for soldier in self.soldiers:
-            if not soldier.dead:
-                target_vector = soldier.box.worldPosition.copy() - origin.box.worldPosition.copy()
-                distance = target_vector.length
-
-                if distance < closest:
-                    closest = distance
-                    best_vector = target_vector
-                    closest_soldier = soldier
-
-        return closest_soldier, best_vector
 
 
 class Infantry(Agent):
@@ -1758,6 +1750,7 @@ class ArtilleryMan(InfantryMan):
         pass
 
     def check_occupied(self, target_tile):
+
         return None
 
     def get_destination(self):
@@ -1766,12 +1759,17 @@ class ArtilleryMan(InfantryMan):
         location = self.agent.box.worldPosition.copy()
         location.z = 0.0
 
-        offset = mathutils.Vector(self.agent.formation[self.index]).to_3d()
+        offset = self.agent.formation[self.index].copy()
         offset.rotate(self.agent.movement_hook.worldOrientation.copy())
 
-        destination = (location + offset).to_2d()
+        destination = location + offset
+        target_tile = [round(axis) for axis in destination.to_2d()]
 
-        return [round(axis) for axis in destination]
+        for soldier in self.agent.soldiers:
+            if soldier.location == target_tile:
+                return self.location
+
+        return target_tile
 
 
 class SoldierGrenade(object):

@@ -235,6 +235,10 @@ class InfantryAnimation(object):
                 target_vector = self.infantryman.agent.agent_targeter.target_vector
                 return bgeutils.get_closest_vector(target_vector)
 
+        if action == "FACE_GUN":
+            target_vector = self.infantryman.agent.box.worldPosition.copy() - self.infantryman.box.worldPosition.copy()
+            return bgeutils.get_closest_vector(target_vector)
+
         return self.infantryman.direction
 
     def update(self):
