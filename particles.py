@@ -226,7 +226,7 @@ class NormalHit(Particle):
 
             for i in range(number):
                 ArmorSparks(self.level, self.scale * 0.4, ground_position.copy())
-                LargeSmoke(self.level, self.scale * 0.6, ground_position.copy(), delay=4)
+                LargeSmoke(self.level, self.scale * 0.5, ground_position.copy(), delay=12)
                 ArmorBlast(self.level, self.scale * 0.2, ground_position.copy())
 
         ExplosionSound(self.level, ground_position.copy(), intensity)
@@ -471,12 +471,13 @@ class LargeSmoke(AnimatedParticle):
 
     def __init__(self, level, growth, position, delay=0):
         super().__init__(level)
-        self.max_sub_frame = 24
+
+        self.max_sub_frame = 4000
 
         self.grow = 1.003 * growth
-        s = 0.006 * growth
+        s = 0.005 * growth
 
-        self.up_force = mathutils.Vector([random.uniform(-s, s), random.uniform(-s, s), s * 2.0])
+        self.up_force = mathutils.Vector([random.uniform(-s, s), random.uniform(-s, s), s * 1.2])
         self.down_force = mathutils.Vector([0.0, 0.0, -0.01])
 
         self.box.worldPosition = position.copy()

@@ -169,10 +169,12 @@ def get_vehicle_parts():
                             "A huge but light weight fire support weapon. Breech loading is slow and difficult."],
                      "84": ["flame thrower", "WEAPON", 3, 6, 3, 2, 1, "FLAME_THROWER",
                             "A deadly weapon, but very short ranged."],
-                     "85": ["small rockets", "WEAPON", 3, 6, 1, 1, 6, "ROCKETS",
+                     "85": ["small rockets", "WEAPON", 4, 6, 1, 1, 6, "ROCKETS",
                             "Rockets can deliver an intense barrage in a short space of time. Has a long reload time."],
-                     "86": ["large rockets", "WEAPON", 4, 6, 2, 1, 15, "ROCKETS",
-                            "Larger rockets have more damage potential but cover a smaller area."]}
+                     "86": ["large rockets", "WEAPON", 4, 6, 2, 1, 18, "ROCKETS",
+                            "Larger rockets have more damage potential but cover a smaller area."],
+                     "87": ["medium rockets", "WEAPON", 3, 6, 2, 1, 9, "ROCKETS",
+                            "Prototype rockets, inefficient design takes up more space than later models."]}
 
     labels = ["name",
               "part_type",

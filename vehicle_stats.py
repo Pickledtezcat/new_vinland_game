@@ -131,7 +131,7 @@ class VehicleWeapon(object):
             self.ammo_drain *= 3.0
 
         elif self.flag == "ROCKETS":
-            self.ammo_drain *= 20.0
+            self.ammo_drain *= 4.0
 
         self.shots_per_ton = int(1.0 / self.ammo_drain)
         self.emitter = None
@@ -463,10 +463,17 @@ class VehicleStats(object):
 
                         cost = ((5 + item.level) * 20) * item.weight
                         self.cost += cost
-                        weapon = VehicleWeapon(self, item.part_key, item.location, item.weapon_location)
-                        if weapon.indirect:
-                            self.artillery = True
-                        self.weapons.append(weapon)
+
+                        if item.flag == "ROCKETS":
+                            added = 3
+                        else:
+                            added = 1
+
+                        for w in range(added):
+                            weapon = VehicleWeapon(self, item.part_key, item.location, item.weapon_location)
+                            if weapon.indirect:
+                                self.artillery = True
+                            self.weapons.append(weapon)
 
                     if item.flag not in self.flags:
                         self.flags.append(item.flag)
@@ -610,10 +617,16 @@ class VehicleStats(object):
         highest = 0
         best = None
 
+        total_manpower = 0
+
+        for location_key in self.manpower:
+            location_manpower = self.manpower[location_key]
+            total_manpower += location_manpower
+
         for location_key in weapon_dict:
             location_group = weapon_dict[location_key]
             number = len(location_group)
-            divided_manpower = self.manpower[location_key] / max(1.0, number)
+            divided_manpower = total_manpower / max(1.0, number)
 
             for index in location_group:
                 self.weapons[index].set_rate_of_fire(divided_manpower)
@@ -628,12 +641,12 @@ class VehicleStats(object):
         self.stability = 6
         weight = max(0.5, self.weight)
 
-        manpower = self.crew / weight
+        manpower = (self.crew * 5.0) / weight
         on_road_handling = min(12.0, manpower * 5.0)
         off_road_handling = int(on_road_handling * 0.5)
 
-        self.handling = [on_road_handling, off_road_handling]
-        self.speed = [on_road_handling, off_road_handling]
+        self.handling = [round(on_road_handling), round(off_road_handling)]
+        self.speed = self.handling
 
     def get_vehicle_movement(self):
         power_to_weight = (self.engine_rating * 50.0) / max(1.0, self.weight)

@@ -25,7 +25,6 @@ class AgentMovement(object):
 
         self.timer = 0.0
         self.done = True
-
         self.set_vectors()
 
     def set_vectors(self):
@@ -118,7 +117,7 @@ class AgentMovement(object):
             timer = self.timer
             damping = self.agent.damping
 
-        if not self.agent.agent_type == "INFANTRY":
+        if self.agent.agent_type == "VEHICLE":
             throttle = self.agent.throttle
             throttle_target = self.agent.throttle_target
             throttle_difference = (throttle - throttle_target)
@@ -126,7 +125,8 @@ class AgentMovement(object):
                 throttle_difference *= -1.0
 
             self.tilt = bgeutils.interpolate_float(self.tilt, throttle_difference, damping)
-            self.recoil = self.recoil.lerp(mathutils.Vector([0.0, 0.0, 0.0]), damping)
+
+        self.recoil = self.recoil.lerp(mathutils.Vector([0.0, 0.0, 0.0]), damping)
 
         self.agent.box.worldPosition = self.start_vector.lerp(self.target_vector, timer)
         rotation = self.current_orientation.lerp(self.target_orientation, bgeutils.smoothstep(timer))

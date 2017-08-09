@@ -648,47 +648,52 @@ class ArtilleryModel(object):
                     end.endObject()
                     self.gun = gun_set
 
-            if weapon and add_gun_mount:
-                for child_ob in gun.children:
-                    child_ob.endObject()
+            if weapon:
 
-                #gun.localPosition.z += 1.0
-                gun.visible = False
+                if not add_gun_mount:
+                    self.gun_block = gun
+                    self.gun_block_rest = gun.localTransform.copy()
 
-                if weapon.visual < 1 or "primitive" in weapon.name:
-                    chassis_size -= 1
+                else:
+                    for child_ob in gun.children:
+                        child_ob.endObject()
 
-                gun_block_string = "v_gun_block_{}_{}".format(faction_number, chassis_size)
-                gun_block = gun.scene.addObject(gun_block_string, gun, 0)
-                gun_block.setParent(gun)
-                self.gun_block = gun_block
-                self.gun_block_rest = gun_block.localTransform.copy()
+                    gun.visible = False
 
-                adders = bgeutils.get_ob_list("mount_gun", gun_block.children)
+                    if weapon.visual < 1 or "primitive" in weapon.name:
+                        chassis_size -= 1
 
-                adder_list = [[ob["mount_gun"], ob] for ob in adders]
-                adder_list = sorted(adder_list)
+                    gun_block_string = "v_gun_block_{}_{}".format(faction_number, chassis_size)
+                    gun_block = gun.scene.addObject(gun_block_string, gun, 0)
+                    gun_block.setParent(gun)
+                    self.gun_block = gun_block
+                    self.gun_block_rest = gun_block.localTransform.copy()
 
-                if adder_list:
-                    adders = [ob[1] for ob in adder_list]
+                    adders = bgeutils.get_ob_list("mount_gun", gun_block.children)
 
-                gun_mount = adders[0]
+                    adder_list = [[ob["mount_gun"], ob] for ob in adders]
+                    adder_list = sorted(adder_list)
 
-                if gun_mount:
-                    gun_size = weapon.visual
+                    if adder_list:
+                        adders = [ob[1] for ob in adder_list]
 
-                    high_velocity = ["IMPROVED_GUN", "ADVANCED_GUN"]
+                    gun_mount = adders[0]
 
-                    if weapon.flag in high_velocity:
-                        brake = 0
-                    else:
-                        brake = 1
+                    if gun_mount:
+                        gun_size = weapon.visual
 
-                    gun_string = "v_a_gun_{}_{}".format(brake, gun_size)
-                    gun_barrel = gun_mount.scene.addObject(gun_string, gun_mount, 0)
-                    gun_barrel.setParent(gun_block)
-                    gun_emitter = bgeutils.get_ob("shooter", gun_barrel.childrenRecursive)
-                    weapon.set_emitter(gun_emitter)
+                        high_velocity = ["IMPROVED_GUN", "ADVANCED_GUN"]
+
+                        if weapon.flag in high_velocity:
+                            brake = 0
+                        else:
+                            brake = 1
+
+                        gun_string = "v_a_gun_{}_{}".format(brake, gun_size)
+                        gun_barrel = gun_mount.scene.addObject(gun_string, gun_mount, 0)
+                        gun_barrel.setParent(gun_block)
+                        gun_emitter = bgeutils.get_ob("shooter", gun_barrel.childrenRecursive)
+                        weapon.set_emitter(gun_emitter)
 
         self.wheels = bgeutils.get_ob_list("wheels", self.vehicle.children)
         self.turret = bgeutils.get_ob("turret", self.vehicle.children)

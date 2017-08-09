@@ -55,7 +55,7 @@ class AgentMovement(AgentState):
 
     def exit_check(self):
         if self.agent.dead:
-            return AgentDead
+            return AgentDying
 
         if self.agent.knocked_out:
             return AgentKnockedOut
@@ -86,7 +86,7 @@ class AgentWaiting(AgentState):
     def exit_check(self):
 
         if self.agent.dead:
-            return AgentDead
+            return AgentDying
 
         if self.agent.knocked_out:
             return AgentKnockedOut
@@ -115,7 +115,7 @@ class AgentIdle(AgentState):
     def exit_check(self):
 
         if self.agent.dead:
-            return AgentDead
+            return AgentDying
 
         if self.agent.knocked_out:
             return AgentKnockedOut
@@ -153,7 +153,7 @@ class AgentCombat(AgentState):
     def exit_check(self):
 
         if self.agent.dead:
-            return AgentDead
+            return AgentDying
 
         if self.agent.knocked_out:
             return AgentKnockedOut
@@ -193,7 +193,7 @@ class AgentCrippled(AgentState):
     def exit_check(self):
 
         if self.agent.dead:
-            return AgentDead
+            return AgentDying
 
         if self.agent.knocked_out:
             return AgentKnockedOut
@@ -226,7 +226,7 @@ class AgentKnockedOut(AgentState):
     def exit_check(self):
 
         if self.agent.dead:
-            return AgentDead
+            return AgentDying
 
         if not self.agent.knocked_out:
             return AgentIdle
@@ -235,7 +235,7 @@ class AgentKnockedOut(AgentState):
         self.agent.movement.update()
 
 
-class AgentDead(AgentState):
+class AgentDying(AgentState):
     def __init__(self, agent):
         super().__init__(agent)
 
@@ -243,14 +243,32 @@ class AgentDead(AgentState):
         self.agent.navigation.stop = True
         self.agent.death_effect()
         self.agent.add_visibility_marker()
+        self.count = 0
 
         # TODO set up all aspects of dying, remove visibility etc...
 
         self.agent.dismount_building()
 
-    def update(self):
+    def exit_check(self):
+
+        if self.count > 30:
+            return AgentDead
+
+    def process(self):
         self.agent.update_stats()
         self.agent.infantry_update()
         self.agent.update_model()
         self.agent.movement.update()
+
+        self.count += 1
+
+
+class AgentDead(AgentState):
+    def __init__(self, agent):
+        super().__init__(agent)
+
+        # TODO add smoke effect...
+
+    def update(self):
+        pass
 
