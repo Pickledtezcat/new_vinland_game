@@ -14,6 +14,7 @@ def get_keyboard_inputs():
                         "save": (162, "f1", 1),
                         "pause": (32, "SPACEKEY", 1),
                         "info": (105, "i_key", 0),
+                        "exit_vehicle": (122, "z_key", 1),
                         "1": (49, "1", 1),
                         "2": (50, "2", 1),
                         "3": (51, "3", 1),

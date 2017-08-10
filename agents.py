@@ -89,6 +89,8 @@ class Agent(object):
         self.direction = [0, -1]
         self.destinations = []
         self.enter_building = None
+        self.enter_vehicle = None
+        self.occupier = None
         self.aim = None
         self.occupied = []
         self.target = None
@@ -175,9 +177,9 @@ class Agent(object):
         save_dict = {"agent_type": self.agent_type, "team": self.team, "location": self.location, "dead": self.dead,
                      "knocked_out": self.knocked_out, "rank": self.rank, "shock": self.shock, "health": self.health,
                      "direction": self.direction, "enter_building": self.enter_building, "angled": self.angled,
-                     "mechanical_damage": self.mechanical_damage,
+                     "mechanical_damage": self.mechanical_damage, "enter_vehicle": self.enter_vehicle,
                      "on_fire": self.on_fire, "selected": self.selected, "state_name": self.state.name,
-                     "load_name": self.load_name, "ammo": self.ammo, "stance": self.stance,
+                     "load_name": self.load_name, "ammo": self.ammo, "stance": self.stance, "occupier": self.occupier,
                      "state_count": self.state.count, "movement_target": self.movement.target,
                      "movement_target_direction": self.movement.target_direction, "weapons": weapons,
                      "movement_timer": self.movement.timer, "initial_health": self.initial_health,
@@ -194,6 +196,8 @@ class Agent(object):
 
         self.direction = agent_dict["direction"]
         self.enter_building = agent_dict["enter_building"]
+        self.enter_vehicle = agent_dict["enter_vehicle"]
+        self.occupier = agent_dict["occupier"]
         self.load_name = agent_dict["load_name"]
         self.dead = agent_dict["dead"]
         self.knocked_out = agent_dict["knocked_out"]
@@ -386,135 +390,149 @@ class Agent(object):
 
         for command in self.commands:
             if command:
-                if command["label"] == "SINGLE_SELECT":
-                    if self.team == 0:
-                        additive = command["additive"]
-                        target = command["target"]
-                        if additive:
-                            if self.agent_id == target:
-                                self.selected = not self.selected
+                fully_loaded = self.fully_loaded()
 
-                        else:
-                            if self.agent_id == target:
-                                self.selected = True
-                            else:
-                                self.selected = False
-
-                if command['label'] == "GROUP_SELECT":
-
-                    additive = command["additive"]
-                    setting = command["setting"]
-                    number = command["number"]
-
-                    if setting:
-                        if self.selected:
-                            self.selection_group = number
-                    else:
-
-                        if self.selection_group == number:
-                            self.selected = True
-                        else:
-                            if not additive:
-                                self.selected = False
-
-                if command['label'] == "SELECT":
-                    x_limit = command["x_limit"]
-                    y_limit = command["y_limit"]
-                    additive = command["additive"]
-                    friends = command["friends"]
-
-                    cam = self.level.manager.main_camera
-
-                    select = False
-
-                    if friends:
-                        if self.agent_id in friends:
+                if fully_loaded:
+                    self.selected = False
+                    if command["label"] == "DISMOUNT_VEHICLE":
+                        self.dismount_vehicle()
+                else:
+                    if command["label"] == "SINGLE_SELECT":
+                        if self.team == 0:
+                            additive = command["additive"]
+                            target = command["target"]
                             if additive:
-                                self.selected = not self.selected
+                                if self.agent_id == target:
+                                    self.selected = not self.selected
+
                             else:
+                                if self.agent_id == target:
+                                    self.selected = True
+                                else:
+                                    self.selected = False
+
+                    if command['label'] == "GROUP_SELECT":
+
+                        additive = command["additive"]
+                        setting = command["setting"]
+                        number = command["number"]
+
+                        if setting:
+                            if self.selected:
+                                self.selection_group = number
+                        else:
+
+                            if self.selection_group == number:
                                 self.selected = True
+                            else:
+                                if not additive:
+                                    self.selected = False
+
+                    if command['label'] == "SELECT":
+                        x_limit = command["x_limit"]
+                        y_limit = command["y_limit"]
+                        additive = command["additive"]
+                        friends = command["friends"]
+
+                        cam = self.level.manager.main_camera
+
+                        select = False
+
+                        if friends:
+                            if self.agent_id in friends:
+                                if additive:
+                                    self.selected = not self.selected
+                                else:
+                                    self.selected = True
+
+                            else:
+                                if not additive:
+                                    self.selected = False
 
                         else:
-                            if not additive:
-                                self.selected = False
+                            if cam.pointInsideFrustum(self.box.worldPosition.copy()):
+                                points = [cam.getScreenPosition(self.box)]
+                                for soldier in self.soldiers:
+                                    if not soldier.dead:
+                                        points.append(cam.getScreenPosition(soldier.box))
 
-                    else:
-                        if cam.pointInsideFrustum(self.box.worldPosition.copy()):
-                            points = [cam.getScreenPosition(self.box)]
-                            for soldier in self.soldiers:
-                                if not soldier.dead:
-                                    points.append(cam.getScreenPosition(soldier.box))
+                                for screen_location in points:
 
-                            for screen_location in points:
+                                    if x_limit[0] < screen_location[0] < x_limit[1]:
+                                        if y_limit[0] < screen_location[1] < y_limit[1]:
+                                            select = True
 
-                                if x_limit[0] < screen_location[0] < x_limit[1]:
-                                    if y_limit[0] < screen_location[1] < y_limit[1]:
-                                        select = True
+                            if select:
+                                self.selected = True
 
-                        if select:
-                            self.selected = True
+                            elif not additive:
+                                if not select:
+                                    self.selected = False
 
-                        elif not additive:
-                            if not select:
-                                self.selected = False
+                    if command["label"] == "MOVEMENT_TARGET":
+                        self.dismount_building()
+                        self.dismount_vehicle()
 
-                if command["label"] == "MOVEMENT_TARGET":
-                    self.dismount_building()
-                    position = command["position"]
-                    reverse = command["reverse"]
-                    additive = command["additive"]
+                        position = command["position"]
+                        reverse = command["reverse"]
+                        additive = command["additive"]
 
-                    if additive:
-                        self.destinations.append(position)
-                    else:
-                        self.navigation.stop = True
-                        self.destinations = [position]
+                        if additive:
+                            self.destinations.append(position)
+                        else:
+                            self.navigation.stop = True
+                            self.destinations = [position]
 
-                    if reverse:
-                        self.throttle = 0.0
-                        self.reverse = True
-                    else:
-                        if self.reverse:
+                        if reverse:
                             self.throttle = 0.0
+                            self.reverse = True
+                        else:
+                            if self.reverse:
+                                self.throttle = 0.0
+                                self.reverse = False
+
+                    if command["label"] == "ROTATION_TARGET":
+                        self.dismount_building()
+                        self.dismount_vehicle()
+
+                        position = command["position"]
+                        reverse = command["reverse"]
+
+                        if reverse:
+                            target_vector = self.box.worldPosition.copy() - mathutils.Vector(position).to_3d()
+                            self.reverse = True
+                        else:
+                            target_vector = mathutils.Vector(position).to_3d() - self.box.worldPosition.copy()
                             self.reverse = False
 
-                if command["label"] == "ROTATION_TARGET":
-                    self.dismount_building()
+                        best_facing = self.get_facing(target_vector)
 
-                    position = command["position"]
-                    reverse = command["reverse"]
+                        self.navigation.stop = True
+                        self.destinations = []
+                        if best_facing != self.direction:
+                            self.aim = best_facing
+                        self.agent_targeter.set_target_id = None
 
-                    if reverse:
-                        target_vector = self.box.worldPosition.copy() - mathutils.Vector(position).to_3d()
-                        self.reverse = True
-                    else:
-                        target_vector = mathutils.Vector(position).to_3d() - self.box.worldPosition.copy()
-                        self.reverse = False
+                    if command["label"] == "TARGET_ENEMY":
+                        self.dismount_vehicle()
+                        target_id = command["target_id"]
 
-                    best_facing = self.get_facing(target_vector)
+                        self.agent_targeter.set_target_id = target_id
+                        self.navigation.stop = True
+                        self.destinations = []
 
-                    self.navigation.stop = True
-                    self.destinations = []
-                    if best_facing != self.direction:
-                        self.aim = best_facing
-                    self.agent_targeter.set_target_id = None
+                    if command["label"] == "STANCE_CHANGE":
+                        stance = command["stance"]
+                        self.stance = stance
+                        self.set_formation()
 
-                if command["label"] == "TARGET_ENEMY":
-                    # self.dismount_building()
-                    target_id = command["target_id"]
-
-                    self.agent_targeter.set_target_id = target_id
-                    self.navigation.stop = True
-                    self.destinations = []
-
-                if command["label"] == "STANCE_CHANGE":
-                    stance = command["stance"]
-                    self.stance = stance
-                    self.set_formation()
-
-                if command["label"] == "ENTER_BUILDING":
-                    if self.agent_type == "INFANTRY":
+                    if command["label"] == "ENTER_BUILDING":
+                        self.dismount_vehicle()
                         self.mount_building(command["target_id"])
+
+                    if command["label"] == "ENTER_VEHICLE":
+                        self.dismount_building()
+                        self.mount_vehicle(command["target_id"])
 
         self.commands = []
 
@@ -523,6 +541,25 @@ class Agent(object):
 
     def dismount_building(self):
         pass
+
+    def mount_vehicle(self, vehicle_id):
+        pass
+
+    def dismount_vehicle(self):
+        pass
+
+    def fully_loaded(self):
+
+        if not self.enter_vehicle:
+            return False
+
+        else:
+            for soldier in self.soldiers:
+                if not soldier.dead:
+                    if not soldier.in_vehicle:
+                        return False
+
+        return True
 
     def set_starting_state(self):
         self.state = AgentStartUp(self)
@@ -604,6 +641,7 @@ class Vehicle(Agent):
 
         super().__init__(level, load_name, location, team, agent_id, load_dict)
 
+        self.tow_hook = bgeutils.get_ob("tow_hook", self.box.childrenRecursive)
         self.set_formation()
 
     def get_weapons(self):
@@ -1148,8 +1186,6 @@ class Artillery(Vehicle):
             position = point.worldPosition.copy() - self.movement_hook.worldPosition.copy()
             position.rotate(self.movement_hook.worldOrientation.copy())
 
-            print(position.to_tuple(3))
-
             self.formation.append(position)
 
     def add_squad(self, load_dict):
@@ -1291,7 +1327,7 @@ class Infantry(Agent):
         # TODO set other visibility cases
 
         for soldier in self.soldiers:
-            if soldier.in_building:
+            if soldier.in_building or soldier.in_vehicle:
                 soldier.visible = False
             else:
                 soldier.visible = self.visible
@@ -1495,6 +1531,22 @@ class Infantry(Agent):
             building.occupier = None
             self.enter_building = None
 
+    def mount_vehicle(self, vehicle_id):
+        vehicle = self.level.agents.get(vehicle_id)
+        if vehicle:
+            if not vehicle.occupier:
+                self.selected = False
+                self.navigation.stop = True
+                self.enter_vehicle = vehicle_id
+                self.destinations = [vehicle.location]
+                vehicle.occupier = self.agent_id
+
+    def dismount_vehicle(self):
+        vehicle = self.level.agents.get(self.enter_vehicle)
+        if vehicle:
+            vehicle.occupier = None
+            self.enter_vehicle = None
+
 
 class InfantryMan(object):
     def __init__(self, agent, infantry_type, index, load_dict=None):
@@ -1532,6 +1584,7 @@ class InfantryMan(object):
         self.direction = [0, 1]
         self.occupied = None
         self.in_building = None
+        self.in_vehicle = None
         self.dead = False
 
         self.speed = 0.02
@@ -1599,6 +1652,9 @@ class InfantryMan(object):
             building_id = tile["building"]
 
             if occupier_id:
+                if occupier_id == self.agent.enter_vehicle:
+                    return False
+
                 occupier = self.agent.level.agents.get(occupier_id)
                 if occupier:
                     if occupier == self.agent and building_id == self.in_building:
@@ -1631,11 +1687,12 @@ class InfantryMan(object):
                     vehicles = ["VEHICLE", "ARTILLERY"]
                     occupier_id = check_tile["occupied"]
                     if occupier_id:
-                        occupant = self.agent.level.agents.get(occupier_id)
-                        if occupant:
-                            if occupant != self.agent and occupant.agent_type in vehicles:
-                                if occupant.navigation.destination:
-                                    closest.append(occupant)
+                        if occupier_id != self.agent.enter_vehicle:
+                            occupant = self.agent.level.agents.get(occupier_id)
+                            if occupant:
+                                if occupant != self.agent and occupant.agent_type in vehicles:
+                                    if occupant.navigation.destination:
+                                        closest.append(occupant)
 
         if closest:
             return closest[0]
@@ -1650,6 +1707,18 @@ class InfantryMan(object):
                 closest_door = building.get_closest_door(list(self.box.worldPosition.copy()))
                 if closest_door:
                     destination = closest_door[:2]
+            else:
+                self.agent.dismount_building()
+
+        if self.agent.enter_vehicle:
+            vehicle = self.agent.level.agents.get(self.agent.enter_vehicle)
+            if vehicle:
+                if vehicle.dead:
+                    self.agent.dismount_vehicle()
+                else:
+                    entry_point = vehicle.tow_hook
+                    if entry_point:
+                        destination = bgeutils.position_to_location(entry_point.worldPosition.copy())
 
         if not destination:
             location = self.agent.box.worldPosition.copy()
@@ -1686,6 +1755,7 @@ class InfantryMan(object):
         save_dict = {"movement_target": self.movement.target, "movement_timer": self.movement.timer,
                      "destination": self.behavior.destination, "history": self.behavior.history,
                      "in_building": self.in_building, "behavior_action": self.behavior.action,
+                     "in_vehicle": self.in_vehicle,
                      "behavior_timer": self.behavior.action_timer, "visible": self.visible,
                      "grenade_ammo": self.grenade.ammo, "grenade_timer": self.grenade.timer,
                      "toughness": self.toughness, "behavior_prone": self.behavior.prone, "index": self.index,
@@ -1703,6 +1773,7 @@ class InfantryMan(object):
         self.direction = load_dict["direction"]
         self.location = load_dict["location"]
         self.in_building = load_dict["in_building"]
+        self.in_vehicle = load_dict["in_vehicle"]
         self.visible = load_dict["visible"]
 
         self.mesh_name = static_dicts.soldiers()[self.infantry_type]["mesh_name"]

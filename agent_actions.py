@@ -189,6 +189,9 @@ class InfantryAction(object):
 
     def update(self):
 
+        if self.infantryman.in_vehicle:
+            self.riding_vehicle()
+
         if self.target:
             self.timer = min(1.0, self.timer + self.infantryman.speed)
             if self.timer >= 1.0:
@@ -203,6 +206,14 @@ class InfantryAction(object):
 
         if not self.done:
             self.set_position()
+
+    def riding_vehicle(self):
+        riding = self.infantryman.agent.level.agents.get(self.infantryman.agent.enter_vehicle)
+        if riding:
+            if not riding.dead:
+                position = riding.tow_hook.worldPosition
+                self.infantryman.box.worldPosition = position.copy()
+                self.infantryman.location = bgeutils.position_to_location(position.copy())
 
     def set_position(self, set_timer=0.0):
 
@@ -354,6 +365,9 @@ class InfantryBehavior(object):
         if not self.infantryman.agent.enter_building:
             self.infantryman.in_building = False
 
+        if not self.infantryman.agent.enter_vehicle:
+            self.infantryman.in_vehicle = False
+
         if self.action == "DYING":
             self.infantryman.dead = True
             self.infantryman.clear_occupied()
@@ -392,6 +406,9 @@ class InfantryBehavior(object):
         if destination != self.destination:
             self.destination = destination
 
+        if self.infantryman.in_vehicle:
+            return "IN_VEHICLE"
+
         if self.infantryman.location != self.destination:
             return "GET_TILE"
         else:
@@ -400,6 +417,17 @@ class InfantryBehavior(object):
                 self.history = [self.infantryman.location]
                 self.infantryman.in_building = self.infantryman.agent.enter_building
                 return "IN_BUILDING"
+
+            if self.infantryman.agent.enter_vehicle:
+                check_destination = self.infantryman.get_destination()
+                if check_destination != self.destination:
+                    return "GET_TILE"
+
+                self.infantryman.clear_occupied()
+                self.history = []
+                self.infantryman.in_vehicle = self.infantryman.agent.enter_vehicle
+
+                return "IN_VEHICLE"
 
             if self.infantryman.agent.agent_type == "ARTILLERY":
                 self.history = [self.infantryman.location]

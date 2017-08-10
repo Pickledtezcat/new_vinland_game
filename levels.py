@@ -205,6 +205,7 @@ class MouseControl(object):
 
     def set_targets(self):
         enemy = None
+        ride = None
 
         if self.over_units:
             for unit_id in self.over_units:
@@ -212,7 +213,32 @@ class MouseControl(object):
                 if target.team != 0 and target.seen and not target.dead:
                     enemy = target
 
-        if enemy:
+                if target.team == 0 and not target.dead:
+                    if target.agent_type == "VEHICLE":
+                        ride = target
+
+        if ride:
+            selected_infantry = [self.level.agents[agent_id] for agent_id in self.level.agents if
+                                 self.level.agents[agent_id].selected and self.level.agents[
+                                     agent_id].agent_type == "INFANTRY"]
+
+            if selected_infantry:
+                if not ride.occupier:
+                    self.context = "BUILDING"
+
+                    click = "right_button" in self.level.manager.game_input.buttons
+
+                    if click:
+                        target_id = ride.agent_id
+                        message = {"label": "ENTER_VEHICLE", "target_id": target_id}
+
+                        for agent in selected_infantry:
+                            agent.commands.append(message)
+
+                else:
+                    self.context = "NO_ENTRY"
+
+        elif enemy:
             selected_agents = [self.level.agents[agent_id] for agent_id in self.level.agents if
                                self.level.agents[agent_id].selected]
 
@@ -504,7 +530,8 @@ class Level(object):
         bush_groups = self.get_foliage_placement(24, 6, 8)
         tree_groups = self.get_foliage_placement(6, 6, 12)
 
-        foliage_groups = [[grass_groups, ["_grass_"], 0, False], [bush_groups, ["_bushes_"], 191, False], [tree_groups, ["_b_tree_", "_s_tree_"], 159, True]]
+        foliage_groups = [[grass_groups, ["_grass_"], 0, False], [bush_groups, ["_bushes_"], 191, False],
+                          [tree_groups, ["_b_tree_", "_s_tree_"], 159, True]]
 
         for foliage_group in foliage_groups:
             group = foliage_group[0]
@@ -915,6 +942,15 @@ class Level(object):
                     building_choice = random.choice(buildings)
                     agent.mount_building(building_choice)
 
+        if "exit_vehicle" in self.manager.game_input.keys:
+            riding_agents = [self.agents[agent_id] for agent_id in self.agents if
+                             self.agents[agent_id].team == 0 and self.agents[agent_id].fully_loaded()]
+
+            message = {"label": "DISMOUNT_VEHICLE"}
+
+            for agent in riding_agents:
+                agent.commands.append(message)
+
         if "escape" in self.manager.game_input.keys:
             self.save_level()
 
@@ -1151,7 +1187,7 @@ class Level(object):
             effect = command["effect"]
             damage = command["damage"]
 
-            #explosion_chart = [8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096]
+            # explosion_chart = [8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096]
             explosion_chart = [0, 16, 64, 256, 1024, 4096]
 
             max_fall_off = 0
@@ -1414,4 +1450,3 @@ class Level(object):
             self.bullets_update()
             self.particle_update()
             self.visibility_update()
-
