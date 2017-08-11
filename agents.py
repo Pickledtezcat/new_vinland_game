@@ -11,9 +11,47 @@ import model_display
 import math
 
 
+class VehicleTrails(object):
+    def __init__(self, agent):
+
+        self.agent = agent
+        self.level = agent.level
+        self.size = self.agent.stats.chassis_size
+        self.timer = 0.0
+
+        self.adders = bgeutils.get_ob_list("trail", self.agent.box.childrenRecursive)
+        self.tracks = []
+
+    def end_tracks(self):
+
+        for track in self.tracks:
+            track.dropped = True
+        self.tracks = []
+
+    def add_tracks(self):
+
+        self.end_tracks()
+        self.tracks = [particles.Track(self.level, adder, self.size * 2.0, self.agent.off_road) for adder in self.adders]
+
+    def update(self):
+
+        if self.agent.on_screen:
+            if self.adders:
+                if self.timer >= 1.0:
+                    self.timer = 0.0
+                    for adder in self.adders:
+                        particles.DirtClods(self.level,  (self.size - 0.5) * self.agent.off_road, adder.worldPosition.copy())
+                    self.add_tracks()
+                else:
+                    self.timer += abs(self.agent.display_speed * 0.15)
+
+        else:
+            self.end_tracks()
+
+
 class Agent(object):
     size = 0
-    off_road = False
+    off_road = 0.0
     max_speed = 0.02
     speed = 0.0
     display_speed = 0.0
@@ -79,7 +117,7 @@ class Agent(object):
         self.add_box()
 
         self.debug_label = particles.DebugLabel(self.level, self)
-        self.debug_text = "AGENT"
+        self.debug_text = ""
 
         self.commands = []
         self.hits = []
@@ -101,6 +139,7 @@ class Agent(object):
         self.stowed = 0.0
         self.angled = 0.0
         self.shooting_bonus = 0.0
+        self.trails = None
 
         self.movement = agent_actions.AgentMovement(self)
         self.navigation = agent_actions.AgentNavigation(self)
@@ -121,6 +160,14 @@ class Agent(object):
 
     def get_center(self):
         self.center = self.box.worldPosition.copy()
+
+    def update_trails(self):
+        if self.trails:
+            self.trails.update()
+
+    def end_trails(self):
+        if self.trails:
+            self.trails.end_tracks()
 
     def get_visual_range(self):
 
@@ -180,13 +227,14 @@ class Agent(object):
                      "mechanical_damage": self.mechanical_damage, "enter_vehicle": self.enter_vehicle,
                      "on_fire": self.on_fire, "selected": self.selected, "state_name": self.state.name,
                      "load_name": self.load_name, "ammo": self.ammo, "stance": self.stance, "occupier": self.occupier,
-                     "state_count": self.state.count, "movement_target": self.movement.target,
+                     "state_count": self.state.count, "movement_target": self.movement.target, "stowed": self.stowed,
                      "movement_target_direction": self.movement.target_direction, "weapons": weapons,
                      "movement_timer": self.movement.timer, "initial_health": self.initial_health,
                      "navigation_destination": self.navigation.destination, "deployed": self.deployed,
                      "navigation_history": self.navigation.history, "destinations": self.destinations,
                      "reverse": self.reverse, "throttle": self.throttle, "occupied": self.occupied, "aim": self.aim,
                      "selection_group": self.selection_group, "turret_angle": self.agent_targeter.turret_angle,
+                     "off_road": self.off_road,
                      "soldiers": [solider.save() for solider in self.soldiers]}
 
         self.clear_occupied()
@@ -209,6 +257,8 @@ class Agent(object):
         self.ammo = agent_dict["ammo"]
         self.deployed = agent_dict["deployed"]
         self.angled = agent_dict["angled"]
+        self.stowed = agent_dict["stowed"]
+        self.off_road = agent_dict["off_road"]
 
         self.movement.load_movement(agent_dict["movement_target"], agent_dict["movement_target_direction"],
                                     agent_dict["movement_timer"])
@@ -261,13 +311,11 @@ class Agent(object):
 
         occupied = []
 
-        for occupied_tile in self.occupied:
-            current_tile = self.level.get_tile(bgeutils.get_loc(occupied_tile))
-            inside = current_tile["occupied"] or current_tile["building"]
-            if inside:
-                if current_tile["occupied"]:
-                    if current_tile["occupied"] != self.agent_id:
-                        return occupied
+        current_location = self.level.get_tile(self.location)
+        inside = current_location["occupied"] or current_location["building"]
+        if inside:
+            if current_location["occupied"] != self.agent_id:
+                return occupied
 
         x, y = target_tile
         occupied_list = [[x + ox, y + oy] for ox in range(-self.size, self.size + 1) for oy in
@@ -332,11 +380,6 @@ class Agent(object):
         resistance = self.resistance * 0.05
 
         self.shock = max(0.0, self.shock - resistance)
-
-        # if self.shock > 100:
-        #     self.knocked_out = True
-        # else:
-        #     self.knocked_out = False
 
         if self.movement.target:
             if self.movement.target == self.navigation.destination:
@@ -642,6 +685,7 @@ class Vehicle(Agent):
         super().__init__(level, load_name, location, team, agent_id, load_dict)
 
         self.tow_hook = bgeutils.get_ob("tow_hook", self.box.childrenRecursive)
+        self.trails = VehicleTrails(self)
         self.set_formation()
 
     def get_weapons(self):
@@ -749,13 +793,11 @@ class Vehicle(Agent):
         # else:
         #     self.knocked_out = False
 
-        if self.off_road:
-            speed_index = 1
-        else:
-            speed_index = 0
+        off_road_speed = bgeutils.interpolate_float(self.stats.speed[0], self.stats.speed[1], self.off_road)
+        off_road_handling = bgeutils.interpolate_float(self.stats.handling[0], self.stats.handling[1], self.off_road)
 
-        self.max_speed = self.stats.speed[speed_index] * 0.00075
-        self.handling = self.stats.handling[speed_index] * 0.001
+        self.max_speed = off_road_speed * 0.00075
+        self.handling = off_road_handling * 0.001
         self.turret_speed = self.stats.turret_speed * 0.001
 
         if self.shock > 40:
@@ -832,6 +874,9 @@ class Vehicle(Agent):
                         if self.stance == "SENTRY":
                             self.is_sentry = True
 
+                    if self.occupier:
+                        self.is_carrying = True
+
                     self.is_damaged = -1
                     if self.mechanical_damage > 0:
                         if self.crippled:
@@ -868,10 +913,8 @@ class Vehicle(Agent):
 
         # TODO integrate pause, dead and other behavior in to states
 
-        self.debug_text = ""
-
-        # self.debug_text = "{}\n{}".format(self.movement.tilt, str(list(self.movement.recoil.copy())))
-        # self.debug_text = "{}".format(str(self.state.name))
+        #self.debug_text = ""
+        self.debug_text = "{}".format(str(self.state.name))
 
         self.check_on_screen()
         self.check_status()
@@ -1002,6 +1045,9 @@ class Vehicle(Agent):
             for c in range(self.stats.chassis_size):
                 hit_locations.append(facing)
 
+            if random.randint(0, 10) == 0:
+                sector = "TOP"
+
             hit_location = random.choice(hit_locations)
             critical_location = random.choice(self.stats.crits[hit_location])
             armor_value = self.stats.armor[hit_location]
@@ -1009,8 +1055,8 @@ class Vehicle(Agent):
 
             if not splash_damage:
                 if "WEAK_SPOT" in self.stats.flags:
-                    if random.randint(0, 10) > 9:
-                        armor_value *= 0.5
+                    if random.randint(0, 10) == 0:
+                        armor_value = 0.0
 
                 if critical_location == "DRIVE":
                     armor_value *= 0.5
@@ -1042,37 +1088,36 @@ class Vehicle(Agent):
                 if critical_location == "EMPTY":
                     armor_value *= 2.0
 
-                if sector == "TOP":
-                    if "OPEN_TOP" in self.stats.flags:
-                        knockout_chance = True
-                        armor_value = 0.0
-                    elif "ANTI_AIRCRAFT" in self.stats.flags:
-                        knockout_chance = True
-                        armor_value = 0.0
-                    else:
-                        if self.stance == "SENTRY":
-                            if "COMMANDER" in self.stats.flags:
-                                if random.randint(0, max_chance) == 0:
-                                    knockout_chance = True
-                                    armor_value = 0.0
+            if sector == "TOP":
+                if "OPEN_TOP" in self.stats.flags:
+                    knockout_chance = True
+                    armor_value = 0.0
+                elif "ANTI_AIRCRAFT" in self.stats.flags:
+                    knockout_chance = True
+                    armor_value = 0.0
+                else:
+                    if self.stance == "SENTRY":
+                        if "COMMANDER" in self.stats.flags:
+                            if random.randint(0, max_chance) == 0:
+                                knockout_chance = True
+                                armor_value = 0.0
 
-                        if "EXTRA_PLATES" in self.stats.flags:
-                            armor_value *= 0.5
-                        else:
-                            armor_value *= 0.25
-
-                if sector == "BOTTOM":
-                    damage_chance = True
                     if "EXTRA_PLATES" in self.stats.flags:
                         armor_value *= 0.5
                     else:
                         armor_value *= 0.25
 
+            if sector == "BOTTOM":
+                damage_chance = True
+                if "EXTRA_PLATES" in self.stats.flags:
+                    armor_value *= 0.5
+                else:
+                    armor_value *= 0.25
+
             penetrated = penetration > armor_value
             damage *= random.uniform(0.5, 1.0)
 
             if penetrated:
-
                 self.health -= damage
                 self.shock += damage
 
@@ -1134,11 +1179,11 @@ class Vehicle(Agent):
         if penetrated:
             particles.NormalHit(self.level, tile, damage_value)
 
-    def death_effect(self):
-
+    def model_death_effect(self):
         if self.model:
             self.model.display_death()
 
+    def death_effect(self):
         tile = self.level.get_tile(self.location)
         particles.DeathExplosion(self.level, tile, 100.0)
 
@@ -1224,6 +1269,147 @@ class Artillery(Vehicle):
             self.prone = False
             self.stance_speed = 1.0
             self.shooting_bonus = 0.5
+
+    def process_hits(self):
+
+        hits = self.hits
+
+        # command = {"label": "HIT", "sector": sector, "weapon": weapon, "agent": agent}
+
+        # command = {"label": "SPLASH_DAMAGE", "sector": None, "damage": effective_damage,
+        #            "agent": agent}
+        # command = {"label": "HIT", "sector": sector, "weapon": weapon, "agent": agent}
+
+        for hit in hits:
+
+            explosion_chance = False
+            knockout_chance = False
+
+            label = hit["label"]
+            # TODO give XP to killing agent
+
+            enemy_agent = hit["agent"]
+            sector = hit["sector"]
+            origin = hit["origin"]
+
+            splash_damage = label == "SPLASH_DAMAGE"
+
+            if splash_damage:
+                knockout_chance = True
+                damage = hit["damage"]
+                penetration = damage * 0.5
+            else:
+                weapon = hit["weapon"]
+                damage = weapon.power
+                penetration = weapon.penetration
+
+            attack_vector = self.center.copy() - origin
+            attack_distance = attack_vector.length
+
+            penetration -= (attack_distance * 0.25)
+            penetration *= random.uniform(0.5, 1.0)
+
+            hit_angle = self.attack_facing(origin)
+            facing = "FLANKS"
+            if math.degrees(hit_angle) > 90:
+                facing = "FRONT"
+
+            hit_locations = []
+            for t in range(self.stats.turret_size):
+                hit_locations.append("TURRET")
+            for c in range(self.stats.chassis_size):
+                hit_locations.append(facing)
+
+            hit_location = random.choice(hit_locations)
+            critical_location = random.choice(self.stats.crits[hit_location])
+            armor_value = self.stats.armor[hit_location]
+            max_chance = 6
+
+            if not splash_damage:
+                if "WEAK_SPOT" in self.stats.flags:
+                    if random.randint(0, 10) > 9:
+                        armor_value *= 0.5
+
+                if critical_location == "WEAPON":
+                    if "MANTLET" not in self.stats.flags:
+                        armor_value *= 0.5
+                    explosion_chance = True
+
+                if critical_location == "CREW":
+                    knockout_chance = True
+
+                if critical_location == "ARMOR":
+                    armor_value *= 2.0
+
+                if critical_location == "EMPTY":
+                    armor_value *= 2.0
+
+                if sector == "TOP":
+                    knockout_chance = True
+                    armor_value = 0.0
+
+                if sector == "BOTTOM":
+                    armor_value = 0.0
+
+            penetrated = penetration > armor_value
+            damage *= random.uniform(0.5, 1.0)
+
+            if penetrated:
+                self.health -= damage
+                self.shock += damage
+
+                if "EXTRA_SAFETY" in self.stats.flags:
+                    max_chance = 12
+
+                if "DANGEROUS_DESIGN" in self.stats.flags:
+                    max_chance = 3
+
+                if explosion_chance:
+                    if random.randint(0, max_chance * 4) == 0:
+                        self.vehicle_explode()
+
+                if knockout_chance and not self.knocked_out:
+                    if random.randint(0, max_chance) == 0:
+                        crew_damage = int(damage * 0.1)
+                        if crew_damage > 0:
+                            if random.randint(0, crew_damage) > self.stats.crew:
+                                self.knocked_out = True
+
+            else:
+                if knockout_chance and not self.knocked_out:
+                    if random.randint(0, max_chance) == 0:
+                        crew_damage = int(damage * 0.1)
+                        if crew_damage > 0:
+                            if random.randint(0, crew_damage) > self.stats.crew:
+                                self.knocked_out = True
+
+            self.add_hit_effect(damage, penetrated)
+
+            recoil_vector = origin.copy() - self.center.copy()
+            recoil_vector.z = 0.0
+
+            recoil_length = min(0.018, ((damage * 0.5) / self.stats.weight) * 0.005)
+            recoil_vector.length = recoil_length
+            self.movement.recoil += recoil_vector
+
+        if self.health < 0 and not self.dead:
+            self.dead = True
+
+            if random.uniform(0.0, 6.0) < self.ammo:
+                self.vehicle_explode()
+
+        self.hits = []
+
+    def death_effect(self):
+
+        if self.model:
+            self.model.display_death()
+
+        tile = self.level.get_tile(self.location)
+        particles.DeathExplosion(self.level, tile, 10.0)
+
+        for soldier in self.soldiers:
+            soldier.toughness = 0
 
 
 class Infantry(Agent):
@@ -1544,6 +1730,7 @@ class Infantry(Agent):
     def dismount_vehicle(self):
         vehicle = self.level.agents.get(self.enter_vehicle)
         if vehicle:
+            self.navigation.stop = True
             vehicle.occupier = None
             self.enter_vehicle = None
 
@@ -1586,6 +1773,7 @@ class InfantryMan(object):
         self.in_building = None
         self.in_vehicle = None
         self.dead = False
+        self.marker = None
 
         self.speed = 0.02
 
@@ -1629,23 +1817,40 @@ class InfantryMan(object):
 
     def set_occupied(self, target_tile):
         if not self.dead:
-            display = False
+            if not self.in_vehicle:
+                if not self.occupied:
+                    display = True
 
-            if display:
-                marker = self.box.scene.addObject("debug_marker", self.box, 120)
-                tile = self.agent.level.map[bgeutils.get_key(target_tile)]
-                marker.worldPosition = mathutils.Vector(tile["position"]).to_3d()
-                marker.worldPosition.z = tile["height"]
+                    if display and not self.marker:
+                        marker = self.box.scene.addObject("debug_marker", self.box, 0)
+                        tile = self.agent.level.map[bgeutils.get_key(target_tile)]
+                        marker.worldPosition = mathutils.Vector(tile["position"]).to_3d()
+                        marker.worldPosition.z = tile["height"]
+                        self.marker = marker
 
-            self.agent.level.set_tile(target_tile, "occupied", self.agent.agent_id)
-            self.occupied = self.location
+                    check_tile = self.agent.level.get_tile(target_tile)
+                    if check_tile:
+                        if not check_tile["occupied"]:
+                            self.agent.level.set_tile(target_tile, "occupied", self.agent.agent_id)
+                            self.occupied = self.location
 
     def clear_occupied(self):
         if self.occupied:
             self.agent.level.set_tile(self.occupied, "occupied", None)
             self.occupied = None
 
+        if self.marker:
+            self.marker.endObject()
+            self.marker = None
+
     def check_occupied(self, target_tile):
+
+        current_location = self.agent.level.get_tile(self.location)
+        inside = current_location["occupied"] or current_location["building"]
+        if inside:
+            if current_location["occupied"] != self.agent.agent_id:
+                return False
+
         tile = self.agent.level.get_tile(target_tile)
         if tile:
             occupier_id = tile["occupied"]
@@ -1658,6 +1863,9 @@ class InfantryMan(object):
                 occupier = self.agent.level.agents.get(occupier_id)
                 if occupier:
                     if occupier == self.agent and building_id == self.in_building:
+                        return False
+
+                    if occupier == self.agent and self.agent.enter_vehicle:
                         return False
 
                     return occupier

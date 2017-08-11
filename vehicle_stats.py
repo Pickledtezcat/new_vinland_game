@@ -239,13 +239,17 @@ class VehicleWeapon(object):
         if self.timer < 1.0:
             return False
 
+        if self.agent != "VEHICLE":
+            if self.agent.stowed < 0.9:
+                return False
+
         moving = not self.agent.movement.done
         if self.rating > 2:
             if moving:
                 if self.indirect:
                     return False
 
-                if not self.agent.stance == "AGGRESSIVE":
+                if self.agent.stance != "AGGRESSIVE":
                     return False
 
         target = self.agent.agent_targeter.enemy_target

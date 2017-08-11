@@ -433,6 +433,102 @@ class LargeBlast(AnimatedParticle):
             self.box.localScale = [self.scale, self.scale, self.scale]
 
 
+class DirtClods(Particle):
+    def __init__(self, level, grow, position):
+        super().__init__(level)
+
+        self.grow = grow
+
+        s = 0.001 * grow
+        self.up_force = mathutils.Vector([random.uniform(-s, s), random.uniform(-s, s), s * 5.0])
+        self.down_force = mathutils.Vector([0.0, 0.0, -0.02])
+
+        self.box.worldPosition = position.copy()
+        self.box.color = mathutils.Vector(self.level.world_dict["dirt_color"]) * 0.5
+
+    def add_box(self):
+        mesh = "{}.{}".format("dirt_1", str(random.randint(1, 8)).zfill(3))
+        return self.level.own.scene.addObject(mesh, self.level.own, 0)
+
+    def process(self):
+        if self.timer >= 1.0:
+            self.ended = True
+
+        else:
+            self.timer += 0.02
+            self.box.color[3] = 1.0 - (self.timer * 0.5)
+
+            up_force = self.up_force.lerp(self.down_force, self.timer)
+            self.box.worldPosition += up_force
+            scale = self.grow * self.timer
+
+            self.box.localScale = [scale, scale, scale]
+
+
+class Track(Particle):
+    def __init__(self, level, adder, width, off_road):
+        super().__init__(level)
+
+        self.adder = adder
+        self.width = width
+        self.box.worldPosition = self.adder.worldPosition.copy()
+        self.off_road = (3.0 + off_road) * 0.25
+        self.box.color = mathutils.Vector(self.level.world_dict["dirt_color"]) * 0.3
+        self.box.color[3] = self.off_road
+
+        self.dropped = False
+        self.finished = False
+
+        self.track_timer = 0.0
+
+    def add_box(self):
+        return self.level.own.scene.addObject("track_effect_1", self.level.own, 0)
+
+    def align_tracks(self):
+
+        target_vector = self.adder.worldPosition.copy() - self.box.worldPosition.copy()
+        length = target_vector.length
+
+        if length > 0.0:
+            y = target_vector
+        else:
+            y = self.adder.getAxisVect([0.0, 1.0, 0.0])
+            length = 0.01
+
+        target_orientation = y.to_3d().to_track_quat("Y", "Z").to_matrix().to_3x3()
+
+        self.box.worldOrientation = target_orientation
+        self.box.localScale.x = self.width
+        self.box.localScale.y = length
+
+    def process(self):
+
+        if self.timer >= 1.0:
+            self.ended = True
+        else:
+            if not self.finished:
+
+                if self.track_timer <= 0.0:
+                    self.track_timer = 1.0
+                    self.align_tracks()
+
+                else:
+                    self.track_timer -= 0.05
+
+            else:
+                self.timer += 0.001
+                alpha = self.off_road - self.timer
+                self.box.color[3] = max(0.0, alpha)
+
+                if alpha < 0.01:
+                    self.ended = True
+
+            if self.dropped and not self.finished:
+                self.align_tracks()
+                self.dropped = False
+                self.finished = True
+
+
 class DirtBlast(Particle):
 
     def __init__(self, level, growth, position):

@@ -206,6 +206,10 @@ class MouseControl(object):
     def set_targets(self):
         enemy = None
         ride = None
+        selected_agents = [self.level.agents[agent_id] for agent_id in self.level.agents if
+                           self.level.agents[agent_id].selected]
+        selected_infantry = [agent for agent in selected_agents if agent.agent_type == "INFANTRY"]
+        all_infantry = selected_infantry and len(selected_agents) == len(selected_infantry)
 
         if self.over_units:
             for unit_id in self.over_units:
@@ -218,11 +222,7 @@ class MouseControl(object):
                         ride = target
 
         if ride:
-            selected_infantry = [self.level.agents[agent_id] for agent_id in self.level.agents if
-                                 self.level.agents[agent_id].selected and self.level.agents[
-                                     agent_id].agent_type == "INFANTRY"]
-
-            if selected_infantry:
+            if all_infantry:
                 if not ride.occupier:
                     self.context = "BUILDING"
 
@@ -239,16 +239,11 @@ class MouseControl(object):
                     self.context = "NO_ENTRY"
 
         elif enemy:
-            selected_agents = [self.level.agents[agent_id] for agent_id in self.level.agents if
-                               self.level.agents[agent_id].selected]
-
             if selected_agents:
                 self.context = "TARGET"
                 click = "right_button" in self.level.manager.game_input.buttons
 
                 if click:
-                    selected_agents = [self.level.agents[agent_id] for agent_id in self.level.agents if
-                                       self.level.agents[agent_id].selected]
                     if selected_agents:
                         target_id = enemy.agent_id
 
@@ -260,10 +255,7 @@ class MouseControl(object):
         elif self.mouse_over:
             if self.mouse_over["building"]:
 
-                selected_agents = [self.level.agents[agent_id] for agent_id in self.level.agents if
-                                   self.level.agents[agent_id].selected]
-
-                if selected_agents:
+                if all_infantry:
                     building = self.level.buildings.get(self.mouse_over["building"])
                     if building:
                         if not building.occupier:

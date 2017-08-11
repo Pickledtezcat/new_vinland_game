@@ -30,6 +30,11 @@ class AgentMovement(object):
     def set_vectors(self):
 
         start_tile = self.agent.level.map[bgeutils.get_key(self.agent.location)]
+        if start_tile["terrain"] > 128:
+            self.agent.off_road = bgeutils.interpolate_float(self.agent.off_road, 1.0, 0.1)
+        else:
+            self.agent.off_road = bgeutils.interpolate_float(self.agent.off_road, 0.0, 0.1)
+
         self.start_vector = mathutils.Vector(start_tile["position"]).to_3d()
         self.start_vector.z = start_tile["height"]
         self.start_normal = mathutils.Vector(start_tile["normal"])
@@ -64,36 +69,48 @@ class AgentMovement(object):
 
     def update(self):
 
-        if self.scale > 0.0:
-            turning_speed = self.agent.turning_speed / self.scale
+        if self.agent.fully_loaded():
+            self.riding_vehicle()
         else:
-            turning_speed = self.agent.turning_speed
+            if self.scale > 0.0:
+                turning_speed = self.agent.turning_speed / self.scale
+            else:
+                turning_speed = self.agent.turning_speed
 
-        if self.target_direction:
-            self.timer = min(1.0, self.timer + turning_speed)
-            if self.timer >= 1.0:
-                self.agent.direction = self.target_direction
-                self.target_direction = None
+            if self.target_direction:
+                self.timer = min(1.0, self.timer + turning_speed)
+                if self.timer >= 1.0:
+                    self.agent.direction = self.target_direction
+                    self.target_direction = None
 
-        elif self.target:
-            speed = self.agent.speed + self.remaining
-            self.remaining = 0.0
+            elif self.target:
+                speed = self.agent.speed + self.remaining
+                self.remaining = 0.0
 
-            self.timer += speed
-            if self.timer >= 1.0:
-                self.remaining = self.timer - 1.0
-                self.timer = 1.0
-                self.agent.location = self.target
-                self.target = None
+                self.timer += speed
+                if self.timer >= 1.0:
+                    self.remaining = self.timer - 1.0
+                    self.timer = 1.0
+                    self.agent.location = self.target
+                    self.target = None
 
+            else:
+                if not self.done:
+                    self.done = True
+                    self.agent.get_center()
+                    self.agent.clear_occupied()
+                    self.agent.set_occupied(self.agent.location)
+
+            self.set_position()
+
+    def riding_vehicle(self):
+
+        riding = self.agent.level.agents.get(self.agent.enter_vehicle)
+
+        if not riding.dead:
+            self.load_movement(riding.location, None, 1.0)
         else:
-            if not self.done:
-                self.done = True
-                self.agent.get_center()
-                self.agent.clear_occupied()
-                self.agent.set_occupied(self.agent.location)
-
-        self.set_position()
+            self.agent.dismount_vehicle()
 
     def set_aim(self):
         self.target_direction = self.agent.aim
@@ -192,20 +209,21 @@ class InfantryAction(object):
         if self.infantryman.in_vehicle:
             self.riding_vehicle()
 
-        if self.target:
-            self.timer = min(1.0, self.timer + self.infantryman.speed)
-            if self.timer >= 1.0:
-                self.infantryman.location = self.target
-                self.target = None
-
         else:
-            if not self.done:
-                self.done = True
-                self.infantryman.clear_occupied()
-                self.infantryman.set_occupied(self.infantryman.location)
+            if self.target:
+                self.timer = min(1.0, self.timer + self.infantryman.speed)
+                if self.timer >= 1.0:
+                    self.infantryman.location = self.target
+                    self.target = None
 
-        if not self.done:
-            self.set_position()
+            else:
+                if not self.done:
+                    self.done = True
+                    self.infantryman.clear_occupied()
+                    self.infantryman.set_occupied(self.infantryman.location)
+
+            if not self.done:
+                self.set_position()
 
     def riding_vehicle(self):
         riding = self.infantryman.agent.level.agents.get(self.infantryman.agent.enter_vehicle)
@@ -214,6 +232,9 @@ class InfantryAction(object):
                 position = riding.tow_hook.worldPosition
                 self.infantryman.box.worldPosition = position.copy()
                 self.infantryman.location = bgeutils.position_to_location(position.copy())
+                self.target = None
+                self.done = True
+                self.infantryman.clear_occupied()
 
     def set_position(self, set_timer=0.0):
 
@@ -581,8 +602,12 @@ class AgentNavigation(object):
 
     def update(self):
 
-        if self.agent.movement.done:
+        if self.agent.fully_loaded():
+            self.destination = None
+            self.history = []
+            self.stop = True
 
+        elif self.agent.movement.done:
             if self.stop:
                 self.stop = False
                 self.destination = None
@@ -697,6 +722,12 @@ class AgentTargeter(object):
             return True
 
         if target_agent.knocked_out:
+            return True
+
+        if target_agent.fully_loaded():
+            return True
+
+        if self.agent.fully_loaded():
             return True
 
     def impenetrable(self, target_agent):

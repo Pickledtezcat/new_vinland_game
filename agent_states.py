@@ -74,6 +74,7 @@ class AgentMovement(AgentState):
         self.agent.agent_targeter.update()
         self.agent.movement.update()
         self.agent.handle_weapons()
+        self.agent.update_trails()
 
         if self.agent.movement.done:
             self.agent.navigation.update()
@@ -105,6 +106,7 @@ class AgentWaiting(AgentState):
         self.agent.agent_targeter.update()
         self.agent.handle_weapons()
         self.agent.movement.update()
+        self.agent.end_trails()
         self.count += 1
 
 
@@ -137,6 +139,7 @@ class AgentIdle(AgentState):
 
         self.agent.agent_targeter.update()
         self.agent.handle_weapons()
+        self.agent.end_trails()
 
         if self.agent.movement.done:
             if self.agent.aim:
@@ -175,6 +178,7 @@ class AgentCombat(AgentState):
 
         self.agent.agent_targeter.update()
         self.agent.handle_weapons()
+        self.agent.update_trails()
 
         if self.agent.movement.done:
             if self.agent.agent_targeter.set_target_id:
@@ -188,6 +192,7 @@ class AgentCrippled(AgentState):
         super().__init__(agent)
 
         self.agent.agent_targeter.reset_values()
+        self.agent.end_trails()
         self.agent.navigation.stop = True
 
     def exit_check(self):
@@ -220,6 +225,7 @@ class AgentKnockedOut(AgentState):
 
         self.agent.agent_targeter.reset_values()
         self.agent.navigation.stop = True
+        self.agent.end_trails()
 
         self.agent.dismount_building()
 
@@ -242,8 +248,10 @@ class AgentDying(AgentState):
         self.agent.agent_targeter.reset_values()
         self.agent.navigation.stop = True
         self.agent.death_effect()
+        self.agent.model_death_effect()
         self.agent.add_visibility_marker()
         self.count = 0
+        self.agent.end_trails()
 
         # TODO set up all aspects of dying, remove visibility etc...
 
@@ -266,6 +274,7 @@ class AgentDying(AgentState):
 class AgentDead(AgentState):
     def __init__(self, agent):
         super().__init__(agent)
+        self.agent.model_death_effect()
 
         # TODO add smoke effect...
 

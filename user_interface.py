@@ -108,7 +108,7 @@ class UserInterface(object):
 
         for status_bar_key in status_bar_keys:
             status_bar = self.status_bars[status_bar_key]
-            if not status_bar.agent.visible or status_bar.agent.dead:
+            if not status_bar.agent.visible or status_bar.agent.dead or status_bar.agent.fully_loaded():
                 status_bar.terminate()
                 del self.status_bars[status_bar_key]
             else:
