@@ -338,6 +338,8 @@ class Agent(object):
 
                     if building:
                         occupied.append(building)
+            else:
+                occupied.append(self)
 
         return occupied
 
@@ -673,6 +675,9 @@ class Agent(object):
     def death_effect(self):
         pass
 
+    def model_death_effect(self):
+        pass
+
 
 class Vehicle(Agent):
     def __init__(self, level, load_name, location, team, agent_id=None, load_dict=None):
@@ -913,8 +918,7 @@ class Vehicle(Agent):
 
         # TODO integrate pause, dead and other behavior in to states
 
-        #self.debug_text = ""
-        self.debug_text = "{}".format(str(self.state.name))
+        self.debug_text = ""
 
         self.check_on_screen()
         self.check_status()
@@ -1374,6 +1378,7 @@ class Artillery(Vehicle):
                         if crew_damage > 0:
                             if random.randint(0, crew_damage) > self.stats.crew:
                                 self.knocked_out = True
+                                self.crew_killed()
 
             else:
                 if knockout_chance and not self.knocked_out:
@@ -1382,6 +1387,7 @@ class Artillery(Vehicle):
                         if crew_damage > 0:
                             if random.randint(0, crew_damage) > self.stats.crew:
                                 self.knocked_out = True
+                                self.crew_killed()
 
             self.add_hit_effect(damage, penetrated)
 
@@ -1401,15 +1407,18 @@ class Artillery(Vehicle):
         self.hits = []
 
     def death_effect(self):
-
-        if self.model:
-            self.model.display_death()
-
         tile = self.level.get_tile(self.location)
         particles.DeathExplosion(self.level, tile, 10.0)
 
+        self.crew_killed()
+
+    def crew_killed(self):
         for soldier in self.soldiers:
             soldier.toughness = 0
+
+    def model_death_effect(self):
+        if self.model:
+            self.model.display_death()
 
 
 class Infantry(Agent):
@@ -1491,7 +1500,6 @@ class Infantry(Agent):
         #     self.knocked_out = False
 
         self.get_best_penetration()
-        self.set_soldiers_visible()
         self.set_speed()
 
     def get_best_penetration(self):
@@ -1508,15 +1516,6 @@ class Infantry(Agent):
                     best_penetration = soldier.weapon.power
 
         self.best_penetration = best_penetration
-
-    def set_soldiers_visible(self):
-        # TODO set other visibility cases
-
-        for soldier in self.soldiers:
-            if soldier.in_building or soldier.in_vehicle:
-                soldier.visible = False
-            else:
-                soldier.visible = self.visible
 
     def check_status(self):
 
@@ -1689,6 +1688,10 @@ class Infantry(Agent):
     def infantry_update(self):
         for soldier in self.soldiers:
             soldier.update()
+            if soldier.in_building or soldier.in_vehicle:
+                soldier.visible = False
+            else:
+                soldier.visible = self.visible
 
     def get_infantry_center(self):
         center = mathutils.Vector()
@@ -1769,11 +1772,11 @@ class InfantryMan(object):
         self.sprite = self.box.children[0]
         self.location = self.agent.location
         self.direction = [0, 1]
-        self.occupied = None
+        self.occupied = []
         self.in_building = None
         self.in_vehicle = None
         self.dead = False
-        self.marker = None
+        self.markers = []
 
         self.speed = 0.02
 
@@ -1816,32 +1819,41 @@ class InfantryMan(object):
                 self.grenade.update()
 
     def set_occupied(self, target_tile):
-        if not self.dead:
-            if not self.in_vehicle:
-                if not self.occupied:
-                    display = True
 
-                    if display and not self.marker:
+        # setting_tile = self.agent.level.get_tile(target_tile)
+        # if setting_tile:
+        #     if not setting_tile["occupied"]:
+
+        if self.occupied:
+            self.clear_occupied()
+
+        if not self.dead:
+            display = False
+
+            check_tile = self.agent.level.get_tile(target_tile)
+            if check_tile:
+                occupied = check_tile["occupied"]
+                if not occupied:
+                    self.agent.level.set_tile(target_tile, "occupied", self.agent.agent_id)
+                    marker = None
+                    if display:
                         marker = self.box.scene.addObject("debug_marker", self.box, 0)
                         tile = self.agent.level.map[bgeutils.get_key(target_tile)]
                         marker.worldPosition = mathutils.Vector(tile["position"]).to_3d()
                         marker.worldPosition.z = tile["height"]
-                        self.marker = marker
-
-                    check_tile = self.agent.level.get_tile(target_tile)
-                    if check_tile:
-                        if not check_tile["occupied"]:
-                            self.agent.level.set_tile(target_tile, "occupied", self.agent.agent_id)
-                            self.occupied = self.location
+                        self.markers.append(marker)
+                    self.occupied.append([target_tile, marker])
 
     def clear_occupied(self):
         if self.occupied:
-            self.agent.level.set_tile(self.occupied, "occupied", None)
-            self.occupied = None
+            for key_set in self.occupied:
+                tile_key = key_set[0]
+                self.agent.level.set_tile(tile_key, "occupied", None)
+                marker = key_set[1]
+                if marker:
+                    marker.endObject()
 
-        if self.marker:
-            self.marker.endObject()
-            self.marker = None
+            self.occupied = []
 
     def check_occupied(self, target_tile):
 
@@ -1968,7 +1980,7 @@ class InfantryMan(object):
                      "grenade_ammo": self.grenade.ammo, "grenade_timer": self.grenade.timer,
                      "toughness": self.toughness, "behavior_prone": self.behavior.prone, "index": self.index,
                      "prone": self.agent.prone, "direction": self.direction, "location": self.location,
-                     "infantry_type": self.infantry_type, "occupied": self.occupied, "weapon_timer": self.weapon.timer,
+                     "infantry_type": self.infantry_type, "weapon_timer": self.weapon.timer,
                      "weapon_ammo": self.weapon.ammo, "dead": self.dead}
 
         self.clear_occupied()
@@ -1988,6 +2000,7 @@ class InfantryMan(object):
 
         self.movement.set_vectors()
         self.movement.set_position()
+        self.movement.set_initial_position()
 
         self.behavior.destination = load_dict["destination"]
         self.behavior.history = load_dict["history"]
@@ -2029,6 +2042,10 @@ class ArtilleryMan(InfantryMan):
         pass
 
     def check_occupied(self, target_tile):
+
+        check_tile = self.agent.level.get_tile(target_tile)
+        if not check_tile:
+            return self
 
         return None
 

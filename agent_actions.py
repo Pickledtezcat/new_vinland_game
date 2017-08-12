@@ -30,6 +30,7 @@ class AgentMovement(object):
     def set_vectors(self):
 
         start_tile = self.agent.level.map[bgeutils.get_key(self.agent.location)]
+
         if start_tile["terrain"] > 128:
             self.agent.off_road = bgeutils.interpolate_float(self.agent.off_road, 1.0, 0.1)
         else:
@@ -204,11 +205,18 @@ class InfantryAction(object):
         self.done = False
         self.timer = 0.0
 
+    def set_initial_position(self):
+        if self.target:
+            target = self.target
+        else:
+            target = self.infantryman.location
+
+        self.infantryman.set_occupied(target)
+
     def update(self):
 
         if self.infantryman.in_vehicle:
             self.riding_vehicle()
-
         else:
             if self.target:
                 self.timer = min(1.0, self.timer + self.infantryman.speed)
@@ -219,13 +227,13 @@ class InfantryAction(object):
             else:
                 if not self.done:
                     self.done = True
-                    self.infantryman.clear_occupied()
-                    self.infantryman.set_occupied(self.infantryman.location)
 
             if not self.done:
                 self.set_position()
 
     def riding_vehicle(self):
+        self.infantryman.clear_occupied()
+
         riding = self.infantryman.agent.level.agents.get(self.infantryman.agent.enter_vehicle)
         if riding:
             if not riding.dead:
@@ -234,7 +242,6 @@ class InfantryAction(object):
                 self.infantryman.location = bgeutils.position_to_location(position.copy())
                 self.target = None
                 self.done = True
-                self.infantryman.clear_occupied()
 
     def set_position(self, set_timer=0.0):
 
@@ -440,11 +447,11 @@ class InfantryBehavior(object):
                 return "IN_BUILDING"
 
             if self.infantryman.agent.enter_vehicle:
+                self.infantryman.clear_occupied()
                 check_destination = self.infantryman.get_destination()
                 if check_destination != self.destination:
                     return "GET_TILE"
 
-                self.infantryman.clear_occupied()
                 self.history = []
                 self.infantryman.in_vehicle = self.infantryman.agent.enter_vehicle
 
@@ -596,7 +603,8 @@ class AgentNavigation(object):
                 for agent in neighbor_check:
                     if agent.agent_type == "INFANTRY":
                         if agent.team == self.agent.team:
-                            touching_infantry = True
+                            if agent.agent_id != self.agent.occupier:
+                                touching_infantry = True
 
         return closest, next_facing, next_target, free, touching_infantry
 

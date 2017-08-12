@@ -25,6 +25,7 @@ class VehicleModel(object):
         self.turret_rest = None
         self.rocket_turret = None
         self.turret_adder = None
+        self.gun = None
         self.gun_adders = None
         self.gun_block = None
         self.gun_block_rest = None
@@ -553,7 +554,7 @@ class ArtilleryModel(object):
         model = "light_machine_gun"
         weapon = None
         add_gun_mount = True
-        artillery = ["LOW_VELOCITY", "INDIRECT", "NO_SIGHTS"]
+        artillery = ["ARTILLERY", "SUPPORT_GUN", "PRIMITIVE_GUN"]
 
         if all_weapons:
             weapon = all_weapons[0]
@@ -573,19 +574,13 @@ class ArtilleryModel(object):
             elif "ROCKET_MOUNT" in flags:
                 add_gun_mount = False
 
-                total_rating = 0
-                for w in all_weapons:
-                    total_rating += w.rating
-
-                if total_rating > 35:
+                if chassis_size > 2:
                     model = "heavy_rocket_launcher"
-                elif total_rating > 15:
+                elif chassis_size > 1:
                     model = "medium_rocket_launcher"
                 else:
                     model = "light_rocket_launcher"
-
             else:
-
                 if weapon.flag == "MORTAR":
                     add_gun_mount = False
                     if chassis_size < 2:
@@ -594,7 +589,6 @@ class ArtilleryModel(object):
                         model = "heavy_mortar"
 
                 elif weapon.flag in artillery:
-
                     artillery_size_dict = {0: "heavy_machine_gun",
                                            1: "light_artillery",
                                            2: "medium_artillery",
@@ -604,7 +598,7 @@ class ArtilleryModel(object):
                     model = artillery_size_dict[chassis_size - 1]
 
                     if chassis_size > 1:
-                        if "primitive" in weapon.name:
+                        if weapon.flag == "PRIMITIVE_GUN":
                             model = "primitive_{}".format(model)
 
                 else:
@@ -649,11 +643,13 @@ class ArtilleryModel(object):
                     self.gun = gun_set
 
             if weapon:
-
                 if not add_gun_mount:
-                    self.gun_block = gun
-                    self.gun_block_rest = gun.localTransform.copy()
-
+                    gun_emitter = bgeutils.get_ob("shooter", gun.children)
+                    if gun_emitter:
+                        weapon.set_emitter(gun_emitter)
+                    else:
+                        self.gun_block = gun
+                        self.gun_block_rest = gun.localTransform.copy()
                 else:
                     for child_ob in gun.children:
                         child_ob.endObject()
@@ -693,7 +689,9 @@ class ArtilleryModel(object):
                         gun_barrel = gun_mount.scene.addObject(gun_string, gun_mount, 0)
                         gun_barrel.setParent(gun_block)
                         gun_emitter = bgeutils.get_ob("shooter", gun_barrel.childrenRecursive)
-                        weapon.set_emitter(gun_emitter)
+
+                        for individual_weapon in all_weapons:
+                            individual_weapon.set_emitter(gun_emitter)
 
         self.wheels = bgeutils.get_ob_list("wheels", self.vehicle.children)
         self.turret = bgeutils.get_ob("turret", self.vehicle.children)
@@ -752,18 +750,10 @@ class ArtilleryModel(object):
         deploy_amount = bgeutils.smoothstep(self.owner.stowed)
 
         for leg in self.legs:
-            leg_model = leg["leg"]
-            start = leg["start"]
-            end = leg["end"]
-            leg_model.localTransform = start.lerp(end, deploy_amount)
+            leg["leg"].localTransform = leg["start"].lerp(leg["end"], deploy_amount)
 
-        gun = self.gun
-
-        if gun:
-            gun_model = gun["gun"]
-            start = gun["start"]
-            end = gun["end"]
-            gun_model.localTransform = start.lerp(end, deploy_amount)
+        if self.gun:
+            self.gun["gun"].localTransform = self.gun["start"].lerp(self.gun["end"], deploy_amount)
 
     def deploy(self):
 

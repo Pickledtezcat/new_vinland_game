@@ -182,7 +182,8 @@ class VehicleWeapon(object):
         else:
             self.bullet = "SHELL"
 
-        self.recoil_amount = min(0.018, ((self.rating * self.rating) / vehicle_weight) * 0.005)
+        self.recoil_amount = min(0.012, ((self.rating * self.rating) / vehicle_weight) * 0.004)
+
         if self.flag in rocket_bullets:
             self.recoil_amount *= 0.1
 
@@ -192,6 +193,8 @@ class VehicleWeapon(object):
         self.gun_model_rest = self.gun_model.localTransform
 
     def update(self):
+
+        rocket_bullets = ["MORTAR", "ROCKETS"]
 
         if self.rating > 3:
             if self.recoiled:
@@ -203,7 +206,7 @@ class VehicleWeapon(object):
                 if self.recoiling < 0.0:
                     self.recoiling += 0.01
 
-            if self.emitter:
+            if self.emitter and self.flag not in rocket_bullets:
                 gun_recoil = mathutils.Matrix.Translation((0.0, self.recoiling, 0.0))
                 self.gun_model.localTransform = self.gun_model_rest * gun_recoil
 
