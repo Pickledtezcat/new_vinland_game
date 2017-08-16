@@ -85,7 +85,7 @@ class VehicleWeapon(object):
             self.accuracy = 12
 
         if self.flag in indirect:
-            self.penetration = int(self.penetration * 0.5)
+            self.penetration = int(self.penetration * 0.1)
             self.indirect = True
             self.accuracy = 6
 
@@ -316,6 +316,10 @@ class VehicleWeapon(object):
                         recoil_vector.rotate(self.agent.model.turret.localOrientation)
                     self.agent.movement.recoil += recoil_vector
                     self.recoiled = True
+
+                    command = {"label": "VISIBILITY_MARKER",
+                               "location": bgeutils.position_to_location(self.agent.center.copy()), "duration": 3.0}
+                    self.agent.level.commands.append(command)
 
                     return True
 

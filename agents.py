@@ -195,7 +195,7 @@ class Agent(object):
     def add_visibility_marker(self):
         if self.team == 0:
             command = {"label": "VISIBILITY_MARKER",
-                       "location": bgeutils.position_to_location(self.center.copy())}
+                       "location": bgeutils.position_to_location(self.center.copy()), "duration": 18.0}
             self.level.commands.append(command)
 
     def set_visible(self, setting):
@@ -1026,7 +1026,7 @@ class Vehicle(Agent):
             if splash_damage:
                 damage_chance = True
                 damage = hit["damage"]
-                penetration = damage * 0.5
+                penetration = damage * 0.1
             else:
                 weapon = hit["weapon"]
                 damage = weapon.power
@@ -1048,9 +1048,6 @@ class Vehicle(Agent):
                 hit_locations.append("TURRET")
             for c in range(self.stats.chassis_size):
                 hit_locations.append(facing)
-
-            if random.randint(0, 10) == 0:
-                sector = "TOP"
 
             hit_location = random.choice(hit_locations)
             critical_location = random.choice(self.stats.crits[hit_location])
@@ -2117,7 +2114,7 @@ class SoldierGrenade(object):
 
             in_range = self.max_range > target_distance
 
-            self.total_accuracy = self.infantryman.agent.accuracy + 5.0
+            self.total_accuracy = self.infantryman.agent.accuracy + 20.0
             if self.infantryman.agent.prone:
                 self.total_accuracy *= 0.5
 

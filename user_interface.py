@@ -140,11 +140,11 @@ class StatusBar(object):
         self.rank_icon.visible = False
 
         self.green = [0.0, 1.0, 0.0, 1.0]
-        self.off_green = [0.0, 0.15, 0.0, 1.0]
+        self.off_green = [0.0, 0.1, 0.0, 1.0]
         self.red = [1.0, 0.0, 0.0, 1.0]
-        self.off_red = [0.15, 0.0, 0.0, 1.0]
+        self.off_red = [0.1, 0.0, 0.0, 1.0]
         self.yellow = [0.5, 0.5, 0.0, 1.0]
-        self.off_yellow = [0.1, 0.1, 0.0, 1.0]
+        self.off_yellow = [0.05, 0.05, 0.0, 1.0]
         self.hud = [0.07, 0.6, 0.05, 1.0]
 
         self.health_bar.color = self.green

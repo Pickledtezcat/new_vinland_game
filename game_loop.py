@@ -53,7 +53,6 @@ class DebugPrinter(object):
 class GameLoop(object):
 
     def __init__(self, cont):
-        bge.texture.setLogFile(bge.logic.expandPath("//saves/error_log.txt"))
 
         self.debug = True
         self.cont = cont

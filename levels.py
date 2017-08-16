@@ -16,10 +16,10 @@ import static_dicts
 
 
 class VisibilityMarker(object):
-    def __init__(self, level, location):
+    def __init__(self, level, location, duration):
         self.level = level
         self.marker_id = "visibility_marker_{}".format(self.level.get_new_id())
-        self.decay = 18.0
+        self.decay = duration
         self.location = location
 
         self.level.visibility_markers.append(self)
@@ -1185,10 +1185,12 @@ class Level(object):
             max_fall_off = 0
 
             airburst = False
+            direct_hit = None
             occupier = target_tile["occupied"]
             if occupier:
                 occupying_agent = self.agents[occupier]
                 if occupying_agent.agent_type != "INFANTRY":
+                    direct_hit = occupying_agent
                     airburst = True
 
             building = target_tile["building"]
@@ -1268,7 +1270,12 @@ class Level(object):
                     effective_vehicle_damage = max(0.0, damage - explosive_reduction)
 
                     if effective_vehicle_damage > 1.0:
-                        hit = {"label": "SPLASH_DAMAGE", "sector": None,
+                        if direct_hit == vehicle:
+                            sector = "TOP"
+                        else:
+                            sector = None
+
+                        hit = {"label": "SPLASH_DAMAGE", "sector": sector,
                                "damage": effective_vehicle_damage,
                                "origin": position.copy(), "agent": agent}
                         vehicle.hits.append(hit)
@@ -1310,7 +1317,8 @@ class Level(object):
 
             if command["label"] == "VISIBILITY_MARKER":
                 location = command["location"]
-                VisibilityMarker(self, location)
+                duration = command["duration"]
+                VisibilityMarker(self, location, duration)
 
             if command["label"] == "SMALL_ARMS":
                 self.small_arms_shoot(command)
