@@ -317,9 +317,10 @@ class VehicleWeapon(object):
                     self.agent.movement.recoil += recoil_vector
                     self.recoiled = True
 
-                    command = {"label": "VISIBILITY_MARKER",
-                               "location": bgeutils.position_to_location(self.agent.center.copy()), "duration": 3.0}
-                    self.agent.level.commands.append(command)
+                    if self.agent.team != 0:
+                        command = {"label": "VISIBILITY_MARKER",
+                                   "location": bgeutils.position_to_location(self.agent.center.copy()), "duration": 3.0}
+                        self.agent.level.commands.append(command)
 
                     return True
 

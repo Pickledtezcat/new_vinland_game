@@ -1370,21 +1370,10 @@ class Artillery(Vehicle):
                         self.vehicle_explode()
 
                 if knockout_chance and not self.knocked_out:
-                    if random.randint(0, max_chance) == 0:
-                        crew_damage = int(damage * 0.1)
-                        if crew_damage > 0:
-                            if random.randint(0, crew_damage) > self.stats.crew:
-                                self.knocked_out = True
-                                self.crew_killed()
+                    self.crew_damage(damage)
 
-            else:
-                if knockout_chance and not self.knocked_out:
-                    if random.randint(0, max_chance) == 0:
-                        crew_damage = int(damage * 0.1)
-                        if crew_damage > 0:
-                            if random.randint(0, crew_damage) > self.stats.crew:
-                                self.knocked_out = True
-                                self.crew_killed()
+            elif knockout_chance and not self.knocked_out:
+                self.crew_damage(damage * 0.5)
 
             self.add_hit_effect(damage, penetrated)
 
@@ -1403,15 +1392,45 @@ class Artillery(Vehicle):
 
         self.hits = []
 
+    def get_attack_facing(self, other_agent_position):
+
+        has_turret = False
+        if self.stats.turret_size > 0:
+            has_turret = True
+
+        facing = "FRONT"
+        armor = dict(TURRET=0, FRONT=0, FLANKS=0)
+
+        return [has_turret, facing, armor]
+
     def death_effect(self):
         tile = self.level.get_tile(self.location)
         particles.DeathExplosion(self.level, tile, 10.0)
 
-        self.crew_killed()
+        self.crew_damage(-1)
 
-    def crew_killed(self):
-        for soldier in self.soldiers:
-            soldier.toughness = 0
+    def crew_damage(self, damage):
+
+        knocked_out = True
+
+        if damage < 0:
+            for soldier in self.soldiers:
+                soldier.toughness = 0
+
+        else:
+            for soldier in self.soldiers:
+                individual_damage = damage * random.uniform(0.0, 1.0)
+
+                if soldier.behavior.prone:
+                    individual_damage *= 0.5
+
+                soldier.toughness -= int(individual_damage)
+
+                if soldier.toughness > 0:
+                    knocked_out = False
+
+        if knocked_out:
+            self.knocked_out = True
 
     def model_death_effect(self):
         if self.model:

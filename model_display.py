@@ -549,7 +549,7 @@ class ArtilleryModel(object):
 
         color = [icon * 0.25, 0.0, self.cammo * 0.125, 1.0]
 
-        all_weapons = [w for w in self.stats.weapons if w.weapon_location == "FRONT"]
+        all_weapons = [w for w in self.stats.weapons if w.weapon_location == "FRONT" or w.weapon_location == "TURRET"]
 
         model = "light_machine_gun"
         weapon = None
@@ -560,7 +560,7 @@ class ArtilleryModel(object):
             weapon = all_weapons[0]
             flags = self.stats.flags
 
-            if "AA_MOUNT" in flags:
+            if "ANTI_AIRCRAFT" in flags:
                 add_gun_mount = True
 
                 aa_size_dict = {0: "heavy_machine_gun",
@@ -569,6 +569,7 @@ class ArtilleryModel(object):
                                 3: "heavy_aa",
                                 4: "heavy_aa",
                                 5: "heavy_aa"}
+
                 model = aa_size_dict[chassis_size - 1]
 
             elif "ROCKET_MOUNT" in flags:
@@ -752,7 +753,7 @@ class ArtilleryModel(object):
         for leg in self.legs:
             leg["leg"].localTransform = leg["start"].lerp(leg["end"], deploy_amount)
 
-        if self.gun:
+        if self.gun and "ANTI_AIRCRAFT" not in self.stats.flags:
             self.gun["gun"].localTransform = self.gun["start"].lerp(self.gun["end"], deploy_amount)
 
     def deploy(self):
