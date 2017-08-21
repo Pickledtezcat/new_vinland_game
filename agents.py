@@ -77,6 +77,7 @@ class Agent(object):
     is_carrying = False
     is_sentry = False
     is_shocked = -1
+    out_of_grenades = False
     best_weapon = None
 
     stance = "FLANK"
@@ -1541,7 +1542,7 @@ class Infantry(Agent):
                 self.is_sentry = False
                 commanders = ["COMMANDER", "OBSERVER", "OFFICER"]
 
-                out_of_grenades = 0
+                out_of_grenades = True
                 out_of_ammo = 0
 
                 if self.shock > 40:
@@ -1551,23 +1552,26 @@ class Infantry(Agent):
                 else:
                     self.is_shocked = -1
 
-                for soldier in self.soldiers:
-                    if self.stance == "SENTRY":
-                        if soldier.special in commanders:
-                            self.is_sentry = True
-                    if soldier.weapon.ammo <= 0.0:
-                        out_of_ammo += 1
-                    if soldier.grenade:
-                        if soldier.grenade.ammo <= 0:
-                            out_of_grenades += 1
-                    else:
-                        out_of_grenades -= 1
+                living_soldiers = [soldier for soldier in self.soldiers if not soldier.dead]
 
-                if out_of_grenades >= len(self.soldiers):
-                    self.has_ammo -= 1
-                if out_of_ammo >= len(self.soldiers):
+                for living_soldier in living_soldiers:
+                    if self.stance == "SENTRY":
+                        if living_soldier.special in commanders:
+                            self.is_sentry = True
+                    if living_soldier.weapon.ammo <= 0.0:
+                        out_of_ammo += 1
+                    if living_soldier.grenade:
+                        if living_soldier.grenade.ammo > 0:
+                            out_of_grenades = False
+
+                if out_of_grenades:
+                    self.out_of_grenades = True
+                else:
+                    self.out_of_grenades = False
+
+                if out_of_ammo >= len(living_soldiers):
                     self.has_ammo -= 2
-                elif out_of_ammo >= int(len(self.soldiers) * 0.5):
+                elif out_of_ammo >= len(living_soldiers) * 0.5:
                     self.has_ammo -= 1
 
             dead = True
@@ -1923,12 +1927,15 @@ class InfantryMan(object):
                     vehicles = ["VEHICLE", "ARTILLERY"]
                     occupier_id = check_tile["occupied"]
                     if occupier_id:
-                        if occupier_id != self.agent.enter_vehicle:
-                            occupant = self.agent.level.agents.get(occupier_id)
-                            if occupant:
-                                if occupant != self.agent and occupant.agent_type in vehicles:
-                                    if occupant.navigation.destination:
-                                        closest.append(occupant)
+                        if occupier_id != self.agent.agent_id:
+                            if occupier_id != self.agent.enter_vehicle:
+                                occupant = self.agent.level.agents.get(occupier_id)
+                                if occupant:
+                                    if occupant.team == self.agent.team:
+                                        if not occupant.dead:
+                                            if occupant.agent_type in vehicles:
+                                                if occupant.navigation.destination:
+                                                    closest.append(occupant)
 
         if closest:
             return closest[0]

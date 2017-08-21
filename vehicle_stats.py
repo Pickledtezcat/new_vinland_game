@@ -29,7 +29,7 @@ class VehicleWeapon(object):
         self.power = self.rating
         self.penetration = self.rating
         self.effective_range = 0.0
-        self.weight = self.part["x_size"] * self.part["y_size"]
+        self.weight = (self.part["x_size"] * self.part["y_size"]) * 0.5
         self.flag = self.part['flag']
         self.timer = 0.8
 
@@ -63,7 +63,7 @@ class VehicleWeapon(object):
                     self.sound = "SHELL_3"
                     size = 3
 
-        elif self.part["rating"] > 1:
+        elif self.part["rating"] > 2:
             if self.flag in support:
                 self.sound = "SHELL_3"
                 size = 2
@@ -74,8 +74,17 @@ class VehicleWeapon(object):
                 self.sound = "SHELL_1"
                 size = 1
 
-        elif self.flag == "RAPID":
-            self.sound = "I_LIGHT_MG"
+        else:
+            if self.flag == "RAPID":
+                self.sound = "I_LIGHT_MG"
+            elif self.flag == "QUICK":
+                self.sound = "I_MG"
+            elif self.flag in advanced:
+                self.sound = "SHELL_2"
+                size = 2
+            else:
+                self.sound = "SHELL_1"
+                size = 2
 
         indirect = ["SUPPORT_GUN", "ARTILLERY"]
         rockets = ["MORTAR", "ROCKETS"]
@@ -142,10 +151,13 @@ class VehicleWeapon(object):
     def set_rocket_emitters(self, emitters):
         self.rocket_emitters = emitters
 
-    def set_rate_of_fire(self, manpower):
+    def set_rate_of_fire(self, man_power_per_ton):
+
+        manpower = man_power_per_ton * self.weight
 
         vehicle_weight = self.stats.weight
-        required_manpower = 10.0 + self.rating
+        required_manpower = 7.0 + self.rating
+
         rate_of_fire = manpower / required_manpower
         rate_of_fire = min(2.0, rate_of_fire)
 
@@ -169,7 +181,7 @@ class VehicleWeapon(object):
         if self.flag in very_slow_firing:
             rate_of_fire *= 0.5
 
-        self.rate_of_fire = rate_of_fire * 0.015
+        self.rate_of_fire = rate_of_fire * 0.02
         if self.rate_of_fire > 0.0:
             self.reload_time = round(1.0 / (60.0 * self.rate_of_fire), 2)
         else:
@@ -242,7 +254,8 @@ class VehicleWeapon(object):
         if self.timer < 1.0:
             return False
 
-        if self.agent != "VEHICLE":
+        # TODO set ready rate based on stability
+        if self.agent.agent_type != "VEHICLE":
             if self.agent.stowed < 0.9:
                 return False
 
@@ -636,15 +649,26 @@ class VehicleStats(object):
             total_manpower += location_manpower
 
         for location_key in weapon_dict:
+            location_manpower = self.manpower[location_key]
             location_group = weapon_dict[location_key]
-            number = len(location_group)
-            divided_manpower = total_manpower / max(1.0, number)
+            if location_group:
+                total_weight = 0.0
 
-            for index in location_group:
-                self.weapons[index].set_rate_of_fire(divided_manpower)
-                if self.weapons[index].rating > highest:
-                    highest = self.weapons[index].rating
-                    best = self.weapons[index]
+                for index in location_group:
+                    location_weapon = self.weapons[index]
+                    total_weight += location_weapon.weight
+
+                if self.vehicle_type == "GUN_CARRIAGE":
+                    man_power_per_ton = total_manpower / total_weight
+                else:
+                    man_power_per_ton = location_manpower / total_weight
+
+                for index in location_group:
+                    location_weapon = self.weapons[index]
+                    location_weapon.set_rate_of_fire(man_power_per_ton)
+                    if location_weapon.rating > highest:
+                        highest = location_weapon.rating
+                        best = location_weapon
 
         self.best_weapon = best
 

@@ -17,7 +17,8 @@ status_dict = {"ammo": "yellow",
                "broken": "red",
                "damaged": "yellow",
                "sentry": "green",
-               "nothing": "green"}
+               "nothing": "green",
+               "grenades": "red"}
 
 
 class UserInterface(object):
@@ -127,14 +128,14 @@ class StatusBar(object):
         self.shock_bar = bgeutils.get_ob("shock_bar", self.box.childrenRecursive)
         self.group_number_icon = bgeutils.get_ob("group_number", self.box.children)
         self.rank_icon = bgeutils.get_ob("rank_icon", self.box.children)
-        self.status_icon = bgeutils.get_ob("status_icon", self.box.children)
+        self.status_icons = bgeutils.get_ob_list("status_icon", self.box.children)
+        self.status_icons.sort(key=lambda ob: ob.get("status_icon"))
 
         self.group_number = None
         self.stance = None
         self.rank = None
-        self.status = None
+        self.status = []
 
-        self.status_icon.visible = False
         self.stance_icon.visible = False
         self.group_number_icon.visible = False
         self.rank_icon.visible = False
@@ -153,7 +154,6 @@ class StatusBar(object):
         self.shock_bar.localScale.x = 0.0
         self.reload_bar.localScale.x = 0.0
 
-        self.status_icon.color = self.hud
         self.stance_icon.color = self.hud
         self.group_number_icon.color = self.hud
         self.rank_icon.color = self.hud
@@ -208,7 +208,6 @@ class StatusBar(object):
         self.stance_icon.visible = setting
 
         if setting:
-
             stance = self.agent.stance
             if self.stance != stance:
                 self.stance = stance
@@ -237,62 +236,78 @@ class StatusBar(object):
 
     def set_status_icon(self):
         self.status = self.get_status()
-        if self.status == "noting":
-            self.status_icon.visible = False
+
+        if not self.status:
+            for icon in self.status_icons:
+                icon.visible = False
+
         else:
-            self.status_icon.visible = True
+            for i in range(4):
+                status_ob = self.status_icons[i]
 
-            status_color = status_dict[self.status]
-            self.status_icon.replaceMesh("status_{}".format(self.status))
+                if i < len(self.status):
+                    status_ob.visible = True
+                    status = self.status[i]
 
-            if status_color == "yellow":
-                if self.agent.selected:
-                    set_color = self.yellow
-                else:
-                    set_color = self.off_yellow
-            elif status_color == "red":
-                if self.agent.selected:
-                    set_color = self.red
-                else:
-                    set_color = self.off_red
-            else:
-                if self.agent.selected:
-                    set_color = self.green
-                else:
-                    set_color = self.off_green
+                    status_color = status_dict[status]
 
-            self.status_icon.color = set_color
+                    if status_color == "yellow":
+                        if self.agent.selected:
+                            set_color = self.yellow
+                        else:
+                            set_color = self.off_yellow
+                    elif status_color == "red":
+                        if self.agent.selected:
+                            set_color = self.red
+                        else:
+                            set_color = self.off_red
+                    else:
+                        if self.agent.selected:
+                            set_color = self.green
+                        else:
+                            set_color = self.off_green
+
+                    status_ob.color = set_color
+                    status_ob.replaceMesh("status_{}".format(status))
+
+                else:
+                    status_ob.visible = False
 
     def get_status(self):
 
+        status_list = []
+
         if self.agent.knocked_out:
-            return "knocked_out"
+            status_list.append("knocked_out")
 
         if self.agent.is_damaged == 1:
-            return "disabled"
+            status_list.append("disabled")
 
         if self.agent.is_carrying:
-            return "carrying"
+            status_list.append("carrying")
 
         if self.agent.is_shocked == 1:
-            return "broken"
+            status_list.append("broken")
 
         if self.agent.has_ammo < 0:
-            return "empty"
+            status_list.append("empty")
 
         if self.agent.is_shocked == 0:
-            return "shocked"
+            status_list.append("shocked")
 
         if self.agent.has_ammo < 1:
-            return "ammo"
+            status_list.append("ammo")
 
         if self.agent.is_damaged == 0:
-            return "damaged"
+            status_list.append("damaged")
+
+        if self.agent.out_of_grenades:
+            status_list.append("grenades")
 
         if self.agent.is_sentry:
-            return "sentry"
+            status_list.append("sentry")
 
-        return "nothing"
+        return status_list
 
     def update_position(self):
 

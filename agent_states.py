@@ -279,5 +279,7 @@ class AgentDead(AgentState):
         # TODO add smoke effect...
 
     def update(self):
+        self.agent.update_stats()
+        self.agent.infantry_update()
         pass
 

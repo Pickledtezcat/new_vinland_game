@@ -753,8 +753,9 @@ class ArtilleryModel(object):
         for leg in self.legs:
             leg["leg"].localTransform = leg["start"].lerp(leg["end"], deploy_amount)
 
-        if self.gun and "ANTI_AIRCRAFT" not in self.stats.flags:
-            self.gun["gun"].localTransform = self.gun["start"].lerp(self.gun["end"], deploy_amount)
+        if self.gun:
+            if "ANTI_AIRCRAFT" not in self.stats.flags:
+                self.gun["gun"].localTransform = self.gun["start"].lerp(self.gun["end"], deploy_amount)
 
     def deploy(self):
 
