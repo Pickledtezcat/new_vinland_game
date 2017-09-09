@@ -660,7 +660,19 @@ class ArtilleryModel(object):
                     if weapon.visual < 1 or "primitive" in weapon.name:
                         chassis_size -= 1
 
-                    gun_block_string = "v_gun_block_{}_{}".format(faction_number, chassis_size)
+                    if weapon.flag == "ARTILLERY":
+                        chassis_size += 1
+
+                    chassis_size = min(4, max(0, chassis_size))
+
+                    armor_locations = ["FRONT", "FLANKS", "TURRET"]
+                    armor_amount = sum([self.stats.armor[location] for location in armor_locations])
+                    if armor_amount > 0:
+                        gun_type = 1
+                    else:
+                        gun_type = 0
+
+                    gun_block_string = "v_gun_block_{}_{}".format(gun_type, chassis_size)
                     gun_block = gun.scene.addObject(gun_block_string, gun, 0)
                     gun_block.setParent(gun)
                     self.gun_block = gun_block

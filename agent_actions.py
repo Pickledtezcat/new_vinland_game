@@ -574,7 +574,6 @@ class AgentNavigation(object):
         next_facing = None
         next_target = None
         closest = 10000.0
-        free = 0
 
         for s in search_array:
             neighbor = [current_tile[0] + s[0], current_tile[1] + s[1]]
@@ -582,7 +581,6 @@ class AgentNavigation(object):
 
             if not neighbor_check:
                 if neighbor not in self.history:
-                    free += 1
 
                     distance = (mathutils.Vector(self.destination) - mathutils.Vector(neighbor)).length
                     if bgeutils.diagonal(s):
@@ -606,7 +604,7 @@ class AgentNavigation(object):
                             if agent.agent_id != self.agent.occupier:
                                 touching_infantry = True
 
-        return closest, next_facing, next_target, free, touching_infantry
+        return next_facing, next_target, touching_infantry
 
     def update(self):
 
@@ -624,7 +622,7 @@ class AgentNavigation(object):
                 self.get_next_destination()
 
             if self.destination:
-                closest, next_facing, next_target, free, touching_infantry = self.get_next_tile()
+                next_facing, next_target, touching_infantry = self.get_next_tile()
 
                 if self.agent.location == self.destination:
                     self.destination = None
@@ -633,10 +631,6 @@ class AgentNavigation(object):
                     self.destination = None
 
                 elif next_target:
-                    if free < 6 and closest < 3:
-                        if len(self.history) > 25:
-                            self.history = []
-                            self.agent.waiting = True
 
                     if touching_infantry:
                         self.agent.waiting = True

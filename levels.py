@@ -1363,7 +1363,7 @@ class Level(object):
                 marker_id = marker.marker_id
 
                 visibility_dict[marker_id] = {"enemy": False, "distance": round(decay),
-                                              "location": location, "decayed": True}
+                                              "location": location, "decayed": True, "selected": False}
 
                 if decay > 0.0:
                     next_generation.append(marker)
@@ -1399,7 +1399,7 @@ class Level(object):
                             location = bgeutils.position_to_location(position)
 
                             visibility_dict[agent_key] = {"enemy": is_enemy, "distance": visibility_distance,
-                                                          "location": location, "decayed": False}
+                                                          "location": location, "decayed": False, "selected": agent.selected}
 
                             for enemy_key in self.agents:
                                 enemy = self.agents[enemy_key]
@@ -1415,7 +1415,7 @@ class Level(object):
                                                 enemy.set_seen(True)
                                                 visibility_dict[enemy_key] = {"enemy": True, "distance": 0,
                                                                               "location": enemy.location,
-                                                                              "decayed": False}
+                                                                              "decayed": False, "selected": False}
 
                                             elif enemy_distance < suspect_distance:
                                                 enemy.set_suspect(True)

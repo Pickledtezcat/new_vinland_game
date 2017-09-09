@@ -23,8 +23,14 @@ class VisionPaint(object):
             outer = i
             self.non_brush_dict[i] = bgeutils.create_brush(self.brush_size, 0, [0, 0, 255], outer=outer, smooth=True)
 
-        self.player_pixel = bgeutils.create_brush(1, 1, [0, 255, 0])
-        self.enemy_pixel = bgeutils.create_brush(1, 1, [255, 0, 0])
+        self.range_dict = {}
+
+        ranges = [0, 18]
+        for r in ranges:
+            self.range_dict[r] = bgeutils.create_ring_brush(self.brush_size, r)
+
+        self.player_brush = bgeutils.create_blob_brush(self.brush_size, [255, 0, 0])
+        self.enemy_brush = bgeutils.create_blob_brush(self.brush_size, [0, 255, 0])
 
         self.canvas = self.create_canvas()
         self.set_infantry_texture()
@@ -56,12 +62,18 @@ class VisionPaint(object):
 
         self.reload_canvas()
 
+        if "r" in self.level.manager.game_input.keys:
+            ranges = True
+        else:
+            ranges = False
+
         for paint_key in paint_dict:
             agent = paint_dict[paint_key]
             enemy = agent["enemy"]
             distance = agent["distance"]
             x, y = agent["location"]
             decayed = agent["decayed"]
+            selected = agent["selected"]
 
             bx = x - int(self.brush_size * 0.5)
             by = y - int(self.brush_size * 0.5)
@@ -72,14 +84,19 @@ class VisionPaint(object):
                                         bge.texture.IMB_BLEND_LIGHTEN)
             else:
                 if enemy:
-                    agent_brush = self.enemy_pixel
+                    self.canvas.source.plot(self.enemy_brush, self.brush_size, self.brush_size, bx, by,
+                                            bge.texture.IMB_BLEND_LIGHTEN)
                 else:
-                    agent_brush = self.player_pixel
+                    if ranges and selected:
+                        self.canvas.source.plot(self.range_dict[18], self.brush_size, self.brush_size, bx, by,
+                                                bge.texture.IMB_BLEND_ERASE_ALPHA)
+
+                    self.canvas.source.plot(self.player_brush, self.brush_size, self.brush_size, bx, by,
+                                            bge.texture.IMB_BLEND_LIGHTEN)
 
                 if distance > 0:
                     vision_brush = self.brush_dict[distance]
                     self.canvas.source.plot(vision_brush, self.brush_size, self.brush_size, bx, by,
                                             bge.texture.IMB_BLEND_LIGHTEN)
-                self.canvas.source.plot(agent_brush, 1, 1, x, y, bge.texture.IMB_BLEND_LIGHTEN)
 
         self.canvas.refresh(True)

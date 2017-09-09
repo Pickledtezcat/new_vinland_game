@@ -211,6 +211,56 @@ def create_brush(brush_size, radius, RGB, outer=0, smooth=False):
     return brush
 
 
+def create_blob_brush(brush_size, RGB):
+
+    brush = bytearray(brush_size * brush_size * 4)
+    center = mathutils.Vector([brush_size * 0.5, brush_size * 0.5])
+    rgb = RGB
+
+    for x in range(brush_size):
+        for y in range(brush_size):
+            i = y * (brush_size * 4) + x * 4
+            location = mathutils.Vector([x, y])
+            target_vector = location - center
+            length = int(round(target_vector.length))
+
+            if length < 2:
+                pixel = rgb
+            else:
+                pixel = [0, 0, 0]
+
+            brush[i] = pixel[0]
+            brush[i + 1] = pixel[1]
+            brush[i + 2] = pixel[2]
+            brush[i + 3] = 255
+
+    return brush
+
+
+def create_ring_brush(brush_size, radius):
+
+    brush = bytearray(brush_size * brush_size * 4)
+    center = mathutils.Vector([brush_size * 0.5, brush_size * 0.5])
+
+    for x in range(brush_size):
+        for y in range(brush_size):
+            i = y * (brush_size * 4) + x * 4
+            location = mathutils.Vector([x, y])
+            target_vector = location - center
+            length = int(round(target_vector.length))
+
+            if length == radius:
+                alpha = 255
+            elif length == radius - 1:
+                alpha = 128
+            else:
+                alpha = 0
+
+            brush[i + 3] = alpha
+
+    return brush
+
+
 def create_pixel(rbga):
     r, g, b, a = rbga
     pixel = bytearray(1 * 1 * 4)
